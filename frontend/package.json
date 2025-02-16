@@ -12,7 +12,7 @@
     "plotly.js": "^3.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-scripts": "5.0.1",
+    "react-scripts": "^5.0.1",
     "recharts": "^2.15.1",
     "web-vitals": "^2.1.4"
   },
@@ -42,9 +42,8 @@
   },
   "description": "This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).",
   "main": "index.js",
-  "devDependencies": {},
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "module"
 }

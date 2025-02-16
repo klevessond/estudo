@@ -1,4 +1,4 @@
-import apiServices from './Api';
+import apiServices from './Api.js';
 
 // Serviço para gerenciar todas as operações relacionadas a clientes
 const ClienteService = {
