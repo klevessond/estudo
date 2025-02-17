@@ -2,6 +2,7 @@ import logo from './logo.svg';
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import ClienteServices from './services/Clienteservices.js';
+import Dashboard from './components/pages/Dashborad/Dashboard.jsx';
 import Layout from './components/layout/layout.jsx';
 
 /* 
@@ -54,7 +55,7 @@ return (
 const App = () =>{
   return(
     <Layout>
-
+      <Dashboard />
     </Layout>
 
   );
