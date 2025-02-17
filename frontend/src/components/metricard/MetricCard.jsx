@@ -4,7 +4,7 @@ import './MetricCard.css';
 
 Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale);
 
-const MetricCard = ({ title, value, percentage, trend, graphColor }) => {
+const MetricCard = ({ title, value, percentage, trend, graphColor, backgroundColor }) => {
     const chartRef = useRef(null);
     const chartInstance = useRef(null); // Referência para a instância do gráfico
 
@@ -22,7 +22,7 @@ const MetricCard = ({ title, value, percentage, trend, graphColor }) => {
             data: {
                 labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
                 datasets: [{
-                    data: [12, 19, 3, 5, 2],
+                    data: [12, 30, 3, 5, 2],
                     borderColor: graphColor,
                     borderWidth: 2,
                     tension: 0.4,
@@ -57,9 +57,10 @@ const MetricCard = ({ title, value, percentage, trend, graphColor }) => {
     }, [graphColor]);
 
     const trendColor = trend === 'up' ? 'green' : 'red';
+    
 
     return (
-        <div className="metric-card">
+        <div className="metric-card" style={{ backgroundColor: backgroundColor || '#ffffff' }}>
             <h3>{title}</h3>
             <div className="metric-value">
                 <span>{value}</span>

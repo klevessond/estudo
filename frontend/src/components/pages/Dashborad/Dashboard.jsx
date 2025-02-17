@@ -13,6 +13,7 @@ const Dashboard = () => {
                     percentage="+49%"
                     trend="up"
                     graphColor="#a8e6cf"
+                    backgroundColor="#f7fffa"
                 />
                 <MetricCard
                     title="Acme Advanced"
@@ -20,6 +21,7 @@ const Dashboard = () => {
                     percentage="-12%"
                     trend="down"
                     graphColor="#ff8b94"
+                    backgroundColor="#fff5f6"
                 />
                 <MetricCard
                     title="Acme Professional"
@@ -27,6 +29,7 @@ const Dashboard = () => {
                     percentage="+8%"
                     trend="up"
                     graphColor="#ffd3b6"
+                    backgroundColor="#fff9f5"
                 />
             </div>
         </div>
