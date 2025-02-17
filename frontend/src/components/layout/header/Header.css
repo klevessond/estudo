@@ -1,0 +1,10 @@
+/* Header.css */
+.header {
+    background-color: #333;
+    color: white;
+    padding: 1rem;
+    text-align: center;
+    width: 100%; /* Ocupa 100% da largura disponível */
+    /*max-width: 1200px;  Largura máxima */
+    margin: 0 auto; /* Centraliza o header */
+}

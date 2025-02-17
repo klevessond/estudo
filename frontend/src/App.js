@@ -2,8 +2,9 @@ import logo from './logo.svg';
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import ClienteServices from './services/Clienteservices.js';
+import Layout from './components/layout/layout.jsx';
 
-
+/* 
 function App() {
   const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +34,8 @@ const renderValue =(value) =>{
   return String(value);
 }
   
-  return (
+
+return (
     <div className="App">
       <h1>Lista de Clientes</h1>
       
@@ -48,5 +50,14 @@ const renderValue =(value) =>{
     </div>
   );
 }
+*/
+const App = () =>{
+  return(
+    <Layout>
+
+    </Layout>
+
+  );
+};
 
 export default App;
