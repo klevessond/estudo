@@ -1,8 +1,8 @@
 import React, { useRef, useEffect } from 'react';
-import { Chart, LineController, LineElement, PointElement, LinearScale, CategoryScale } from 'chart.js';
+import { Chart, LineController, LineElement, PointElement, LinearScale, CategoryScale,Tooltip  } from 'chart.js';
 import './MetricCard.css';
 
-Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale);
+Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale,Tooltip);
 
 const MetricCard = ({ title, value, percentage, trend, graphColor, backgroundColor }) => {
     const chartRef = useRef(null);
@@ -22,11 +22,14 @@ const MetricCard = ({ title, value, percentage, trend, graphColor, backgroundCol
             data: {
                 labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
                 datasets: [{
+                    label: 'Valores', // Rótulo do dataset (aparece no tooltip)
                     data: [12, 30, 3, 5, 2],
                     borderColor: graphColor,
                     borderWidth: 2,
                     tension: 0.4,
                     fill: false,
+                    pointRadius: 3, // Tamanho do ponto
+                    pointHoverRadius: 5, // Tamanho do ponto ao passar o mouse
                 }],
             },
             options: {
@@ -37,6 +40,22 @@ const MetricCard = ({ title, value, percentage, trend, graphColor, backgroundCol
                         display: false,
                     },
                 },
+                tooltip: {
+                    enabled: true, // Habilita o tooltip
+                    mode: 'index', // Mostra tooltips para todos os itens no mesmo índice
+                    intersect: false, // Tooltip aparece ao passar o mouse sobre a linha, não apenas sobre os pontos
+                    callbacks: {
+                        title: (context) => {
+                            // Título do tooltip (rótulo do eixo X)
+                            return `Mês: ${context[0].label}`;
+                        },
+                        label: (context) => {
+                            // Conteúdo do tooltip (valor do eixo Y)
+                            return `Valor: ${context.raw}`;
+                        },
+                    },
+                },
+            
                 scales: {
                     x: {
                         display: false,
