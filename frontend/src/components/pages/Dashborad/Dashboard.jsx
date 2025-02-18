@@ -12,7 +12,7 @@ const Dashboard = () => {
                 {/* Div que agrupa os 3 MetricCards */}
                 <div className="metric-cards">
                     <MetricCard
-                        title="Acme Plus"
+                        title="Novos clientes"
                         value="$24,780"
                         percentage="+49%"
                         trend="up"
@@ -20,7 +20,7 @@ const Dashboard = () => {
                         backgroundColor="#f7fffa"
                     />
                     <MetricCard
-                        title="Acme Advanced"
+                        title="Vendas novos clientes"
                         value="$17,489"
                         percentage="-12%"
                         trend="down"
@@ -28,7 +28,7 @@ const Dashboard = () => {
                         backgroundColor="#fff5f6"
                     />
                     <MetricCard
-                        title="Acme Professional"
+                        title="Clientes não Positivados"
                         value="$32,100"
                         percentage="+8%"
                         trend="up"
