@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import MetricCard from '../../metricard/MetricCard';
 import BarChart from '../../BarChart/BarChart';
 import './Dashboard.css';
@@ -7,7 +7,9 @@ const Dashboard = () => {
     return (
         <div className="dashboard">
             <h1>Dashboard</h1>
+            {/* Container pai com display:flex */}
             <div className="dashboard-container">
+                {/* Div que agrupa os 3 MetricCards */}
                 <div className="metric-cards">
                     <MetricCard
                         title="Acme Plus"
@@ -34,6 +36,8 @@ const Dashboard = () => {
                         backgroundColor="#fff9f5"
                     />
                 </div>
+
+                {/* Div que agrupa o BarChart */}
                 <div className="chart-section">
                     <BarChart />
                 </div>
