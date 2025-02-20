@@ -1,0 +1,15 @@
+.pie-chart-plotly-container {
+    background-color: #fff;
+    border-radius: px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 1rem;
+    max-width: 400px;  /* Ajuste conforme desejar */
+    margin: 0;    /* Centraliza horizontalmente se necessário */
+  }
+  
+  .pie-chart-plotly-container h2 {
+    text-align: center;
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+  }
+  
