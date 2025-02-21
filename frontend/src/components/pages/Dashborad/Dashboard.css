@@ -24,3 +24,12 @@
     flex: 1;             /* Ocupa mais espaço que a coluna de cards */
     margin-left: 0;      /* Se quiser remover espaçamento adicional */
 }
+
+.right-section {
+    margin-left: auto;
+}
+
+.map-section {
+    margin-top: 20px;
+    /* Você pode ajustar a largura ou centralizar o componente se desejar */
+  }

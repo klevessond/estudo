@@ -1,0 +1,8 @@
+/* components/ComboChart/ComboChart.css */
+
+.combo-chart-container {
+    width: 100%;
+    max-width: 800px; /* exemplo de largura máxima */
+    margin: 0 auto;   /* centraliza na tela */
+  }
+  

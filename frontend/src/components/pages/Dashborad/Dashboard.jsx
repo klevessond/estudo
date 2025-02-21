@@ -2,12 +2,15 @@ import React from 'react';
 import MetricCard from '../../metricard/MetricCard';
 import BarChart from '../../BarChart/BarChart';
 import PieChart from  '../../Piechart/PieChart';
+import ComboChart from '../../ComboChart/ComboChart';
+import SalesMap from '../../Map/SalesMap';
 import './Dashboard.css';
 
 const Dashboard = () => {
     return (
         <div className="dashboard">
-            <h1>Dashboard</h1>
+          
+            <ComboChart />
             {/* Container pai com display:flex */}
             <div className="dashboard-container">
                 {/* Div que agrupa os 3 MetricCards */}
@@ -36,13 +39,25 @@ const Dashboard = () => {
                             graphColor="#ffd3b6"
                             backgroundColor="#fff9f5"
                         />
+                        <MetricCard
+                            title="Clientes Positivados"
+                            value="$17,489"
+                            percentage="-12%"
+                            trend="down"
+                            graphColor="#ff8b94"
+                            backgroundColor="#fff5f6"
+                        />
                         <div className="chart-section">
                             <PieChart/>
                         </div>
                     </div>
                          {/* Div que agrupa o BarChart */}
-                        <div className="chart-section">
+                        <div className="chart-section right-section">
                             <BarChart />
+                                 <div className="map-section">
+                                    <SalesMap />
+                                </div>
+
                         </div>
 
                
