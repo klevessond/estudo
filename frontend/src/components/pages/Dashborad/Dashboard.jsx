@@ -9,11 +9,9 @@ import './Dashboard.css';
 const Dashboard = () => {
     return (
         <div className="dashboard">
-          
             <ComboChart />
-            {/* Container pai com display:flex */}
             <div className="dashboard-container">
-                {/* Div que agrupa os 3 MetricCards */}
+                <div>
                     <div className="metric-cards">
                         <MetricCard
                             title="Novos clientes"
@@ -47,24 +45,20 @@ const Dashboard = () => {
                             graphColor="#ff8b94"
                             backgroundColor="#fff5f6"
                         />
-                        <div className="chart-section">
-                            <PieChart/>
-                        </div>
                     </div>
-                         {/* Div que agrupa o BarChart */}
-                        <div className="chart-section right-section">
-                            <BarChart />
-                                 <div className="map-section">
-                                    <SalesMap />
-                                </div>
-
-                        </div>
-
-               
-         
-                        
+                    <div className="chart-section">
+                        <PieChart/>
+                    </div>
+                </div>
+                <div className="chart-section right-section">
+                    <BarChart />
                 </div>
             </div>
+            {/* Container independente para o mapa */}
+            <div className="map-section">
+                <SalesMap />
+            </div>
+        </div>
     );
 };
 

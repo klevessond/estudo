@@ -88,7 +88,7 @@ const BarChart = () => {
 
     return (
         <div className="bar-chart-container">
-            <h2>Vendas por Mês (2022, 2023, 2024)</h2>
+            <h2>Evolucao de Vendas por Mês (2022, 2023, 2024)</h2>
             <div className="chart-wrapper">
                 <canvas ref={chartRef}></canvas>
             </div>

@@ -1,6 +1,5 @@
 /* components/SalesMap/SalesMap.css */
 .sales-map-container {
-    height: 100vh;  /* Ocupa 100% da altura da viewport */
-    width: 100%;    /* Ocupa 100% da largura */
-  }
-  
+  height: 50vh;  /* Ocupa 50% da altura da viewport */
+  width: 50vw;   /* Ocupa 50% da largura da viewport */
+}

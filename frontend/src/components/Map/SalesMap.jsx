@@ -7,7 +7,7 @@ import './SalesMap.css'; // Caso queira adicionar estilos personalizados
 const SalesMap = () => {
   useEffect(() => {
     // Cria o mapa dentro do elemento com id "sales-map"
-    const map = L.map('sales-map').setView([-5.79, -35.22], 7);
+    const map = L.map('sales-map').setView([-5.79, -35.22], 8);
 
     // Adiciona a camada base do OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -40,7 +40,12 @@ const SalesMap = () => {
     };
   }, []);
 
-  return <div id="sales-map" className="sales-map-container"></div>;
+  return (
+    <div>
+      <h2>Distribuição Geografica de vendas</h2>
+      <div id="sales-map" className="sales-map-container"></div>
+    </div>
+  );
 };
 
 export default SalesMap;
