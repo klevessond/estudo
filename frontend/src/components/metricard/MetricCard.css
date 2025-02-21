@@ -4,9 +4,11 @@
     border-radius: 8px;
     padding: 1rem;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    width: 200px;
-    height: auto; /* Altura ajustada ao conteúdo */
-    margin: 0; /* Remove margens */
+    width: 90%; /* Responsivo */
+    max-width: 200px;
+    height: auto; /* Ajustável ao conteúdo */
+    margin: 10px auto; /* Centraliza */
+    text-align: center; /* Melhor legibilidade */
 }
 
 .metric-card h3 {
@@ -15,10 +17,12 @@
     color: #333;
 }
 
+/* Responsividade da Seção de Valores */
 .metric-value {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap; /* Quebra linha em telas pequenas */
     margin: 1rem 0;
 }
 
@@ -31,8 +35,47 @@
     font-size: 0.9rem;
 }
 
+/* Gráfico dentro da métrica */
 .metric-graph {
     height: 50px;
     margin-top: 1rem;
     border-radius: 4px;
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+    .metric-card {
+        width: 95%;
+        max-width: 180px;
+        padding: 0.75rem;
+    }
+
+    .metric-value {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .metric-value span {
+        font-size: 1.3rem;
+    }
+
+    .metric-graph {
+        height: 40px;
+    }
+}
+
+@media (max-width: 480px) {
+    .metric-card {
+        width: 100%;
+        max-width: none;
+        padding: 0.5rem;
+    }
+
+    .metric-value span {
+        font-size: 1.2rem;
+    }
+
+    .metric-graph {
+        height: 35px;
+    }
 }

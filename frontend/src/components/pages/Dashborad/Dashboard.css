@@ -7,7 +7,7 @@
     display: flex;
     align-items: flex-start; /* Alinha todos no topo */
     gap: 20px;              /* Espaçamento horizontal entre os blocos */
-    /* flex-wrap: wrap;   // se quiser permitir quebra de linha em telas menores */
+    flex-wrap: wrap;   /*se quiser permitir quebra de linha em telas menores */
 }
 
 /* Ajusta como os cartões aparecem */
