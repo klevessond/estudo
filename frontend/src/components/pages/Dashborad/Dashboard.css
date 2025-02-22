@@ -33,3 +33,9 @@
     margin-top: 20px;
     /* Você pode ajustar a largura ou centralizar o componente se desejar */
   }
+
+  .pie-charts-row {
+    display: flex;
+    gap: 20px; /* Ajuste o espaçamento entre os gráficos conforme necessário */
+    justify-content: center; /* Ou 'space-between', 'flex-start', etc. */
+}

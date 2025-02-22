@@ -4,6 +4,7 @@ import BarChart from '../../BarChart/BarChart';
 import PieChart from  '../../Piechart/PieChart';
 import ComboChart from '../../ComboChart/ComboChart';
 import SalesMap from '../../Map/SalesMap';
+import PieVendasCanceladas from '../../Piechart/PieVendasCanceladas';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -47,7 +48,10 @@ const Dashboard = () => {
                         />
                     </div>
                     <div className="chart-section">
-                        <PieChart/>
+                        <div className="pie-charts-row">
+                            <PieChart />
+                            <PieVendasCanceladas/>
+                            </div>
                     </div>
                 </div>
                 <div className="chart-section right-section">
