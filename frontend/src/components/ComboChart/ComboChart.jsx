@@ -2,11 +2,10 @@
 import React from 'react';
 import './ComboChart.css';
 
-
 // Imports do Chart.js e do adaptador de datas
 import {
   Chart as ChartJS,
-  TimeScale,           // Escala de tempo
+  TimeScale, // Escala de tempo
   CategoryScale,
   LinearScale,
   PointElement,
@@ -34,8 +33,7 @@ ChartJS.register(
   Legend
 );
 
-// Exemplo de dados (12 meses) para ilustrar
-// Cada item tem: data (mês), vendas (linha), clientes (barra), volume (barra)
+// Exemplo de dados (12 meses)
 const rawData = [
   { month: '2023-01-01', sales: 10000, customers: 25, volume: 300 },
   { month: '2023-02-01', sales: 9000,  customers: 20, volume: 250 },
@@ -52,14 +50,13 @@ const rawData = [
 ];
 
 const ComboChart = () => {
-  // Mapeamos os dados para extrair arrays específicos de cada métrica
+  // Extraindo os dados
   const labels = rawData.map(item => item.month);
-
   const dataSales = rawData.map(item => item.sales);
   const dataCustomers = rawData.map(item => item.customers);
   const dataVolume = rawData.map(item => item.volume);
 
-  // Configuração do "data" que o Chart.js espera
+  // Configuração dos dados para o Chart.js
   const data = {
     labels,
     datasets: [
@@ -68,23 +65,23 @@ const ComboChart = () => {
         label: 'Vendas (R$)',
         data: dataSales,
         borderColor: '#36A2EB',
-        backgroundColor: '#36A2EB33', // cor semitransparente
-        tension: 0.2, // curva da linha
-        yAxisID: 'ySales', // Eixo Y específico para vendas
+        backgroundColor: '#36A2EB33',
+        tension: 0.2,
+        yAxisID: 'ySales',
       },
       {
         type: 'bar',
         label: 'Clientes (nº)',
         data: dataCustomers,
         backgroundColor: '#FF6384',
-        yAxisID: 'yCustomers', // Eixo Y específico para clientes
+        yAxisID: 'yCustomers',
       },
       {
         type: 'bar',
         label: 'Volume (itens)',
         data: dataVolume,
         backgroundColor: '#FFCE56',
-        yAxisID: 'yVolume', // Eixo Y específico para volume
+        yAxisID: 'yVolume',
       },
     ],
   };
@@ -92,7 +89,6 @@ const ComboChart = () => {
   // Configurações do gráfico
   const options = {
     responsive: true,
-    // Título e legendas
     plugins: {
       title: {
         display: true,
@@ -102,12 +98,11 @@ const ComboChart = () => {
         position: 'top',
       },
     },
-    // Configuração dos eixos
     scales: {
       x: {
-        type: 'time',    // Eixo X é de tempo
+        type: 'time',
         time: {
-          unit: 'month', // Queremos exibir por mês
+          unit: 'month',
         },
         title: {
           display: true,
@@ -127,7 +122,6 @@ const ComboChart = () => {
         type: 'linear',
         display: true,
         position: 'right',
-        // Garantir que não fique em cima do outro eixo
         grid: {
           drawOnChartArea: false,
         },
@@ -143,7 +137,6 @@ const ComboChart = () => {
         grid: {
           drawOnChartArea: false,
         },
-        // Você pode ajustar a posição (left/right) conforme desejar
         title: {
           display: true,
           text: 'Volume (itens)',
@@ -154,7 +147,33 @@ const ComboChart = () => {
 
   return (
     <div className="combo-chart-container">
-      <Chart type="bar" data={data} options={options} />
+      <div className="combo-chart-content">
+        <div className="chart-table">
+          <table className="tabela">
+            <thead>
+              <tr>
+                <th>Mês</th>
+                <th>Vendas (R$)</th>
+                <th>Clientes (nº)</th>
+                <th>Volume (itens)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rawData.map((item, index) => (
+                <tr key={index}>
+                  <td>{item.month}</td>
+                  <td>{item.sales}</td>
+                  <td>{item.customers}</td>
+                  <td>{item.volume}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="chart">
+          <Chart type="bar" data={data} options={options} />
+        </div>
+      </div>
     </div>
   );
 };

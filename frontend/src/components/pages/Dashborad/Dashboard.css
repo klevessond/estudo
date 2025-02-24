@@ -33,10 +33,13 @@
     gap: 20px;
   }
   
-  .bar-chart-container, .line-vendedores-container {
+  .bar-chart-container {
     flex: 1;
   }
-
+  
+  .line-vendedores-container {
+    flex: 2; /* ou outro valor maior para ocupar mais espaço */
+  }
   /* Container do mapa */
   .map-section {
     margin-top: 20px;

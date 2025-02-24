@@ -17,7 +17,7 @@ const Dashboard = () => {
                     <div className="metric-cards">
                         <MetricCard
                             title="Novos clientes"
-                            value="$24,780"
+                            value="50"
                             percentage="+49%"
                             trend="up"
                             graphColor="#a8e6cf"
@@ -25,7 +25,7 @@ const Dashboard = () => {
                         />
                         <MetricCard
                             title="Vendas novos clientes"
-                            value="$17,489"
+                            value="$170,489"
                             percentage="-12%"
                             trend="down"
                             graphColor="#ff8b94"
@@ -33,7 +33,7 @@ const Dashboard = () => {
                         />
                         <MetricCard
                             title="Clientes não Positivados"
-                            value="$32,100"
+                            value="25"
                             percentage="+8%"
                             trend="up"
                             graphColor="#ffd3b6"
@@ -41,7 +41,7 @@ const Dashboard = () => {
                         />
                         <MetricCard
                             title="Clientes Positivados"
-                            value="$17,489"
+                            value="145"
                             percentage="-12%"
                             trend="down"
                             graphColor="#ff8b94"
@@ -55,9 +55,13 @@ const Dashboard = () => {
                             </div>
                     </div>
                 </div>
-                <div className="chart-section right-section">
-                    <BarChart />
+                <div>
+                    <div className="chart-section right-section">
+                       <div><BarChart /></div> 
+                        
+                    
                     <Linevendedores/>
+                    </div>
                 </div>
             </div>
             {/* Container independente para o mapa */}
