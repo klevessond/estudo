@@ -1,5 +1,5 @@
 .bar-chart-container {
-    width: 100%; /* Para aumentar a largura, altere este valor para um percentual maior ou defina um max-width maior */
+    width: 50%; /* Para aumentar a largura, altere este valor para um percentual maior ou defina um max-width maior */
     max-width: 500px; /* Exemplo: aumentar a largura máxima */
     margin: 50px auto; /* Ajusta a margem e centraliza */
     padding: 1rem;

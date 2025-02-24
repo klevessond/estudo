@@ -1,41 +1,51 @@
 .dashboard {
     padding: 20px;
-}
-
-/* Contêiner flex: coloca .metric-cards e .chart-section lado a lado */
-.dashboard-container {
+  }
+  
+  /* Container flex: coloca .metric-cards e .chart-section lado a lado */
+  .dashboard-container {
     display: flex;
-    align-items: flex-start; /* Alinha todos no topo */
-    gap: 20px;              /* Espaçamento horizontal entre os blocos */
-    flex-wrap: wrap;   /*se quiser permitir quebra de linha em telas menores */
-}
-
-/* Ajusta como os cartões aparecem */
-.metric-cards {
-    display: flex;       /* Exibe 3 cards lado a lado */
-    gap: 20px;           /* Espaçamento entre os cards */
-    margin-bottom: 20px; /* Espaçamento inferior, se precisar */
-    flex-wrap: wrap;     /* Quebra de linha em telas pequenas (opcional) */
-    flex: 1;             /* Pode crescer/encolher para ocupar espaço */
-}
-
-/* Ajusta a seção do gráfico */
-.chart-section {
-    flex: 1;             /* Ocupa mais espaço que a coluna de cards */
-    margin-left: 0;      /* Se quiser remover espaçamento adicional */
-}
-
-.right-section {
+    align-items: flex-start;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  
+  /* Ajusta como os cartões aparecem */
+  .metric-cards {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+  
+  /* Ajusta a seção do gráfico */
+  .chart-section {
+    flex: 1;
+    margin-left: 0;
+  }
+  
+  /* Container à direita para os gráficos de barras e linhas */
+  .right-section {
     margin-left: auto;
-}
-
-.map-section {
-    margin-top: 20px;
-    /* Você pode ajustar a largura ou centralizar o componente se desejar */
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+  }
+  
+  .bar-chart-container, .line-vendedores-container {
+    flex: 1;
   }
 
+  /* Container do mapa */
+  .map-section {
+    margin-top: 20px;
+  }
+  
+  /* Container para os gráficos de pizza */
   .pie-charts-row {
     display: flex;
-    gap: 20px; /* Ajuste o espaçamento entre os gráficos conforme necessário */
-    justify-content: center; /* Ou 'space-between', 'flex-start', etc. */
-}
+    gap: 20px;
+    justify-content: center;
+  }
+  
