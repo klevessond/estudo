@@ -43,6 +43,9 @@
   /* Container do mapa */
   .map-section {
     margin-top: 20px;
+    display: flex;
+    flex-direction: row;
+    gap: 20px; /* opcional, para espaçar os componentes */
   }
   
   /* Container para os gráficos de pizza */

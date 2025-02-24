@@ -1,0 +1,10 @@
+.chart-container {
+  padding: 20px;
+  max-width: 900px; /* Limita a largura máxima do container */
+  margin: 0 auto;
+}
+
+.chart {
+  width: 100%;
+  height: 400px;  /* Reduz a altura para diminuir o gráfico */
+}

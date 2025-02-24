@@ -59,8 +59,19 @@ const Linevendedores = () => {
       }
     ];
 
-    // Base de anotações (por exemplo, título)
+    // Anotações base com os títulos
     const baseAnnotations = [
+      {
+        xref: 'paper',
+        yref: 'paper',
+        x: 0.0,
+        y: 1.15,
+        xanchor: 'left',
+        yanchor: 'bottom',
+        text: '',
+        font: { family: 'Arial', size: 24, color: 'black' },
+        showarrow: false
+      },
       {
         xref: 'paper',
         yref: 'paper',
@@ -74,7 +85,7 @@ const Linevendedores = () => {
       }
     ];
 
-    // Cria as anotações para os nomes dos vendedores, posicionadas à esquerda
+    // Anotações para os nomes dos vendedores (lado esquerdo)
     const vendorNames = ['Vendedor 1', 'Vendedor 2', 'Vendedor 1', 'Vendedor 2', 'Vendedor 1', 'Vendedor 2'];
     const vendorAnnotations = dataTraces.map((trace, i) => ({
       xref: 'paper',
@@ -88,10 +99,7 @@ const Linevendedores = () => {
       font: { family: 'Arial', size: 16, color: trace.line.color }
     }));
 
-    // Subconjuntos de anotações para cada empresa
-    const vendorAnnotationsA = [vendorAnnotations[0], vendorAnnotations[1]];
-    const vendorAnnotationsB = [vendorAnnotations[2], vendorAnnotations[3]];
-    const vendorAnnotationsC = [vendorAnnotations[4], vendorAnnotations[5]];
+    // Conjunto completo de anotações para exibir inicialmente todos os vendedores
     const vendorAnnotationsAll = vendorAnnotations;
 
     // Layout com dropdown para filtrar os dados por empresa
@@ -113,7 +121,7 @@ const Linevendedores = () => {
             method: 'update',
             args: [
               { visible: [true, true, false, false, false, false] },
-              { annotations: baseAnnotations.concat(vendorAnnotationsA),
+              { annotations: baseAnnotations.concat([vendorAnnotations[0], vendorAnnotations[1]]),
                 title: 'Empresa A - Vendedores' }
             ]
           },
@@ -122,7 +130,7 @@ const Linevendedores = () => {
             method: 'update',
             args: [
               { visible: [false, false, true, true, false, false] },
-              { annotations: baseAnnotations.concat(vendorAnnotationsB),
+              { annotations: baseAnnotations.concat([vendorAnnotations[2], vendorAnnotations[3]]),
                 title: 'Empresa B - Vendedores' }
             ]
           },
@@ -131,7 +139,7 @@ const Linevendedores = () => {
             method: 'update',
             args: [
               { visible: [false, false, false, false, true, true] },
-              { annotations: baseAnnotations.concat(vendorAnnotationsC),
+              { annotations: baseAnnotations.concat([vendorAnnotations[4], vendorAnnotations[5]]),
                 title: 'Empresa C - Vendedores' }
             ]
           }
@@ -145,8 +153,12 @@ const Linevendedores = () => {
         yanchor: 'top'
       }],
       xaxis: { title: 'Período' },
-      yaxis: { title: 'Desempenho' }
+      yaxis: { title: 'Desempenho' },
+      margin: { t: 150 } // Aumenta a margem superior para acomodar as anotações
     };
+
+    // Adiciona as anotações ao layout inicial
+    layout.annotations = baseAnnotations.concat(vendorAnnotationsAll);
 
     return { data: dataTraces, layout };
   }, []);

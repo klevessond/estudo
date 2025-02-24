@@ -6,6 +6,7 @@ import ComboChart from '../../ComboChart/ComboChart';
 import SalesMap from '../../Map/SalesMap';
 import PieVendasCanceladas from '../../Piechart/PieVendasCanceladas';
 import Linevendedores from '../../LineChart/Linevendedores';
+import DencidadeCidadeChart from '../../ComboChart/DencidadeCidadeChart';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -41,7 +42,7 @@ const Dashboard = () => {
                         />
                         <MetricCard
                             title="Clientes Positivados"
-                            value="145"
+                            value="  145"
                             percentage="-12%"
                             trend="down"
                             graphColor="#ff8b94"
@@ -64,9 +65,12 @@ const Dashboard = () => {
                     </div>
                 </div>
             </div>
-            {/* Container independente para o mapa */}
-            <div className="map-section">
-                <SalesMap />
+            <div>
+                {/* Container independente para o mapa */}
+                <div className="map-section">
+                    <SalesMap />
+                    <DencidadeCidadeChart/>
+                </div>
             </div>
         </div>
     );
