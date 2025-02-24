@@ -161,7 +161,7 @@ const ComboChart = () => {
             <tbody>
               {rawData.map((item, index) => (
                 <tr key={index}>
-                  <td>{item.month}</td>
+                  <td>{`${item.month.substring(5,7)}/${item.month.substring(0,4)}`}</td>
                   <td>{item.sales}</td>
                   <td>{item.customers}</td>
                   <td>{item.volume}</td>
