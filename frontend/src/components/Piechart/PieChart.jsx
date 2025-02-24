@@ -1,7 +1,6 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import Plot from 'react-plotly.js';
 
-// Memoriza o componente Plot para evitar re-renderizações desnecessárias
 const MemoizedPlot = React.memo(Plot);
 
 const PieChart = () => {
@@ -16,8 +15,12 @@ const PieChart = () => {
   ];
   const valores = [4500, 3200, 2100, 1600, 900, 700, 500];
 
+  // Calcula o total original (quando todas as legendas estão ativas)
+  const fullTotal = useMemo(() => valores.reduce((a, b) => a + b, 0), [valores]);
+
   // Estado para exibir o total visível
-  const [total, setTotal] = useState(valores.reduce((a, b) => a + b, 0));
+  const [total, setTotal] = useState(fullTotal);
+
   // Ref para armazenar o status de visibilidade dos grupos sem causar re-render
   const visibleGroupsRef = useRef(
     grupos.reduce((acc, grupo) => {
@@ -65,21 +68,24 @@ const PieChart = () => {
   // Função que trata o clique na legenda
   const handleLegendClick = useCallback((eventData, graphDiv) => {
     const label = eventData.label;
-    // Atualiza o status do grupo clicado
+    // Alterna a visibilidade do grupo clicado
     visibleGroupsRef.current[label] = !visibleGroupsRef.current[label];
     // Recalcula o total com base nos grupos visíveis
     const newTotal = grupos.reduce((sum, grupo, index) => {
       return sum + (visibleGroupsRef.current[grupo] ? valores[index] : 0);
     }, 0);
     setTotal(newTotal);
-    // Permite que o comportamento padrão do Plotly (ocultar/mostrar a fatia) ocorra
+    // Permite o comportamento padrão do Plotly (ocultar/mostrar a fatia)
   }, [grupos, valores]);
+
+  // Calcula a porcentagem do total visível em relação ao total original
+  const percentage = Math.round((total / fullTotal) * 100);
 
   return (
     <div className="pie-chart-plotly-container">
       <h2>Vendas por Grupo de Produto</h2>
       <div>
-        <strong>Total Vendido:</strong> {total}
+        <strong>Total Vendido:</strong> {total} ({percentage}%)
       </div>
       <MemoizedPlot
         data={data}
@@ -90,7 +96,7 @@ const PieChart = () => {
           displaylogo: false,
           modeBarButtonsToRemove: ['toImage'],
         }}
-        // Usa onInitialized para adicionar o listener sem reinicializar o gráfico
+        // Adiciona o listener para clique na legenda sem reinicializar o gráfico
         onInitialized={(figure, graphDiv) => {
           graphDiv.on('plotly_legendclick', (eventData) =>
             handleLegendClick(eventData, graphDiv)
