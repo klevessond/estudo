@@ -5,6 +5,7 @@ import PieChart from  '../../Piechart/PieChart';
 import ComboChart from '../../ComboChart/ComboChart';
 import SalesMap from '../../Map/SalesMap';
 import PieVendasCanceladas from '../../Piechart/PieVendasCanceladas';
+import Linevendedores from '../../LineChart/Linevendedores';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -56,6 +57,7 @@ const Dashboard = () => {
                 </div>
                 <div className="chart-section right-section">
                     <BarChart />
+                    <Linevendedores/>
                 </div>
             </div>
             {/* Container independente para o mapa */}

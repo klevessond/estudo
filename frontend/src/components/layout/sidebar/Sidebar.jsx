@@ -11,8 +11,8 @@ const Sidebar = () => {
             </button>
             <ul>
                 <li>{isCollapsed ? '🏠' : 'Home'}</li>
-                <li>{isCollapsed ? '📊' : 'Gráficos'}</li>
-                <li>{isCollapsed ? '📄' : 'Relatórios'}</li>
+                <li>{isCollapsed ? '📊' : 'Analise Demografia'}</li>
+                <li>{isCollapsed ? '📄' : 'Monitoramento de Ecarte'}</li>
             </ul>
         </aside>
     );
