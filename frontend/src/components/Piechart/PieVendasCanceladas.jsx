@@ -19,7 +19,7 @@ const PieVendasCanceladas = () => {
     "Empresa C": true,
   });
 
-  // Função para alternar a seleção de uma empresa
+  // Alterna a seleção de uma empresa
   const toggleCompany = useCallback((companyName) => {
     setSelectedCompanies(prev => ({
       ...prev,
@@ -27,7 +27,7 @@ const PieVendasCanceladas = () => {
     }));
   }, []);
 
-  // Calcula os totais separadamente: total vendido e total devolvido
+  // Calcula os totais para as empresas ativas
   const { totalVendido, totalDevolvido } = useMemo(() => {
     let totalVendido = 0, totalDevolvido = 0;
     companies.forEach(company => {
@@ -38,6 +38,23 @@ const PieVendasCanceladas = () => {
     });
     return { totalVendido, totalDevolvido };
   }, [companies, selectedCompanies]);
+
+  // Totais completos (quando todas as empresas estão ativas)
+  const { fullTotalVendido, fullTotalDevolvido } = useMemo(() => {
+    let fullTotalVendido = 0, fullTotalDevolvido = 0;
+    companies.forEach(company => {
+      fullTotalVendido += company.values[0];
+      fullTotalDevolvido += company.values[1];
+    });
+    return { fullTotalVendido, fullTotalDevolvido };
+  }, [companies]);
+
+  // Cálculo dos percentuais (em relação aos totais completos)
+  const percentageVendido = Math.round((totalVendido / fullTotalVendido) * 100) || 0;
+  const percentageDevolvido = Math.round((totalDevolvido / fullTotalDevolvido) * 100) || 0;
+
+  // Novo total faturado: soma de vendido e devolvido
+  const totalFaturado = totalVendido + totalDevolvido;
 
   // Dados para o Plotly – todos os gráficos são exibidos, mesmo que a empresa esteja inativa
   const companyData = useMemo(() => companies.map((company, index) => ({
@@ -112,10 +129,12 @@ const PieVendasCanceladas = () => {
         ))}
       </div>
       
-      {/* Exibe os totais separados */}
+      {/* Exibe os totais com os percentuais e o novo total faturado */}
       <div className="totals-container">
-        <div className="total-vendido">Total Vendido: {totalVendido}</div>
-        <div className="total-devolvido">Total Devolvido: {totalDevolvido}</div>
+        <div className="total-faturado">Faturado: {totalFaturado}</div>
+        <div className="total-vendido">Total Entregue: {totalVendido} ({percentageVendido}%)</div>
+        <div className="total-devolvido">Total Devolvido: {totalDevolvido} ({percentageDevolvido}%)</div>
+        
       </div>
       
       <Plot 
