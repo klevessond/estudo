@@ -159,14 +159,61 @@ const ComboChart = () => {
               </tr>
             </thead>
             <tbody>
-              {rawData.map((item, index) => (
-                <tr key={index}>
-                  <td>{`${item.month.substring(5,7)}/${item.month.substring(0,4)}`}</td>
-                  <td>{item.sales}</td>
-                  <td>{item.customers}</td>
-                  <td>{item.volume}</td>
-                </tr>
-              ))}
+              {rawData.map((item, index) => {
+                // Formata o mês para MM/AAAA
+                const formattedMonth = `${item.month.substring(5, 7)}/${item.month.substring(0, 4)}`;
+
+                // Calcula variações percentuais se não for o primeiro mês
+                const prev = rawData[index - 1] || {};
+                const salesChange = index > 0 ? (((item.sales - prev.sales) / prev.sales) * 100).toFixed(1) : null;
+                const customersChange = index > 0 ? (((item.customers - prev.customers) / prev.customers) * 100).toFixed(1) : null;
+                const volumeChange = index > 0 ? (((item.volume - prev.volume) / prev.volume) * 100).toFixed(1) : null;
+
+                return (
+                  <tr key={index}>
+                    <td>{formattedMonth}</td>
+                    <td>
+                      {item.sales}
+                      {index > 0 && item.sales < prev.sales && (
+                        <span className="decrease-indicator">
+                          ↓ {Math.abs(salesChange)}%
+                        </span>
+                      )}
+                      {index > 0 && item.sales > prev.sales && (
+                        <span className="increase-indicator">
+                          ↑ {salesChange}%
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {item.customers}
+                      {index > 0 && item.customers < prev.customers && (
+                        <span className="decrease-indicator">
+                          ↓ {Math.abs(customersChange)}%
+                        </span>
+                      )}
+                      {index > 0 && item.customers > prev.customers && (
+                        <span className="increase-indicator">
+                          ↑ {customersChange}%
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {item.volume}
+                      {index > 0 && item.volume < prev.volume && (
+                        <span className="decrease-indicator">
+                          ↓ {Math.abs(volumeChange)}%
+                        </span>
+                      )}
+                      {index > 0 && item.volume > prev.volume && (
+                        <span className="increase-indicator">
+                          ↑ {volumeChange}%
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

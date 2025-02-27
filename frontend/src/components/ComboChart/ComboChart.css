@@ -1,7 +1,6 @@
 /* components/ComboChart/ComboChart.css */
 .combo-chart-container {
   width: 100%;
-  /* Removendo o max-width para usar todo o espaço disponível ou aumente conforme necessário */
   margin: 0 auto;
   padding: 20px;
   box-sizing: border-box;
@@ -12,7 +11,7 @@
   flex-direction: row;
   gap: 20px;
   align-items: flex-start;
-  flex-wrap: nowrap; /* Garante que não quebre para uma nova linha */
+  flex-wrap: nowrap;
 }
 
 /* Tabela à esquerda com tamanho mínimo */
@@ -38,6 +37,19 @@
 .tabela th {
   background-color: #f0f0f0;
   font-weight: bold;
+}
+
+/* Indicadores de queda e aumento */
+.decrease-indicator {
+  color: red;
+  font-size: 0.9em;
+  margin-left: 5px;
+}
+
+.increase-indicator {
+  color: green;
+  font-size: 0.9em;
+  margin-left: 5px;
 }
 
 /* Gráfico à direita com tamanho mínimo */
