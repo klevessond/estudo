@@ -77,11 +77,11 @@ const rawDataYoY = [
 ];
 
 const ComboChart = () => {
-  const [mode, setMode] = useState('MoM'); // 'MoM' ou 'YoY'
+  const [mode, setMode] = useState('Mes'); // 'MoM' ou 'YoY'
 
   let data, options, tableRows, tableHeaderLabel;
 
-  if (mode === 'MoM') {
+  if (mode === 'Mes') {
     // Dados MoM
     const labels = rawDataMoM.map(item => item.month);
     const dataSales = rawDataMoM.map(item => item.sales);
@@ -122,7 +122,7 @@ const ComboChart = () => {
       plugins: {
         title: {
           display: true,
-          text: 'Evolução MoM - Vendas, Clientes e Volume (2023)',
+          text: 'Evolução Mes/Mes - Vendas, Clientes e Volume (2023)',
         },
         legend: { position: 'top' },
       },
@@ -294,7 +294,7 @@ const ComboChart = () => {
       plugins: {
         title: {
           display: true,
-          text: 'Comparação YoY - Vendas, Clientes e Volume',
+          text: 'Comparação Ano/Ano - Vendas, Clientes e Volume',
         },
         legend: { position: 'top' },
       },
@@ -331,8 +331,8 @@ const ComboChart = () => {
 
   return (
     <div className="combo-chart-container">
-      <button onClick={() => setMode(mode === 'MoM' ? 'YoY' : 'MoM')}>
-        Mudar para {mode === 'MoM' ? 'YoY' : 'MoM'}
+      <button onClick={() => setMode(mode === 'Mes' ? 'Ano' : 'Mes')}>
+        Mudar para {mode === 'Mes' ? 'Ano' : 'Mes'}
       </button>
       <div className="combo-chart-content">
         <div className="chart-table">
