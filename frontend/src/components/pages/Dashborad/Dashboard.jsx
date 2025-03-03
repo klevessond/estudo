@@ -7,6 +7,7 @@ import SalesMap from '../../Map/SalesMap';
 import PieVendasCanceladas from '../../Piechart/PieVendasCanceladas';
 import Linevendedores from '../../LineChart/Linevendedores';
 import DencidadeCidadeChart from '../../ComboChart/DencidadeCidadeChart';
+import VendacidadeQuartil from '../../Quartil/vendacidadequartil';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -58,10 +59,8 @@ const Dashboard = () => {
                 </div>
                 <div>
                     <div className="chart-section right-section">
-                       <div><BarChart /></div> 
-                        
-                    
-                    <Linevendedores/>
+                       <VendacidadeQuartil />
+                        <Linevendedores/>
                     </div>
                 </div>
             </div>
