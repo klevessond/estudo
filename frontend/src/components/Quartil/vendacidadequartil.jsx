@@ -40,20 +40,16 @@ const VendacidadeQuartil = () => {
   const n = salesValues.length;
 
   // Cálculo dos quartis:
-  // - Q1: mediana dos 14 primeiros valores (média dos itens de índice 6 e 7)
-  // - Q2: mediana do conjunto (valor de índice 14, pois há 29 itens)
-  // - Q3: mediana dos 14 últimos valores (média dos itens de índice 21 e 22)
-  const Q1 = (salesValues[6] + salesValues[7]) / 2; // 1090.32
-  const Q2 = salesValues[14]; // 2487.42
-  const Q3 = (salesValues[21] + salesValues[22]) / 2; // 5351.285
+  const Q1 = (salesValues[6] + salesValues[7]) / 2; // mediana dos 14 primeiros valores
+  const Q2 = salesValues[14]; // mediana do conjunto
+  const Q3 = (salesValues[21] + salesValues[22]) / 2; // mediana dos 14 últimos valores
 
-  // Cálculo do IQR e dos limites de outline (ainda usados para o gráfico)
+  // Cálculo do IQR e limites de outline (mantidos no gráfico)
   const iqr = Q3 - Q1;
   const lowerOutline = Q1 - 1.5 * iqr;
   const upperOutline = Q3 + 1.5 * iqr;
 
   // Determinação da simetria da distribuição:
-  // Se a dispersão na parte superior (Q3 - Q2) for maior que a inferior (Q2 - Q1), há assimetria positiva (cauda à direita).
   const diffLower = Q2 - Q1;
   const diffUpper = Q3 - Q2;
   let simetria = "Simétrica";
@@ -63,7 +59,16 @@ const VendacidadeQuartil = () => {
     simetria = "Assimetria Negativa";
   }
 
-  // Eixo X: usamos o índice (de 1 a 29)
+  // Cálculo da média e do desvio padrão (populacional)
+  const mean = salesValues.reduce((sum, val) => sum + val, 0) / n;
+  const variance = salesValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / n;
+  const std = Math.sqrt(variance);
+
+  // Para a faixa do desvio padrão:
+  const lowerStdLine = mean - std;
+  const upperStdLine = mean + std;
+
+  // Eixo X: índice dos produtos (1 a n)
   const xValues = Array.from({ length: n }, (_, i) => i + 1);
 
   useEffect(() => {
@@ -76,7 +81,7 @@ const VendacidadeQuartil = () => {
       line: { color: 'blue' }
     };
 
-    // Trace para o Q1 (linha horizontal)
+    // Traces para os quartis e outlines
     const traceQ1 = {
       x: [1, n],
       y: [Q1, Q1],
@@ -85,7 +90,6 @@ const VendacidadeQuartil = () => {
       line: { dash: 'dash', color: 'green' }
     };
 
-    // Trace para a Mediana (Q2)
     const traceQ2 = {
       x: [1, n],
       y: [Q2, Q2],
@@ -94,7 +98,6 @@ const VendacidadeQuartil = () => {
       line: { dash: 'dash', color: 'orange' }
     };
 
-    // Trace para o Q3
     const traceQ3 = {
       x: [1, n],
       y: [Q3, Q3],
@@ -103,7 +106,6 @@ const VendacidadeQuartil = () => {
       line: { dash: 'dash', color: 'red' }
     };
 
-    // Trace para o outline inferior
     const traceLowerOutline = {
       x: [1, n],
       y: [lowerOutline, lowerOutline],
@@ -112,7 +114,6 @@ const VendacidadeQuartil = () => {
       line: { dash: 'dash', color: 'purple' }
     };
 
-    // Trace para o outline superior
     const traceUpperOutline = {
       x: [1, n],
       y: [upperOutline, upperOutline],
@@ -121,7 +122,29 @@ const VendacidadeQuartil = () => {
       line: { dash: 'dash', color: 'brown' }
     };
 
+    // Trace para a faixa do desvio padrão (band)
+    const traceStdBand = {
+      x: [1, n, n, 1],
+      y: [lowerStdLine, lowerStdLine, upperStdLine, upperStdLine],
+      fill: 'toself',
+      fillcolor: 'rgba(0, 0, 255, 0.2)', // cor azul com transparência
+      line: { color: 'transparent' },
+      type: 'scatter',
+      name: 'Média ± Desvio Padrão'
+    };
+
+    // Trace para a linha da média
+    const traceMean = {
+      x: [1, n],
+      y: [mean, mean],
+      mode: 'lines',
+      name: 'Média',
+      line: { dash: 'dot', color: 'black' }
+    };
+
     const data = [
+      traceStdBand,
+      traceMean,
       traceSales,
       traceQ1,
       traceQ2,
@@ -132,32 +155,28 @@ const VendacidadeQuartil = () => {
 
     const layout = {
       title: 'Relatório de Dispersão - Valores de Venda e Quartis',
-      xaxis: {
-        title: 'Índice dos Produtos',
-        dtick: 1
-      },
-      yaxis: {
-        title: 'Valor de Venda (R$)'
-      },
+      xaxis: { title: 'Índice dos Produtos', dtick: 1 },
+      yaxis: { title: 'Valor de Venda (R$)' },
       margin: { t: 50, b: 50, l: 50, r: 50 }
     };
 
     Plotly.newPlot(chartRef.current, data, layout);
-  }, [xValues, salesValues, n, Q1, Q2, Q3, lowerOutline, upperOutline]);
+  }, [xValues, salesValues, n, Q1, Q2, Q3, lowerOutline, upperOutline, mean, lowerStdLine, upperStdLine]);
 
   return (
     <div className="chart-container">
       <h2>Relatório de Dispersão - Valores de Venda</h2>
       <p>
-      Amplitude Interquartil - 50% dos valores estão entre <strong>Q1({Q1.toFixed(2)}) e Q3 ({Q3.toFixed(2)})</strong>
-        </p>
-        <p>
-          <strong>Tipo de Simetria:</strong> {simetria}
-        </p>
-      <div ref={chartRef} className="chart"></div>
-      <div className="chart-info">
+        50% dos valores estão entre <strong>Q1({Q1.toFixed(2)}) e Q3({Q3.toFixed(2)})</strong>
+      </p>
+      <p>
+        Tipo de Simetria: <strong>{simetria} </strong>     
+        Média: <strong>{mean.toFixed(2)}</strong> | Desvio Padrão: <strong>{std.toFixed(2)}</strong>
+      </p>
+      <p>
         
-      </div>
+      </p>
+      <div ref={chartRef} className="chart"></div>
     </div>
   );
 };
