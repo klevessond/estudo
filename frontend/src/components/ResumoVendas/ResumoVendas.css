@@ -1,0 +1,97 @@
+.resumo-container {
+    background: #fff;
+    margin: 20px;
+    border-radius: 12px;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.05);
+    padding: 20px;
+  }
+  
+  .resumo-layout {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 30px;
+    align-items: flex-start;
+  }
+  
+  /* Bloco 1: Receita, Meta, Percentual */
+  .bloco-info {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  /* Bloco 2: Gráfico */
+  .bloco-grafico {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
+  }
+  .chart-title {
+    font-size: 1.2rem;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  
+  .info-total {
+    text-align: center;
+    margin-bottom: 10px;
+    font-size: 1rem;
+  }
+  
+  /* Bloco 3: Ticket Médio e Nº de Vendas */
+  .bloco-kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .info-card {
+    padding: 16px 20px;
+    border-radius: 8px;
+    width: 200px;
+  }
+  
+  .info-card.green {
+    background-color: #28a745;
+    color: white;
+  }
+  
+  .info-card.gray {
+    background-color: #f8f9fa;
+    color: #333;
+    border: 1px solid #dee2e6;
+  }
+  
+  .label {
+    font-size: 14px;
+    font-weight: bold;
+  }
+  
+  .value {
+    font-size: 20px;
+    font-weight: bold;
+    margin-top: 5px;
+  }
+  
+  .percent-bar {
+    background-color: #f1f1f1;
+    color: #28a745;
+    font-weight: bold;
+    font-size: 20px;
+    padding: 30px 16px;
+    border-radius: 8px;
+    border: 2px solid #28a745;
+    width: 80px;
+    text-align: center;
+    height: fit-content;
+  }
+  .grafico-centralizado {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 400px;
+    width: 100%;
+  }

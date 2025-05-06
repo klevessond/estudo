@@ -25,7 +25,7 @@
 .chart-table {
   flex: 1;
   min-width: 300px;
-  max-height: 400px; /* altura máxima para scroll */
+  max-height: 600px; /* altura máxima para scroll */
   overflow-y: auto;
 }
 

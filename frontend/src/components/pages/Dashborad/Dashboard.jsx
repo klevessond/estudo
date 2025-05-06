@@ -8,15 +8,14 @@ import PieVendasCanceladas from '../../Piechart/PieVendasCanceladas';
 import Linevendedores from '../../LineChart/Linevendedores';
 import DencidadeCidadeChart from '../../ComboChart/DencidadeCidadeChart';
 import VendacidadeQuartil from '../../Quartil/vendacidadequartil';
+import ResumoVendas from '../../ResumoVendas/ResumoVendas';
 import './Dashboard.css';
 
 const Dashboard = () => {
     return (
-        <div className="dashboard">
-            <ComboChart />
-            <div className="dashboard-container">
-                <div>
-                    <div className="metric-cards">
+        <div>
+            <div><ResumoVendas /></div>   
+             <div className="metric-cards">
                         <MetricCard
                             title="Novos clientes"
                             value="50"
@@ -50,6 +49,10 @@ const Dashboard = () => {
                             backgroundColor="#fff5f6"
                         />
                     </div>
+            <ComboChart/>
+            <div>
+                <div>
+                   
                     <div className="chart-section">
                         <div className="pie-charts-row">
                             <PieChart />
