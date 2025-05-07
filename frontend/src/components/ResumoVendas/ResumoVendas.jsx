@@ -79,12 +79,80 @@ const ResumoVendas = () => {
 
   const percentualVisivel = ((total / fullTotal) * 100).toFixed(1);
 
+  // Dentro do componente ResumoVendas
+  const [periodoSelecionado, setPeriodoSelecionado] = useState('mes');
+  const [mesAtual, setMesAtual] = useState(() => {
+    const hoje = new Date();
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+    const ano = hoje.getFullYear();
+    return `${ano}-${mes}`; // formato do input[type=month]
+  });
+
+const renderCamposData = () => {
+  if (periodoSelecionado === 'mes') {
+    return (
+      <div className="campos-periodo">
+        <input
+          type="month"
+          className="input-periodo"
+          value={mesAtual}
+          onChange={(e) => setMesAtual(e.target.value)}
+        />
+      </div>
+    );
+  }
+
+  if (periodoSelecionado === 'periodo') {
+    return (
+      <div className="campos-periodo">
+        <label>De:</label>
+        <input type="date" className="input-periodo" />
+        <label>Até:</label>
+        <input type="date" className="input-periodo" />
+      </div>
+    );
+  }
+
+  return null;
+};
+  
   return (
     <div className="resumo-container">
       <div className="resumo-layout">
 
         {/* Bloco 1: Receita, Meta e Percentual */}
+
         <div className="bloco-info">
+        <div className="info-card gray" style={{ width: '90%' }}>
+          <div className="periodo-selector">
+              <label className="periodo-label">Selecionar período:</label>
+              <div className="botoes-periodo">
+                <button
+                  className={`btn-periodo ${periodoSelecionado === 'hoje' ? 'ativo' : ''}`}
+                  onClick={() => setPeriodoSelecionado('hoje')}
+                >
+                  Hoje
+                </button>
+                <button
+                  className={`btn-periodo ${periodoSelecionado === 'mes' ? 'ativo' : ''}`}
+                  onClick={() => setPeriodoSelecionado('mes')}
+                >
+                  Mês
+                </button>
+                <button
+                  className={`btn-periodo ${periodoSelecionado === 'periodo' ? 'ativo' : ''}`}
+                  onClick={() => setPeriodoSelecionado('periodo')}
+                >
+                  Período
+                </button>
+              </div>
+              {renderCamposData()}
+            </div>
+            </div>
+            
+
+
+
           <div className="info-card green">
             <div className="label">Receita</div>
             <div className="value">R$ {receita.toLocaleString()}</div>

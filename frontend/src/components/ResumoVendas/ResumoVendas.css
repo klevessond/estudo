@@ -132,3 +132,52 @@
     padding: 0;
     font-size: 16px;
   }
+
+  .periodo-selector {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+  }
+  
+  .periodo-label {
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+  
+  .botoes-periodo {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  
+  .btn-periodo {
+    background-color: #e0e0e0;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.2s ease;
+  }
+  
+  .btn-periodo:hover {
+    background-color: #d5d5d5;
+  }
+  
+  .btn-periodo.ativo {
+    background-color: #28a745;
+    color: white;
+  }
+  
+  .campos-periodo {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  
+  .input-periodo {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
