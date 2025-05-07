@@ -1,8 +1,11 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import Plot from 'react-plotly.js';
 import './ResumoVendas.css';
+import { useNavigate } from 'react-router-dom';
+
 
 const ResumoVendas = () => {
+  const navigate = useNavigate();
   const receita = 1000000;
   const meta = 952000;
   const vendas = 420;
@@ -318,6 +321,12 @@ const renderCamposData = () => {
         {/* Bloco 4: Tabela Top 10 Itens */}
         <div className="bloco-top-itens">
           <h3>Top 10 itens</h3>
+          <button
+  onClick={() => navigate('/pivot-vendas', { state: { top10Itens } })}
+  style={{ marginTop: '12px', padding: '8px 16px', backgroundColor: '#36A2EB', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+>
+  Ver Tabela Dinâmica
+</button>
           <table className="top-itens-tabela">
             <thead>
               <tr>
