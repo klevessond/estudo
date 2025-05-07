@@ -12,6 +12,14 @@ const ResumoVendas = () => {
 
   const lojas = ['Loja Norte', 'Loja Sul', 'Loja Leste', 'Loja Oeste'];
   const valores = [420000, 370000, 120000, 90000];
+  const [mostrarDetalhesTicket, setMostrarDetalhesTicket] = useState(false);
+  const [mostrarDetalhesVendas, setMostrarDetalhesVendas] = useState(false);
+  const [mostrarDetalhesClientes, setMostrarDetalhesClientes] = useState(false);
+  const vendasPorLoja = [180, 140, 60, 40]; // proporção fictícia
+  const nvendasPorLoja = [180, 140, 60, 40]; // soma: 420
+  const clientesPorLoja = [300, 350, 250, 200]; // soma: 1100
+  const ticketMedioPorLoja = lojas.map((_, i) => valores[i] / vendasPorLoja[i]);
+
 
   const fullTotal = useMemo(() => valores.reduce((a, b) => a + b, 0), [valores]);
   const [total, setTotal] = useState(fullTotal);
@@ -175,39 +183,136 @@ const renderCamposData = () => {
       <strong>Total Vendido:</strong> R$ {total.toLocaleString()} ({percentualVisivel}%)
     </div>
 
-    <Plot
-      data={data}
-      layout={layout}
-      config={{
-        responsive: true,
-        displaylogo: false,
-        displayModeBar: false,
-      }}
-      onInitialized={(figure, graphDiv) => {
-        graphDiv.on('plotly_legendclick', (eventData) =>
-          handleLegendClick(eventData, graphDiv)
-        );
-      }}
-      style={{ width: '100%', height: '100%' }}
-    />
-  </div>
-</div>
+        <Plot
+          data={data}
+          layout={layout}
+          config={{
+            responsive: true,
+            displaylogo: false,
+            displayModeBar: false,
+          }}
+          onInitialized={(figure, graphDiv) => {
+            graphDiv.on('plotly_legendclick', (eventData) =>
+              handleLegendClick(eventData, graphDiv)
+            );
+          }}
+          style={{ width: '100%', height: '100%' }}
+        />
+      </div>
+    </div>
 
 
         {/* Bloco 3: Ticket Médio e Nº de Vendas */}
         <div className="bloco-kpi">
-          <div className="info-card gray">
-            <div className="label">Ticket Médio</div>
+        <div
+            className="info-card gray"
+            onClick={() => setMostrarDetalhesTicket(prev => !prev)}
+            style={{ cursor: 'pointer', position: 'relative' }}
+          >
+            <div className="label">
+              Ticket Médio
+              <span style={{ fontSize: '12px', fontWeight: 'normal', marginLeft: '6px', color: '#666' }}>
+                
+              </span>
+              <span style={{
+                position: 'absolute',
+                right: 10,
+                top: 18,
+                fontSize: '16px',
+                transition: 'transform 0.2s ease',
+                transform: mostrarDetalhesTicket ? 'rotate(180deg)' : 'rotate(0deg)'
+              }}>
+                ⬇️
+              </span>
+            </div>
             <div className="value">R$ {ticketMedio.toFixed(2).toLocaleString()}</div>
+
+            {mostrarDetalhesTicket && (
+              <div style={{ marginTop: '12px', fontSize: '13px' }}>
+                <strong>Por Loja:</strong>
+                <ul style={{ marginTop: '4px', paddingLeft: '16px' }}>
+                  {lojas.map((loja, i) => (
+                    <li key={loja}>
+                      {loja}: R$ {ticketMedioPorLoja[i].toFixed(2).toLocaleString()}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
-          <div className="info-card gray">
-            <div className="label">Nº de Vendas</div>
-            <div className="value">{vendas}</div>
-          </div>
-          <div className="info-card gray">
-            <div className="label">Clientes ativos</div>
-            <div className="value">{clientes_ativos}</div>
-          </div>
+          <div
+                className="info-card gray"
+                onClick={() => setMostrarDetalhesVendas(prev => !prev)}
+                style={{ cursor: 'pointer', position: 'relative' }}
+              >
+                <div className="label">
+                  Nº de Vendas
+                  <span style={{ fontSize: '12px', fontWeight: 'normal', marginLeft: '6px', color: '#666' }}>
+                   
+                  </span>
+                  <span style={{
+                    position: 'absolute',
+                    right: 10,
+                    top: 18,
+                    fontSize: '16px',
+                    transition: 'transform 0.2s ease',
+                    transform: mostrarDetalhesVendas ? 'rotate(180deg)' : 'rotate(0deg)'
+                  }}>
+                    ⬇️
+                  </span>
+                </div>
+                <div className="value">{vendas}</div>
+
+                {mostrarDetalhesVendas && (
+                  <div style={{ marginTop: '12px', fontSize: '13px' }}>
+                    <strong>Por Loja:</strong>
+                    <ul style={{ marginTop: '4px', paddingLeft: '16px' }}>
+                      {lojas.map((loja, i) => (
+                        <li key={loja}>
+                          {loja}: {vendasPorLoja[i]}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div
+                  className="info-card gray"
+                  onClick={() => setMostrarDetalhesClientes(prev => !prev)}
+                  style={{ cursor: 'pointer', position: 'relative' }}
+                >
+                  <div className="label">
+                    Clientes Ativos
+                    <span style={{ fontSize: '12px', fontWeight: 'normal', marginLeft: '6px', color: '#666' }}>
+                      
+                    </span>
+                    <span style={{
+                      position: 'absolute',
+                      right: 10,
+                      top: 18,
+                      fontSize: '16px',
+                      transition: 'transform 0.2s ease',
+                      transform: mostrarDetalhesClientes ? 'rotate(180deg)' : 'rotate(0deg)'
+                    }}>
+                      ⬇️
+                    </span>
+                  </div>
+                  <div className="value">{clientes_ativos}</div>
+
+                  {mostrarDetalhesClientes && (
+                    <div style={{ marginTop: '12px', fontSize: '13px' }}>
+                      <strong>Por Loja:</strong>
+                      <ul style={{ marginTop: '4px', paddingLeft: '16px' }}>
+                        {lojas.map((loja, i) => (
+                          <li key={loja}>
+                            {loja}: {clientesPorLoja[i]}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
         </div>
 
         {/* Bloco 4: Tabela Top 10 Itens */}
