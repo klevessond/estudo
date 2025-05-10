@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import './Login.css';
+import logo from '../../assets/logo.png';
+
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -22,11 +25,23 @@ const Login = () => {
   };
 
   return (
-    <div>
-      <h2>Login</h2>
-      <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Usuário" />
-      <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="Senha" />
-      <button onClick={handleLogin}>Entrar</button>
+    <div className="login-container">
+      <div className="login-card">
+        <img src={logo} alt="Logo da empresa" className="login-logo" />
+        <h2>Login</h2>
+        <input
+          value={username}
+          onChange={e => setUsername(e.target.value)}
+          placeholder="Usuário"
+        />
+        <input
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          type="password"
+          placeholder="Senha"
+        />
+        <button onClick={handleLogin}>Entrar</button>
+      </div>
     </div>
   );
 };

@@ -9,11 +9,13 @@ import Linevendedores from '../../LineChart/Linevendedores';
 import DencidadeCidadeChart from '../../ComboChart/DencidadeCidadeChart';
 import VendacidadeQuartil from '../../Quartil/vendacidadequartil';
 import ResumoVendas from '../../ResumoVendas/ResumoVendas';
+import IndicativosDeVenda from '../../metricard/IndicativosDeVenda'; // já no padrão
 import './Dashboard.css';
 
 const Dashboard = () => {
     return (
         <div>
+            <div><IndicativosDeVenda /></div>
             <div><ResumoVendas /></div>   
              <div className="metric-cards">
                         <MetricCard
