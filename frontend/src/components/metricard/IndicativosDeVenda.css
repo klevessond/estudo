@@ -62,29 +62,23 @@
     height: 24px;
   }
   
-  .card-value {
+  .card-value,
+  .card-percentage {
     font-size: 1.5rem;
     font-weight: bold;
-    margin-top: 0.5rem;
-    
+    margin: 0;
   }
   
   .card-subtitle {
-    font-size: 1.3rem;
+    font-size: 1.1rem;
+    margin: 0;
     opacity: 0.9;
-    
-    
-    
   }
   
-  .card-subtitle2{
-    font-size: 1.3rem;
+  .card-subtitle2 {
+    font-size: 1.1rem;
+    margin: 0;
     opacity: 0.9;
-  }
-
-  .card-percentage {
-    font-size: 1.3rem;
-    margin-top: 0.5rem;
   }
   
   .card-variation {
@@ -112,4 +106,11 @@
     background-color: #1e88e5;
     color: white;
     border-color: #0d47a1;
+  }
+
+  .card-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem; /* ajuste fino da distância entre valor e subtítulo */
+    margin-bottom: 0.25rem; /* se quiser um espaçamento entre os grupos */
   }

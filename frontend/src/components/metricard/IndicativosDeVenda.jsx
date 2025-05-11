@@ -8,10 +8,14 @@ const Card = ({ title, value, subtitle,subtitle2, percentage, variation, icon })
         <h2>{title}</h2>
         {icon && <img src={icon} alt="Ícone" className="card-icon" />}
       </div>
-      <p className="card-value">{value}</p>
-      {subtitle && <p className="card-subtitle">{subtitle}</p>}
-      {percentage && <p className="card-percentage">{percentage}</p>}
-      {subtitle2 && <p className="card-subtitle">{subtitle2}</p>}
+      <div className="card-group">
+  <p className="card-value">{value}</p>
+  {subtitle && <p className="card-subtitle">{subtitle}</p>}
+</div>
+<div className="card-group">
+  {percentage && <p className="card-percentage">{percentage}</p>}
+  {subtitle2 && <p className="card-subtitle">{subtitle2}</p>}
+</div>
       {variation && <p className="card-variation">Variação: {variation}</p>}
     </div>
   );
