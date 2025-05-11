@@ -1,10 +1,10 @@
 .indicativos-wrapper {
-    padding: 1rem;
+    padding: 0rem;
   }
   
   .indicativos-buttons {
     display: flex;
-    gap: 0.5rem;
+    gap: 1.0rem;
     margin-bottom: 1rem;
     flex-wrap: wrap;
   }
@@ -25,10 +25,12 @@
   }
   
   .indicativos-container {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-    padding-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-start; /* <- alinhamento à esquerda */
+    align-items: flex-start;
+    padding-top: 0.5rem;
   }
   
   .indicativo-stack {
@@ -38,18 +40,21 @@
     height: 100%;
   }
   .indicativo-card {
-    background-color: #1e88e5;
+    background-color: #075396;
     color: white;
     border-radius: 1rem;
-    padding: 1rem;
-    width: 260px;
+    padding: 0.5rem;
+    width: 170px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    
   }
   
-  .card-header {
+  .card-header h2 {
     display: flex;
+    margin: 0;
     justify-content: space-between;
     align-items: center;
+    
   }
   
   .card-icon {
@@ -61,20 +66,29 @@
     font-size: 1.5rem;
     font-weight: bold;
     margin-top: 0.5rem;
+    
   }
   
   .card-subtitle {
-    font-size: 0.9rem;
+    font-size: 1.3rem;
     opacity: 0.9;
+    
+    
+    
   }
   
+  .card-subtitle2{
+    font-size: 1.3rem;
+    opacity: 0.9;
+  }
+
   .card-percentage {
-    font-size: 0.9rem;
+    font-size: 1.3rem;
     margin-top: 0.5rem;
   }
   
   .card-variation {
-    font-size: 0.9rem;
+    font-size: 1.3rem;
     margin-top: 0.25rem;
   }
 

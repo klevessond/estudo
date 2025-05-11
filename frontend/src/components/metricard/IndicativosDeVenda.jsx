@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './IndicativosDeVenda.css';
 
-const Card = ({ title, value, subtitle, percentage, variation, icon }) => {
+const Card = ({ title, value, subtitle,subtitle2, percentage, variation, icon }) => {
   return (
     <div className="indicativo-card">
       <div className="card-header">
@@ -11,6 +11,7 @@ const Card = ({ title, value, subtitle, percentage, variation, icon }) => {
       <p className="card-value">{value}</p>
       {subtitle && <p className="card-subtitle">{subtitle}</p>}
       {percentage && <p className="card-percentage">{percentage}</p>}
+      {subtitle2 && <p className="card-subtitle">{subtitle2}</p>}
       {variation && <p className="card-variation">Variação: {variation}</p>}
     </div>
   );
@@ -52,23 +53,26 @@ const IndicativosDeVenda = () => {
           title="Realizado"
           value="32.715.084"
           subtitle="Faturamento"
-          percentage="84,92% Cobertura Atual"
+          percentage="84,92%"
+          subtitle2=" Cobertura Atual"
           variation="-5.810.197"
         />
         <Card
           title="Alocações"
           value="44.511.059"
           subtitle="Fat + A Faturar"
-          percentage="115,54% Cobertura Prevista"
+          percentage="115,54%"
+          subtitle2=" Cobertura Prevista"
           variation="5.985.778"
         />
         <Card
           title="Captado"
           value="114.523.742"
           subtitle="Valor Captado"
-          percentage="297,27% Cobertura Captado"
+          percentage="297,27%"
+          subtitle2=" Cobertura Captado"
           variation="75.998.461"
-          icon="/path/to/icon.png"
+          
         />
       </div>
     </div>
