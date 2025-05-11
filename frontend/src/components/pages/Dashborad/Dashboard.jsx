@@ -10,12 +10,16 @@ import DencidadeCidadeChart from '../../ComboChart/DencidadeCidadeChart';
 import VendacidadeQuartil from '../../Quartil/vendacidadequartil';
 import ResumoVendas from '../../ResumoVendas/ResumoVendas';
 import IndicativosDeVenda from '../../metricard/IndicativosDeVenda'; // já no padrão
+import IndicativosTabelaVendedor from '../../metricard/IndicativosTabelaVendedor';
 import './Dashboard.css';
 
 const Dashboard = () => {
     return (
         <div>
-            <div><IndicativosDeVenda /></div>
+            <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem' }}>
+                            <div><IndicativosDeVenda /></div>
+                            <div><IndicativosTabelaVendedor /></div>
+                </div>
             <div><ResumoVendas /></div>   
              <div className="metric-cards">
                         <MetricCard

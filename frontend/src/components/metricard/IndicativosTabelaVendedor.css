@@ -1,0 +1,14 @@
+th {
+    font-weight: bold;
+    border-bottom: 2px solid #0074c2;
+  }
+  
+  td {
+    border-bottom: 1px solid #ccc;
+  }
+  
+  table {
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+  }
+  
