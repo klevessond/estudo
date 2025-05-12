@@ -3,8 +3,11 @@ import React from 'react';
 import {
   useReactTable,
   getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
   flexRender,
 } from '@tanstack/react-table';
+
 import './IndicativosTabelaVendedor.css'
 const data = [
   {
@@ -186,18 +189,38 @@ const columns = [
 ];
 
 const IndicativosTabelaVendedor = () => {
-  const table = useReactTable({
-    data,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-  });
+  const [globalFilter, setGlobalFilter] = React.useState('');
 
+const table = useReactTable({
+  data,
+  columns,
+  state: {
+    globalFilter,
+  },
+      onGlobalFilterChange: setGlobalFilter,
+      getCoreRowModel: getCoreRowModel(),
+      getFilteredRowModel: getFilteredRowModel(),
+      getSortedRowModel: getSortedRowModel(),
+    });
   return (
     <div style={{ overflowX: 'auto', padding: '1rem' }}>
       <h3 style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
         Acompanhamento de desvios por Colaboradores
       </h3>
-
+      <input
+            type="text"
+            placeholder="Buscar colaborador..."
+            value={globalFilter ?? ''}
+            onChange={e => setGlobalFilter(e.target.value)}
+            style={{
+              marginBottom: '1rem',
+              padding: '6px 12px',
+              width: '100%',
+              maxWidth: '400px',
+              borderRadius: '6px',
+              border: '1px solid #ccc',
+            }}
+          />
       <div
         style={{
           maxHeight: '450px',         // Altura máxima (~10 linhas)
@@ -218,15 +241,22 @@ const IndicativosTabelaVendedor = () => {
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map(header => (
                   <th
-                    key={header.id}
-                    style={{
-                      padding: '8px',
-                      textAlign: 'left',
-                      borderBottom: '1px solid #ccc',
-                    }}
-                  >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                  </th>
+                  key={header.id}
+                  colSpan={header.colSpan}
+                  style={{
+                    padding: '8px',
+                    textAlign: 'left',
+                    borderBottom: '1px solid #ccc',
+                    cursor: header.column.getCanSort() ? 'pointer' : 'default',
+                  }}
+                  onClick={header.column.getToggleSortingHandler()}
+                >
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                  {{
+                    asc: ' 🔼',
+                    desc: ' 🔽',
+                  }[header.column.getIsSorted()] ?? null}
+                </th>
                 ))}
               </tr>
             ))}
