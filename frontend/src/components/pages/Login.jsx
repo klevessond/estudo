@@ -9,10 +9,11 @@ const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
+  const apiBase = `http://${window.location.hostname}:8000`;
 
   const handleLogin = async () => {
     try {
-      const response = await axios.post('http://localhost:8000/api/token/', {
+      const response = await axios.post(`${apiBase}/api/token/`, {
         username,
         password,
       });
