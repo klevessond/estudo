@@ -16,7 +16,7 @@ import './Dashboard.css';
 const Dashboard = () => {
     return (
         <div>
-            <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'row', gap: '0.5rem' }}>
                             <div><IndicativosDeVenda /></div>
                             <div><IndicativosTabelaVendedor /></div>
                 </div>

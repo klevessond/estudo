@@ -203,7 +203,7 @@ const table = useReactTable({
       getSortedRowModel: getSortedRowModel(),
     });
   return (
-    <div style={{ overflowX: 'auto', padding: '1rem' }}>
+    <div className="indicativos-tabela" style={{ overflowX: 'auto', padding: '1rem' }}>
       <h3 style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
         Acompanhamento de desvios por Colaboradores
       </h3>
@@ -223,7 +223,7 @@ const table = useReactTable({
           />
       <div
         style={{
-          maxHeight: '450px',         // Altura máxima (~10 linhas)
+          maxHeight: '200px',         // Altura máxima (~10 linhas)
           overflowY: 'auto',
           border: '2px solid #0074c2', // Borda azul ao redor
           borderRadius: '8px',
@@ -286,6 +286,7 @@ const table = useReactTable({
         </table>
       </div>
     </div>
+    
   );
 };
 
