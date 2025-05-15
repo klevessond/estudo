@@ -1,91 +1,95 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './ResumoVendas.css';
 
-const PeriodoSelector = ({ onChange }) => {
-  const [periodoSelecionado, setPeriodoSelecionado] = useState('mes');
-  const [mesAtual, setMesAtual] = useState(() => {
-    const hoje = new Date();
-    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-    const ano = hoje.getFullYear();
-    return `${ano}-${mes}`;
+const PeriodoSelector = ({ defaultValue, label = 'Selecionar período:', onChange }) => {
+  // Mês corrente padrão (ex: '2025-05')
+  const hoje = new Date();
+  const mesCorrente = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+  const dataHoje = hoje.toISOString().split('T')[0];
+
+  const [periodo, setPeriodo] = useState(() => {
+    if (!defaultValue || typeof defaultValue !== 'object') return 'mes';
+    return defaultValue.tipo;
   });
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
 
-  const handlePeriodoChange = (periodo) => {
-    setPeriodoSelecionado(periodo);
+  const [mesAtual, setMesAtual] = useState(() => {
+    if (defaultValue?.tipo === 'mes') return defaultValue.mes || mesCorrente;
+    return mesCorrente;
+  });
+
+  const [dataInicio, setDataInicio] = useState(() => {
+    if (defaultValue?.tipo === 'periodo') return defaultValue.de || '';
+    return '';
+  });
+
+  const [dataFim, setDataFim] = useState(() => {
+    if (defaultValue?.tipo === 'periodo') return defaultValue.ate || '';
+    return '';
+  });
+
+  useEffect(() => {
     if (periodo === 'hoje') {
-      const hoje = new Date().toISOString().split('T')[0];
-      onChange({ tipo: 'hoje', de: hoje, ate: hoje });
+      onChange?.({ tipo: 'hoje', de: dataHoje, ate: dataHoje });
     } else if (periodo === 'mes') {
-      onChange({ tipo: 'mes', mes: mesAtual });
-    } else {
-      onChange({ tipo: 'periodo', de: dataInicio, ate: dataFim });
+      onChange?.({ tipo: 'mes', mes: mesAtual });
+    } else if (periodo === 'periodo') {
+      onChange?.({ tipo: 'periodo', de: dataInicio, ate: dataFim });
     }
-  };
+  }, [periodo, mesAtual, dataInicio, dataFim]);
 
-  const renderCamposData = () => {
-    if (periodoSelecionado === 'mes') {
-      return (
+  return (
+    <div className="periodo-selector">
+      <label className="periodo-label">{label}</label>
+      <div className="botoes-periodo">
+        <button
+          className={`btn-periodo ${periodo === 'hoje' ? 'ativo' : ''}`}
+          onClick={() => setPeriodo('hoje')}
+        >
+          Hoje
+        </button>
+        <button
+          className={`btn-periodo ${periodo === 'mes' ? 'ativo' : ''}`}
+          onClick={() => setPeriodo('mes')}
+        >
+          Mês
+        </button>
+        <button
+          className={`btn-periodo ${periodo === 'periodo' ? 'ativo' : ''}`}
+          onClick={() => setPeriodo('periodo')}
+        >
+          Período
+        </button>
+      </div>
+
+      {periodo === 'mes' && (
         <div className="campos-periodo">
           <input
             type="month"
             className="input-periodo"
             value={mesAtual}
-            onChange={(e) => {
-              setMesAtual(e.target.value);
-              onChange({ tipo: 'mes', mes: e.target.value });
-            }}
+            onChange={(e) => setMesAtual(e.target.value)}
           />
         </div>
-      );
-    }
+      )}
 
-    if (periodoSelecionado === 'periodo') {
-      return (
+      {periodo === 'periodo' && (
         <div className="campos-periodo">
           <label>De:</label>
           <input
             type="date"
             className="input-periodo"
             value={dataInicio}
-            onChange={(e) => {
-              setDataInicio(e.target.value);
-              onChange({ tipo: 'periodo', de: e.target.value, ate: dataFim });
-            }}
+            onChange={(e) => setDataInicio(e.target.value)}
           />
           <label>Até:</label>
           <input
             type="date"
             className="input-periodo"
             value={dataFim}
-            onChange={(e) => {
-              setDataFim(e.target.value);
-              onChange({ tipo: 'periodo', de: dataInicio, ate: e.target.value });
-            }}
+            onChange={(e) => setDataFim(e.target.value)}
           />
         </div>
-      );
-    }
-
-    return null;
-  };
-
-  return (
-    <div className="periodo-selector">
-      <label className="periodo-label">Selecionar período:</label>
-      <div className="botoes-periodo">
-        {['hoje', 'mes', 'periodo'].map((tipo) => (
-          <button
-            key={tipo}
-            className={`btn-periodo ${periodoSelecionado === tipo ? 'ativo' : ''}`}
-            onClick={() => handlePeriodoChange(tipo)}
-          >
-            {tipo === 'hoje' ? 'Hoje' : tipo === 'mes' ? 'Mês' : 'Período'}
-          </button>
-        ))}
-      </div>
-      {renderCamposData()}
+      )}
     </div>
   );
 };
