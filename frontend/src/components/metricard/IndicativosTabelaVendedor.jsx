@@ -203,7 +203,7 @@ const table = useReactTable({
       getSortedRowModel: getSortedRowModel(),
     });
   return (
-    <div className="indicativos-tabela" style={{ overflowX: 'auto', padding: '1rem' }}>
+    <div className="indicativos-tabela" style={{ overflowX: 'auto', paddingBottom: '0.5rem' }}>
       <h3 style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
         Acompanhamento de desvios por Colaboradores
       </h3>

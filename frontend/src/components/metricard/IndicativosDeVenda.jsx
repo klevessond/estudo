@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import './IndicativosDeVenda.css';
 
+
+
 const Card = ({ title, value, subtitle,subtitle2, percentage, variation, icon }) => {
   return (
     <div className="indicativo-card">
@@ -26,6 +28,8 @@ const IndicativosDeVenda = () => {
 
   const buttons = ['Financeiro', 'Peso', 'Mix', 'Positivação'];
 
+  const [showMyIndexes, setShowMyIndexes] = useState(false);
+
   return (
     <div className="indicativos-wrapper">
       <div className="indicativos-buttons">
@@ -38,7 +42,14 @@ const IndicativosDeVenda = () => {
             {btn}
           </button>
         ))}
-      </div>
+      <button
+    className={`indicativo-button ${showMyIndexes ? 'active' : ''}`}
+    onClick={() => setShowMyIndexes(!showMyIndexes)}
+  >
+    Meus Índices
+  </button>
+</div>
+
 
       <div className="indicativos-container">
         <div className="indicativo-stack">
