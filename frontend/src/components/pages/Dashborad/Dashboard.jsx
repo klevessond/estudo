@@ -13,18 +13,21 @@ import IndicativosDeVenda from '../../metricard/IndicativosDeVenda'; // já no p
 import IndicativosTabelaVendedor from '../../metricard/IndicativosTabelaVendedor';
 import BarChartColaboradores from '../../BarChart/BarChartColaboradores';
 import PeriodoSelector from '../../ResumoVendas/PeriodoSelector';
+import IndicadoresFiltro from '../../metricard/IndicadoresFiltro';
 import './Dashboard.css';
 
 const Dashboard = () => {
     return (
         <div>
-           
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+            <PeriodoSelector /><IndicadoresFiltro/>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'row', gap: '0.5rem', alignItems: 'flex-start' }}>
-    <div> <PeriodoSelector/><IndicativosDeVenda /></div>
+    <div><IndicativosDeVenda /></div>
 
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
         <IndicativosTabelaVendedor />
-        <BarChartColaboradores />
+        
     </div>
 </div>
                 

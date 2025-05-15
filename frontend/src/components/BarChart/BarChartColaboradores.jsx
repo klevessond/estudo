@@ -162,7 +162,7 @@ const BarChartColaboradores = () => {
 
   return (
     <div className="bar-chart-container">
-      <h2>Faturamento por Colaborador</h2>
+      <h3>Faturamento Equipe</h3>
       <div className="chart-wrapper">
         <canvas ref={chartRef}></canvas>
       </div>
