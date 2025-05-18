@@ -1,6 +1,6 @@
 .bar-chart-container {
     width: 100%; /* Para aumentar a largura, altere este valor para um percentual maior ou defina um max-width maior */
-    max-width: 500px; /* Exemplo: aumentar a largura máxima */
+    max-width: 1000px; /* Exemplo: aumentar a largura máxima */
     margin: 00px auto; /* Ajusta a margem e centraliza */
     padding: 0.0rem;
     background-color: #fff;
@@ -11,8 +11,8 @@
 .chart-wrapper {
     position: relative;
     width: 100%; /* Mantém a largura do gráfico dentro do contêiner */
-    min-height: 200px; /* Para aumentar a altura mínima, altere este valor */
-    height: 30vh; /* Para aumentar a altura geral, ajuste este valor em relação à altura da tela */
+    min-height: 400px; /* Para aumentar a altura mínima, altere este valor */
+    height: 50vh; /* Para aumentar a altura geral, ajuste este valor em relação à altura da tela */
 }
 
 /* Media Queries para responsividade */

@@ -11,24 +11,22 @@ import VendacidadeQuartil from '../../Quartil/vendacidadequartil';
 import ResumoVendas from '../../ResumoVendas/ResumoVendas';
 import IndicativosDeVenda from '../../metricard/IndicativosDeVenda'; // já no padrão
 import IndicativosTabelaVendedor from '../../metricard/IndicativosTabelaVendedor';
-import BarChartColaboradores from '../../BarChart/BarChartColaboradores';
 import PeriodoSelector from '../../ResumoVendas/PeriodoSelector';
-import IndicadoresFiltro from '../../metricard/IndicadoresFiltro';
+import BarChartColaboradores from '../../BarChart/BarChartColaboradores';
+
 import './Dashboard.css';
 
 const Dashboard = () => {
     return (
         <div>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-            <PeriodoSelector /><IndicadoresFiltro/>
+            <PeriodoSelector /><IndicativosDeVenda />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'row', gap: '0.5rem', alignItems: 'flex-start' }}>
-    <div><IndicativosDeVenda /></div>
-
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-        <IndicativosTabelaVendedor />
-        
-    </div>
+            <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem', alignItems: 'flex-start', width: '100%' }}>
+  <div style={{ flex: 2 }}><BarChartColaboradores /></div>
+  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+    <IndicativosTabelaVendedor />
+  </div>
 </div>
                 
             <div><ResumoVendas /></div>   

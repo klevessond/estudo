@@ -52,7 +52,31 @@ const IndicadoresCards = () => {
         subtitle2=" Cobertura Captado"
         variation="75.998.461"
       />
-      <BarChartColaboradores />
+      <Card
+        title="Peso"
+        value="114.523.742"
+        subtitle="Valor Captado"
+        percentage="297,27%"
+        subtitle2=" Cobertura Captado"
+        variation="75.998.461"
+      />
+      <Card
+        title="Positivado"
+        value="114.523.742"
+        subtitle="Valor Captado"
+        percentage="297,27%"
+        subtitle2=" Cobertura Captado"
+        variation="75.998.461"
+      />
+      <Card
+        title="MIX"
+        value="114.523.742"
+        subtitle="Valor Captado"
+        percentage="297,27%"
+        subtitle2=" Cobertura Captado"
+        variation="75.998.461"
+      />
+      
     </div>
   );
 };
