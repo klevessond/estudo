@@ -175,9 +175,9 @@ const columns = [
     accessorKey: 'cobertura',
     header: 'Cob %',
     cell: info => (
-      <span>
-        <span style={{ color: 'green', marginRight: 5 }}>⬆</span>
-        {info.getValue().toFixed(2)}%
+      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <span style={{ fontSize: '1.25rem', color: 'green', fontWeight: 'bold' }}>⬆</span>
+        <span style={{ fontWeight: 600 }}>{info.getValue().toFixed(2)}%</span>
       </span>
     ),
   },
@@ -223,7 +223,7 @@ const table = useReactTable({
           />
       <div
         style={{
-          maxHeight: '200px',         // Altura máxima (~10 linhas)
+          maxHeight: '250px',         // Altura máxima (~10 linhas)
           overflowY: 'auto',
           border: '2px solid #0074c2', // Borda azul ao redor
           borderRadius: '8px',
