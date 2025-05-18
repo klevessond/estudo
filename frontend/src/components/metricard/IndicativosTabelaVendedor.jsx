@@ -188,7 +188,7 @@ const columns = [
   },
 ];
 
-const IndicativosTabelaVendedor = () => {
+const IndicativosTabelaVendedor = (props) => {
   const [globalFilter, setGlobalFilter] = React.useState('');
 
 const table = useReactTable({
@@ -264,11 +264,13 @@ const table = useReactTable({
           <tbody>
             {table.getRowModel().rows.map((row, idx) => (
               <tr
-                key={row.id}
-                style={{
-                  background: idx % 2 === 0 ? '#f9f9f9' : '#fff',
-                }}
-              >
+              key={row.id}
+              style={{
+                background: idx % 2 === 0 ? '#f9f9f9' : '#fff',
+                cursor: 'pointer', // opcional: mostra que é clicável
+              }}
+              onClick={() => props.onSelecionarColaborador?.(row.original)} // AQUI
+            >
                 {row.getVisibleCells().map(cell => (
                   <td
                     key={cell.id}

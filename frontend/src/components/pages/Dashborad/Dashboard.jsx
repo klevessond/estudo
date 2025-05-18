@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import MetricCard from '../../metricard/MetricCard';
 import BarChart from '../../BarChart/BarChart';
 import PieChart from  '../../Piechart/PieChart';
@@ -9,25 +9,59 @@ import Linevendedores from '../../LineChart/Linevendedores';
 import DencidadeCidadeChart from '../../ComboChart/DencidadeCidadeChart';
 import VendacidadeQuartil from '../../Quartil/vendacidadequartil';
 import ResumoVendas from '../../ResumoVendas/ResumoVendas';
-import IndicativosDeVenda from '../../metricard/IndicativosDeVenda'; // já no padrão
+import IndicativosDeVenda from '../../metricard/IndicativosDeVenda';
+import CardsColaborador from '../../metricard/CardsColaborador';
 import IndicativosTabelaVendedor from '../../metricard/IndicativosTabelaVendedor';
 import PeriodoSelector from '../../ResumoVendas/PeriodoSelector';
 import BarChartColaboradores from '../../BarChart/BarChartColaboradores';
 
 import './Dashboard.css';
 
+
+
 const Dashboard = () => {
+
+const [modo, setModo] = useState('geral'); 
+const [colaboradorSelecionado, setColaboradorSelecionado] = useState(null);
+
     return (
         <div>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
             <PeriodoSelector /><IndicativosDeVenda />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem', alignItems: 'flex-start', width: '100%' }}>
-  <div style={{ flex: 2 }}><BarChartColaboradores /></div>
-  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-    <IndicativosTabelaVendedor />
-  </div>
-</div>
+            <div style={{ margin: '1rem 0', display: 'flex', gap: '0.75rem' }}>
+                <button
+                    className={`btn-modo ${modo === 'geral' ? 'ativo' : ''}`}
+                    onClick={() => setModo('geral')}
+                >
+                    Geral
+                </button>
+                <button
+                    className={`btn-modo ${modo === 'individual' ? 'ativo' : ''}`}
+                    onClick={() => setModo('individual')}
+                    disabled={!colaboradorSelecionado}
+                    style={{ opacity: !colaboradorSelecionado ? 0.5 : 1 }}
+                >
+                    Individual
+                </button>
+                </div>
+            <div style={{ display: 'flex', flexDirection: 'row', gap: '1rem', alignItems: 'flex-start' }}>
+                <div style={{ flex: 2 }}>
+                    {modo === 'geral' && <BarChartColaboradores />}
+                    {modo === 'individual' && colaboradorSelecionado && (
+                    <CardsColaborador colaborador={colaboradorSelecionado} />
+                    )}
+                </div>
+
+                <div style={{ flex: 1 }}>
+                    <IndicativosTabelaVendedor
+                    onSelecionarColaborador={colab => {
+                        setColaboradorSelecionado(colab);
+                        setModo('individual');
+                    }}
+                    />
+                </div>
+                </div>
                 
             <div><ResumoVendas /></div>   
              <div className="metric-cards">
