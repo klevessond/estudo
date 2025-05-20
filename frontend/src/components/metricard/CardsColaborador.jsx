@@ -27,6 +27,8 @@ const CardsColaborador = ({ colaborador }) => {
           </div>
           <div style={{ background: '#f9f0e6', padding: '1rem', borderRadius: '8px' }}>
             <strong>Alocado:</strong><br /> R$ {colaborador.alocado.toLocaleString('pt-BR')}
+            <div style={{ background: '#eafaf1', padding: '0rem', borderRadius: '8px' }}></div>
+            <strong>Evo % ano Ant:</strong><br />
           </div>
           <div style={{ background: '#fff0f3', padding: '1rem', borderRadius: '8px' }}>
             <strong>Cobertura:</strong><br /> {colaborador.cobertura.toFixed(2)}%
@@ -34,6 +36,12 @@ const CardsColaborador = ({ colaborador }) => {
           <div style={{ background: '#f1faff', padding: '1rem', borderRadius: '8px' }}>
             <strong>Variação:</strong><br /> R$ {colaborador.variacao.toLocaleString('pt-BR')}
           </div>
+          <div style={{ background: '#eafae1', padding: '1rem', borderRadius: '8px' }}>
+            <strong>Peso:</strong><br /> R$ {colaborador.faturado.toLocaleString('pt-BR')}
+            <div style={{ background: '#eafaf1', padding: '0rem', borderRadius: '8px' }}></div>
+            <strong>Objetivo:</strong><br />
+          </div>
+          
         </div>
       </div>
     );

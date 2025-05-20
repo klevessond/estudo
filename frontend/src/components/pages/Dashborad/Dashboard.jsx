@@ -14,6 +14,7 @@ import CardsColaborador from '../../metricard/CardsColaborador';
 import IndicativosTabelaVendedor from '../../metricard/IndicativosTabelaVendedor';
 import PeriodoSelector from '../../ResumoVendas/PeriodoSelector';
 import BarChartColaboradores from '../../BarChart/BarChartColaboradores';
+import CardsDetalhadosVendedor from '../../metricard/CardsDetalhadosVendedor';
 
 import './Dashboard.css';
 
@@ -49,8 +50,13 @@ const [colaboradorSelecionado, setColaboradorSelecionado] = useState(null);
                 <div style={{ flex: 2 }}>
                     {modo === 'geral' && <BarChartColaboradores />}
                     {modo === 'individual' && colaboradorSelecionado && (
-                    <CardsColaborador colaborador={colaboradorSelecionado} />
-                    )}
+                        <>
+                            <CardsColaborador colaborador={colaboradorSelecionado} />
+                            {colaboradorSelecionado.colaborador.includes('Ana Paula Silva Peixoto') && (
+                            <CardsDetalhadosVendedor/>
+                            )}
+                        </>
+                        )}
                 </div>
 
                 <div style={{ flex: 1 }}>
