@@ -47,27 +47,39 @@ const [colaboradorSelecionado, setColaboradorSelecionado] = useState(null);
                 </button>
                 </div>
             <div style={{ display: 'flex', flexDirection: 'row', gap: '1rem', alignItems: 'flex-start' }}>
-                <div style={{ flex: 2 }}>
-                    {modo === 'geral' && <BarChartColaboradores />}
-                    {modo === 'individual' && colaboradorSelecionado && (
-                        <>
-                            <CardsColaborador colaborador={colaboradorSelecionado} />
-                            {colaboradorSelecionado.colaborador.includes('Ana Paula Silva Peixoto') && (
-                            <CardsDetalhadosVendedor/>
-                            )}
-                        </>
-                        )}
+            <div style={{ flex: 2 }}>
+                {modo === 'geral' && (
+                    <>
+                    <BarChartColaboradores />
+                    </>
+                )}
+
+                {modo === 'individual' && colaboradorSelecionado && (
+                    <>
+                    <CardsColaborador colaborador={colaboradorSelecionado} />
+                    {colaboradorSelecionado.colaborador.includes('Ana Paula Silva Peixoto') }
+                    </>
+                )}
                 </div>
 
                 <div style={{ flex: 1 }}>
+                {modo === 'geral' && (
                     <IndicativosTabelaVendedor
                     onSelecionarColaborador={colab => {
                         setColaboradorSelecionado(colab);
                         setModo('individual');
                     }}
                     />
+                )}
+
+                {modo === 'individual' && colaboradorSelecionado && (
+                    colaboradorSelecionado.colaborador.includes('Ana Paula Silva Peixoto') && (
+                    <CardsDetalhadosVendedor />
+                    )
+                )}
                 </div>
-                </div>
+
+            </div>
                 
             <div><ResumoVendas /></div>   
              <div className="metric-cards">
