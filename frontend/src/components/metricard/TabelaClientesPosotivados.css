@@ -1,0 +1,42 @@
+/* TabelaClientes.css */
+.tabela-clientes {
+    margin-top: 1rem;
+  }
+  
+  .tabela-titulo {
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+  }
+  
+  .tabela-wrapper {
+    max-height: 250px;
+    overflow-y: auto;
+    border: 2px solid #0074c2;
+    border-radius: 8px;
+  }
+  
+  .tabela-estilizada {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 300px;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+  }
+  
+  .tabela-estilizada th {
+    background-color: #0074c2;
+    color: #fff;
+    padding: 8px;
+    text-align: left;
+    border-bottom: 2px solid #005fa3;
+  }
+  
+  .tabela-estilizada td {
+    padding: 8px;
+    border-bottom: 1px solid #ccc;
+  }
+  
+  .tabela-estilizada tr:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+  

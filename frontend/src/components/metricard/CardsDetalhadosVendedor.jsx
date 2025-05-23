@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import '../ResumoVendas/ResumoVendas.css'; // Reutilizando estilos dos botões
+import TabelaClientesvendedor from './TabelaClientesPosotivados'; // certifique-se de importar corretamente
+import TabelaMixProdutosVendedor from './TabelaMixProdutosVendedor'; // importar no topo
 
 const CardsDetalhadosVendedor = () => {
   const [visao, setVisao] = useState('positivados');
@@ -57,42 +59,27 @@ const CardsDetalhadosVendedor = () => {
       </div>
 
       {visao === 'positivados' && (
-        <div>
-          <strong>Total: {clientesPositivados.length} clientes ({percentualPositivados.toFixed(1)}%)</strong>
-          <ul>
-            {clientesPositivados.map(cliente => (
-              <li key={cliente}>{cliente}</li>
-            ))}
-          </ul>
-        </div>
+        <TabelaClientesvendedor
+          titulo={`Clientes Positivados (${clientesPositivados.length})`}
+          clientes={clientesPositivados}
+        />
       )}
 
       {visao === 'nao' && (
-        <div>
-          <strong>Total: {clientesNaoPositivados.length} clientes ({percentualNaoPositivados.toFixed(1)}%)</strong>
-          <ul>
-            {clientesNaoPositivados.map(cliente => (
-              <li key={cliente}>{cliente}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+        <TabelaClientesvendedor
+          titulo={`Clientes Não Positivados (${clientesNaoPositivados.length})`}
+          clientes={clientesNaoPositivados}
+        />
+    )}
 
       {visao === 'mix' && (
-        <div>
-          <strong>Mix atendido: {itensMixAtendidos.length}/{mixEsperado.length} ({percentualMix.toFixed(1)}%)</strong>
-          <table style={{ marginTop: '1rem', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr><th style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>Item</th></tr>
-            </thead>
-            <tbody>
-              {itensMixAtendidos.map(item => (
-                <tr key={item}><td style={{ padding: '6px 0' }}>{item}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+          <TabelaMixProdutosVendedor
+            titulo="Mix de Produtos Atendidos"
+            itens={itensMixAtendidos}
+            totalEsperado={mixEsperado.length}
+            percentual={percentualMix}
+          />
+        )}
     </div>
   );
 };
