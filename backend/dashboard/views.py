@@ -2,6 +2,10 @@ from django.shortcuts import render
 from django.db import connections
 from django.http import JsonResponse
 import pandas as pd
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso
+
 
 # Create your views here.
 
@@ -56,3 +60,8 @@ def get_dados_excel(request):
         return JsonResponse({'dados': dados})
     except Exception as e:
         return JsonResponse({'erro': str(e)}, status=500)
+
+class ObjetivoPesoView(APIView):
+    def get(self, request):
+        data = buscar_objetivo_peso()
+        return Response(data)
