@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import './IndicativosDeVenda.css';
+import axios from 'axios';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 
 const Card = ({ title, value, subtitle, subtitle2, percentage, variation, icon }) => (
@@ -21,6 +22,29 @@ const Card = ({ title, value, subtitle, subtitle2, percentage, variation, icon }
 );
 
 const IndicadoresCards = () => {
+  const [peso, setPeso] = useState(null);
+
+  useEffect(() => {
+    const fetchPeso = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://localhost:8000/objetivo-peso/', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        const valor = response.data.objetivo_peso || 0;
+        setPeso(valor.toLocaleString('pt-BR'));
+      } catch (error) {
+        console.error('Erro ao buscar o objetivo de peso:', error);
+        setPeso('Erro');
+      }
+    };
+
+    fetchPeso();
+  }, []);
+
   return (
     <div className="indicativos-container">
       <div className="indicativo-stack">
@@ -54,7 +78,7 @@ const IndicadoresCards = () => {
       />
       <Card
         title="Peso"
-        value="114.523.742"
+        value={peso ?? '...'}
         subtitle="Valor Captado"
         percentage="297,27%"
         subtitle2=" Cobertura Captado"
