@@ -65,4 +65,12 @@ def buscar_objetivo_peso():
         """)
         columns = [col[0] for col in cursor.description]
         rows = cursor.fetchall()
-        return [dict(zip(columns, row)) for row in rows]
+        dados = [dict(zip(columns, row)) for row in rows]
+
+        # Pegamos o objetivo total da empresa de forma isolada
+        objetivo_peso = dados[0]['ObjetivoTotalEmpresaPeriodo'] if dados else 0
+
+        return {
+            "objetivo_peso": objetivo_peso,
+            "detalhamento": dados
+        }
