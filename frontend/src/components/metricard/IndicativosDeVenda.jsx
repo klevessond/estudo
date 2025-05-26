@@ -21,14 +21,17 @@ const Card = ({ title, value, subtitle, subtitle2, percentage, variation, icon }
   </div>
 );
 
-const IndicadoresCards = () => {
+const IndicadoresCards = ({ periodoSelecionado }) => {
   const [peso, setPeso] = useState(null);
 
-  useEffect(() => {
+   useEffect(() => {
     const fetchPeso = async () => {
+        const { de, ate } = periodoSelecionado;
+        console.log('ENVIANDO PARA BACKEND:', de, ate);
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('http://localhost:8000/objetivo-peso/', {
+        const { de, ate } = periodoSelecionado;
+        const response = await axios.get(`http://localhost:8000/objetivo-peso/?de=${de}&ate=${ate}`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -42,8 +45,10 @@ const IndicadoresCards = () => {
       }
     };
 
-    fetchPeso();
-  }, []);
+    if (periodoSelecionado?.de && periodoSelecionado?.ate) {
+      fetchPeso();
+    }
+  }, [periodoSelecionado]);
 
   return (
     <div className="indicativos-container">

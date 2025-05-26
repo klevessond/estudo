@@ -24,11 +24,24 @@ const Dashboard = () => {
 
 const [modo, setModo] = useState('geral'); 
 const [colaboradorSelecionado, setColaboradorSelecionado] = useState(null);
-
+const [periodoSelecionado, setPeriodoSelecionado] = useState({
+    de: '2025-01-01',
+    ate: '2025-01-31'
+  });
     return (
         <div>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-            <PeriodoSelector /><IndicativosDeVenda />
+            <PeriodoSelector onChange={(dados) => {
+                console.log('RECEBIDO EM DASHBOARD:', dados);
+                if (dados?.de && dados?.ate) {
+                    setPeriodoSelecionado({ de: dados.de, ate: dados.ate });
+                } else if (dados?.mes) {
+                    const [ano, mes] = dados.mes.split('-');
+                    const de = `${ano}-${mes}-01`;
+                    const ate = new Date(ano, mes, 0).toISOString().split('T')[0];
+                    setPeriodoSelecionado({ de, ate });
+                }
+        }} /><IndicativosDeVenda periodoSelecionado={periodoSelecionado}/>
             </div>
             <div style={{ margin: '1rem 0', display: 'flex', gap: '0.75rem' }}>
                 <button

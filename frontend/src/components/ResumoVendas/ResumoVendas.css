@@ -203,3 +203,13 @@
     color: white;
   }
   
+  .btn-aplicar {
+  margin-top: 0.5rem;
+  padding: 6px 12px;
+  background-color: #0074c2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}

@@ -63,5 +63,11 @@ def get_dados_excel(request):
 
 class ObjetivoPesoView(APIView):
     def get(self, request):
-        data = buscar_objetivo_peso()
-        return Response(data)
+        data_inicio = request.GET.get('de')
+        data_fim = request.GET.get('ate')
+
+        if not data_inicio or not data_fim:
+            return Response({"erro": "Parâmetros 'de' e 'ate' são obrigatórios"}, status=400)
+
+        resultado = buscar_objetivo_peso(data_inicio, data_fim)
+        return Response(resultado)

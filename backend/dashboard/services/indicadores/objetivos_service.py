@@ -1,10 +1,10 @@
 from django.db import connections
 
-def buscar_objetivo_peso():
+def buscar_objetivo_peso(data_inicio, data_fim):
     with connections['dados_industria'].cursor() as cursor:
-        cursor.execute("""
-            DECLARE @DataInicio DATE = '2025-01-01';
-            DECLARE @DataFim DATE = '2025-01-31';
+        cursor.execute(f"""
+            DECLARE @DataInicio DATE = '{data_inicio}';
+            DECLARE @DataFim DATE = '{data_fim}';
 
             WITH ObjetivosFiltrados AS (
                 SELECT *
