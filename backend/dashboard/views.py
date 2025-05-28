@@ -4,8 +4,11 @@ from django.http import JsonResponse
 import pandas as pd
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso
+from rest_framework.permissions import IsAuthenticated
 
+
+from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso
+from dashboard.services.indicadores.vendas_service import buscar_peso_vendido
 
 # Create your views here.
 
@@ -61,13 +64,19 @@ def get_dados_excel(request):
     except Exception as e:
         return JsonResponse({'erro': str(e)}, status=500)
 
-class ObjetivoPesoView(APIView):
+class IndicadoresView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request):
         data_inicio = request.GET.get('de')
         data_fim = request.GET.get('ate')
 
         if not data_inicio or not data_fim:
-            return Response({"erro": "Parâmetros 'de' e 'ate' são obrigatórios"}, status=400)
+            return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
 
-        resultado = buscar_objetivo_peso(data_inicio, data_fim)
-        return Response(resultado)
+        objetivo_peso = buscar_objetivo_peso(data_inicio, data_fim)
+        vendido = buscar_peso_vendido(data_inicio, data_fim)
+
+        return Response({
+            "objetivo": objetivo_peso,
+            "vendas": vendido
+        })

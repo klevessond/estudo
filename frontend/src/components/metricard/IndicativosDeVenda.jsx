@@ -31,13 +31,13 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
       try {
         const token = localStorage.getItem('token');
         const { de, ate } = periodoSelecionado;
-        const response = await axios.get(`http://localhost:8000/objetivo-peso/?de=${de}&ate=${ate}`, {
+        const response = await axios.get(`http://localhost:8000/Indicadores/?de=${de}&ate=${ate}`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
         });
 
-        const valor = response.data.objetivo_peso || 0;
+        const valor = response.data.objetivo?.objetivo_peso || 0;
         setPeso(valor.toLocaleString('pt-BR'));
       } catch (error) {
         console.error('Erro ao buscar o objetivo de peso:', error);
