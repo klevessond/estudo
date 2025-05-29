@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso
 from dashboard.services.indicadores.vendas_service import buscar_peso_vendido
+from dashboard.services.indicadores.vendas_service import buscar_positivacao_por_rota
 
 # Create your views here.
 
@@ -75,6 +76,7 @@ class IndicadoresView(APIView):
 
         objetivo_peso = buscar_objetivo_peso(data_inicio, data_fim)
         vendido = buscar_peso_vendido(data_inicio, data_fim)
+        positivacao_data = buscar_positivacao_por_rota(data_inicio, data_fim)
 
          # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
         variacao = vendido.get("peso_realizado", 0) - objetivo_peso.get("objetivo_peso", 0)
@@ -88,5 +90,6 @@ class IndicadoresView(APIView):
                 "percentual": round(percentual, 2),
                 "variacao": round(variacao, 2),
                 
-            }
+            },
+            "positivacao": positivacao_data
         })
