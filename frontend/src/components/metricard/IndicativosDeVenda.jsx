@@ -3,7 +3,7 @@ import './IndicativosDeVenda.css';
 import axios from 'axios';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 
-const Card = ({ title, value, subtitle, subtitle2, percentage, variation, icon }) => (
+const Card = ({ title,title2, value,value2, subtitle, subtitle2, percentage, variation, icon }) => (
   <div className="indicativo-card">
     <div className="card-header">
       <h2>{title}</h2>
@@ -12,6 +12,14 @@ const Card = ({ title, value, subtitle, subtitle2, percentage, variation, icon }
     <div className="card-group">
       <p className="card-value">{value}</p>
       {subtitle && <p className="card-subtitle">{subtitle}</p>}
+    </div>
+    <div className="card-header">
+      <h2>{title2}</h2>
+      {icon && <img src={icon} alt="Ícone" className="card-icon" />}
+    </div>
+    <div className="card-group">
+      <p className="card-value">{value2}</p>
+    
     </div>
     <div className="card-group">
       {percentage && <p className="card-percentage">{percentage}</p>}
@@ -25,6 +33,7 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
   const [peso, setPeso] = useState(null);
   const [pesoPercentual, setPesoPercentual] = useState(null);
   const [pesoVariacao, setPesoVariacao] = useState(null);
+  const [pesoRealizado, setPesoRealizado] = useState(null);
 
    useEffect(() => {
     const fetchPeso = async () => {
@@ -38,9 +47,11 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
             Authorization: `Bearer ${token}`
           }
         });
-        const percentual = response.data.resumo_peso?.percentual || 0;
-        const variacao = response.data.resumo_peso?.variacao || 0;
+        const percentual = response.data.realizado_peso?.percentual || 0;
+        const variacao = response.data.realizado_peso?.variacao || 0;
         const valor = response.data.objetivo?.objetivo_peso || 0;
+        const realizado = response.data.vendas?.peso_realizado || 0;
+        setPesoRealizado(realizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
         setPeso(valor.toLocaleString('pt-BR'));
         setPesoPercentual(`${percentual.toFixed(2)}%`);
         setPesoVariacao(variacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
@@ -90,9 +101,11 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
       <Card
         title="Peso"
         value={peso ?? '...'}
-        subtitle="Valor Captado"
+        title2="Realizado"
+        subtitle="OBJETIVO"
+        value2={pesoRealizado ?? '...'}
         percentage={pesoPercentual}
-        subtitle2=" Cobertura Captado"
+        subtitle2=" Cobertura do Realizado"
         variation={pesoVariacao}
       />
       <Card

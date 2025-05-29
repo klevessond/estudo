@@ -79,12 +79,14 @@ class IndicadoresView(APIView):
          # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
         variacao = vendido.get("peso_realizado", 0) - objetivo_peso.get("objetivo_peso", 0)
         percentual = (vendido.get("peso_realizado", 0) / objetivo_peso.get("objetivo_peso", 1)) * 100
+        
 
         return Response({
             "objetivo": objetivo_peso,
             "vendas": vendido,
             "realizado_peso": {
                 "percentual": round(percentual, 2),
-                "variacao": round(variacao, 2)
+                "variacao": round(variacao, 2),
+                
             }
         })
