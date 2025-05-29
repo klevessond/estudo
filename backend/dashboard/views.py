@@ -65,7 +65,7 @@ def get_dados_excel(request):
         return JsonResponse({'erro': str(e)}, status=500)
 
 class IndicadoresView(APIView):
-    permission_classes = [IsAuthenticated]
+    #permission_classes = [IsAuthenticated]
     def get(self, request):
         data_inicio = request.GET.get('de')
         data_fim = request.GET.get('ate')
@@ -76,7 +76,15 @@ class IndicadoresView(APIView):
         objetivo_peso = buscar_objetivo_peso(data_inicio, data_fim)
         vendido = buscar_peso_vendido(data_inicio, data_fim)
 
+         # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
+        variacao = vendido.get("peso_realizado", 0) - objetivo_peso.get("objetivo_peso", 0)
+        percentual = (vendido.get("peso_realizado", 0) / objetivo_peso.get("objetivo_peso", 1)) * 100
+
         return Response({
             "objetivo": objetivo_peso,
-            "vendas": vendido
+            "vendas": vendido,
+            "realizado_peso": {
+                "percentual": round(percentual, 2),
+                "variacao": round(variacao, 2)
+            }
         })

@@ -23,6 +23,8 @@ const Card = ({ title, value, subtitle, subtitle2, percentage, variation, icon }
 
 const IndicadoresCards = ({ periodoSelecionado }) => {
   const [peso, setPeso] = useState(null);
+  const [pesoPercentual, setPesoPercentual] = useState(null);
+  const [pesoVariacao, setPesoVariacao] = useState(null);
 
    useEffect(() => {
     const fetchPeso = async () => {
@@ -36,9 +38,13 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
             Authorization: `Bearer ${token}`
           }
         });
-
+        const percentual = response.data.resumo_peso?.percentual || 0;
+        const variacao = response.data.resumo_peso?.variacao || 0;
         const valor = response.data.objetivo?.objetivo_peso || 0;
         setPeso(valor.toLocaleString('pt-BR'));
+        setPesoPercentual(`${percentual.toFixed(2)}%`);
+        setPesoVariacao(variacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+
       } catch (error) {
         console.error('Erro ao buscar o objetivo de peso:', error);
         setPeso('Erro');
@@ -85,9 +91,9 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
         title="Peso"
         value={peso ?? '...'}
         subtitle="Valor Captado"
-        percentage="297,27%"
+        percentage={pesoPercentual}
         subtitle2=" Cobertura Captado"
-        variation="75.998.461"
+        variation={pesoVariacao}
       />
       <Card
         title="Positivado"
