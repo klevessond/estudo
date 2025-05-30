@@ -7,8 +7,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 
-from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso
-from dashboard.services.indicadores.vendas_service import buscar_peso_vendido
+from dashboard.services.indicadores.objetivos_service import buscar_objetivo
+from dashboard.services.indicadores.vendas_service import buscar_vendido
 from dashboard.services.indicadores.vendas_service import buscar_positivacao_por_rota
 
 # Create your views here.
@@ -74,19 +74,19 @@ class IndicadoresView(APIView):
         if not data_inicio or not data_fim:
             return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
 
-        objetivo_peso = buscar_objetivo_peso(data_inicio, data_fim)
-        vendido = buscar_peso_vendido(data_inicio, data_fim)
+        objetivo = buscar_objetivo(data_inicio, data_fim)
+        vendido = buscar_vendido(data_inicio, data_fim)
         positivacao_detalhada = buscar_positivacao_por_rota(data_inicio, data_fim)
 
          # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
-        variacao = vendido.get("peso_realizado", 0) - objetivo_peso.get("objetivo_peso", 0)
-        percentual = (vendido.get("peso_realizado", 0) / objetivo_peso.get("objetivo_peso", 1)) * 100
+        variacao = vendido.get("peso_realizado", 0) - objetivo.get("objetivo_peso", 0)
+        percentual = (vendido.get("peso_realizado", 0) / objetivo.get("objetivo_peso", 1)) * 100
 
         positivacao_realizado_geral = (
             positivacao_detalhada[0].get("ClientesPositivadosEmpresa", 0)
             if positivacao_detalhada else 0
         )
-        objetivo_positivacao = objetivo_peso.get('objetivo_positivacao', 0)
+        objetivo_positivacao = objetivo.get('objetivo_positivacao', 0)
         
         percentual_positivacao = (
                 positivacao_realizado_geral / objetivo_positivacao * 100
@@ -95,8 +95,7 @@ class IndicadoresView(APIView):
         variacao_positivacao = positivacao_detalhada[0].get("ClientesPositivadosEmpresa", 0) - objetivo_positivacao
 
         return Response({
-            "objetivo": objetivo_peso,
-            "objetivo_positivacao": objetivo_positivacao,
+            "objetivo": objetivo,
             "vendas": vendido,
             "realizado_peso": {
                 "percentual": round(percentual, 2),

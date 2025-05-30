@@ -1,6 +1,6 @@
 from django.db import connections
 
-def buscar_peso_vendido(data_inicio, data_fim):
+def buscar_vendido(data_inicio, data_fim):
     with connections['dados_industria'].cursor() as cursor:
         cursor.execute(f"""
             DECLARE @DataInicio DATE = '{data_inicio}';
