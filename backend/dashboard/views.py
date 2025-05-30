@@ -105,7 +105,10 @@ class IndicadoresView(APIView):
             },
             "positivacao_detalhada": positivacao_detalhada,
             "positivacao":{
-                "realizado":positivacao_realizado_geral
+                "realizado":positivacao_realizado_geral,
+                "percentual": percentual_positivacao,
+                "variacao": variacao_positivacao
+
 
             }
         })

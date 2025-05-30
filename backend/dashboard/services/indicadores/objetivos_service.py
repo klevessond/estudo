@@ -74,8 +74,10 @@ def buscar_objetivo_peso(data_inicio, data_fim):
 
         # Pegamos o objetivo total da empresa de forma isolada
         objetivo_peso = dados[0]['ObjetivoTotalEmpresaPeriodo'] if dados else 0
+        objetivo_positivacao = dados[0]['PositivacaoTotalEmpresaPeriodo'] if dados else 0
 
         return {
             "objetivo_peso": objetivo_peso,
+            "objetivo_positivacao": objetivo_positivacao,
             "detalhamento": dados
         }
