@@ -32,13 +32,17 @@ def buscar_objetivo_peso(data_inicio, data_fim):
                     O.DataDe,
                     O.DataAte,
                     O.Valor AS ObjetivoRota,
-                    SUM(O.Valor) OVER(PARTITION BY V.CodFuncionario) AS ObjetivoTotalVendedor
+                    O.Positivacao AS PositivacaoRota,
+                    SUM(O.Valor) OVER(PARTITION BY V.CodFuncionario) AS ObjetivoTotalVendedor,
+                    SUM(O.Positivacao) OVER(PARTITION BY V.CodFuncionario) AS PositivacaoTotalVendedor
                 FROM Vendedores V
                 INNER JOIN Rota R ON R.CodAreaVenda = V.CodAreaVenda
                 INNER JOIN ObjetivosFiltrados O ON O.CodRota = R.CodRota
             ),
             ObjetivoTotalEmpresa AS (
-                SELECT SUM(O.Valor) AS ObjetivoTotalEmpresaPeriodo
+                SELECT 
+                SUM(O.Valor) AS ObjetivoTotalEmpresaPeriodo,
+                SUM(O.Positivacao) AS PositivacaoTotalEmpresaPeriodo
                 FROM ObjetivoFinanceiro O
                 INNER JOIN Rota R ON O.CodRota = R.CodRota
                 INNER JOIN AreaVenda AV ON R.CodAreaVenda = AV.CodAreaVenda
@@ -58,7 +62,8 @@ def buscar_objetivo_peso(data_inicio, data_fim):
                 OC.DataAte,
                 OC.ObjetivoRota,
                 OC.ObjetivoTotalVendedor,
-                OTE.ObjetivoTotalEmpresaPeriodo
+                OTE.ObjetivoTotalEmpresaPeriodo,
+                OTE.PositivacaoTotalEmpresaPeriodo
             FROM ObjetivosCompletos OC
             CROSS JOIN ObjetivoTotalEmpresa OTE
             ORDER BY OC.Funcionario, OC.Rota;

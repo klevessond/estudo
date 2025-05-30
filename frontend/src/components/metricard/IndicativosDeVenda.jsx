@@ -34,9 +34,11 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
   const [pesoPercentual, setPesoPercentual] = useState(null);
   const [pesoVariacao, setPesoVariacao] = useState(null);
   const [pesoRealizado, setPesoRealizado] = useState(null);
+  const [positivadoRealizado, setPositivadoRealizado] = useState(null);
+
 
    useEffect(() => {
-    const fetchPeso = async () => {
+    const fetchIndicadores  = async () => {
         const { de, ate } = periodoSelecionado;
         console.log('ENVIANDO PARA BACKEND:', de, ate);
       try {
@@ -51,10 +53,12 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
         const variacao = response.data.realizado_peso?.variacao || 0;
         const valor = response.data.objetivo?.objetivo_peso || 0;
         const realizado = response.data.vendas?.peso_realizado || 0;
+        const positivado = response.data.positivacao?.realizado || 0;
         setPesoRealizado(realizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
         setPeso(valor.toLocaleString('pt-BR'));
         setPesoPercentual(`${percentual.toFixed(2)}%`);
         setPesoVariacao(variacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+        setPositivadoRealizado(positivado.toLocaleString('pt-BR'));
 
       } catch (error) {
         console.error('Erro ao buscar o objetivo de peso:', error);
@@ -63,7 +67,7 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
     };
 
     if (periodoSelecionado?.de && periodoSelecionado?.ate) {
-      fetchPeso();
+      fetchIndicadores ();
     }
   }, [periodoSelecionado]);
 
@@ -101,8 +105,8 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
       <Card
         title="Peso"
         value={peso ?? '...'}
-        title2="Realizado"
         subtitle="OBJETIVO"
+        title2="Realizado"
         value2={pesoRealizado ?? '...'}
         percentage={pesoPercentual}
         subtitle2=" Cobertura do Realizado"
@@ -111,9 +115,10 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
       <Card
         title="Positivado"
         value="114.523.742"
-        subtitle="Valor Captado"
-        percentage="297,27%"
-        subtitle2=" Cobertura Captado"
+        subtitle="OBJETIVO"
+        title2="Realizado"
+        value2={positivadoRealizado ?? '...'}
+        subtitle2=" Cobertura do Realizado"
         variation="75.998.461"
       />
       <Card
