@@ -76,23 +76,20 @@ class IndicadoresView(APIView):
 
         objetivo = buscar_objetivo(data_inicio, data_fim)
         vendido = buscar_vendido(data_inicio, data_fim)
-        positivacao_detalhada = buscar_positivacao_por_rota(data_inicio, data_fim)
+        positivacao = buscar_positivacao_por_rota(data_inicio, data_fim)
 
          # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
         variacao = vendido.get("peso_realizado", 0) - objetivo.get("objetivo_peso", 0)
         percentual = (vendido.get("peso_realizado", 0) / objetivo.get("objetivo_peso", 1)) * 100
 
-        positivacao_realizado_geral = (
-            positivacao_detalhada[0].get("ClientesPositivadosEmpresa", 0)
-            if positivacao_detalhada else 0
-        )
+        positivacao_realizado_geral = positivacao.get("positivacao_realizado_geral", 0)
         objetivo_positivacao = objetivo.get('objetivo_positivacao', 0)
         
         percentual_positivacao = (
                 positivacao_realizado_geral / objetivo_positivacao * 100
                 if objetivo_positivacao else 0
             )
-        variacao_positivacao = positivacao_detalhada[0].get("ClientesPositivadosEmpresa", 0) - objetivo_positivacao
+        variacao_positivacao = positivacao_realizado_geral  - objetivo_positivacao
 
         return Response({
             "objetivo": objetivo,
@@ -102,12 +99,10 @@ class IndicadoresView(APIView):
                 "variacao": round(variacao, 2),
                 
             },
-            "positivacao_detalhada": positivacao_detalhada,
-            "positivacao":{
+             "positivacao":{
                 "realizado":positivacao_realizado_geral,
                 "percentual": percentual_positivacao,
                 "variacao": variacao_positivacao
-
-
-            }
+           },
+            "positivacao_detalhada": positivacao
         })

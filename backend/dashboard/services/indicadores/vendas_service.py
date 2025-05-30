@@ -195,4 +195,11 @@ def buscar_positivacao_por_rota(data_inicio, data_fim):
                     """)
         columns = [col[0] for col in cursor.description]
         rows = cursor.fetchall()
-        return [dict(zip(columns, row)) for row in rows]
+        dados = [dict(zip(columns, row)) for row in rows]
+        positivados_total = dados[0].get("ClientesPositivadosEmpresa", 0) if dados else 0
+
+
+        return {
+        "positivacao_realizado_geral": positivados_total,
+        "detalhado": dados
+    }
