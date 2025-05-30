@@ -30,11 +30,16 @@ const Card = ({ title,title2, value,value2, subtitle, subtitle2, percentage, var
 );
 
 const IndicadoresCards = ({ periodoSelecionado }) => {
+  //PESO
   const [peso, setPeso] = useState(null);
   const [pesoPercentual, setPesoPercentual] = useState(null);
   const [pesoVariacao, setPesoVariacao] = useState(null);
   const [pesoRealizado, setPesoRealizado] = useState(null);
+  //POSITIVACAO
+  const [positivadoObjetivo, setPositivadoObjetivo] = useState('');
   const [positivadoRealizado, setPositivadoRealizado] = useState(null);
+  const [positivadoPercentual, setPositivadoPercentual] = useState(null);
+  const [positivadoVariacao, setPositivadoVariacao] = useState(null);
 
 
    useEffect(() => {
@@ -49,16 +54,28 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
             Authorization: `Bearer ${token}`
           }
         });
+        //PESO
         const percentual = response.data.realizado_peso?.percentual || 0;
         const variacao = response.data.realizado_peso?.variacao || 0;
         const valor = response.data.objetivo?.objetivo_peso || 0;
         const realizado = response.data.vendas?.peso_realizado || 0;
-        const positivado = response.data.positivacao?.realizado || 0;
+
         setPesoRealizado(realizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
         setPeso(valor.toLocaleString('pt-BR'));
         setPesoPercentual(`${percentual.toFixed(2)}%`);
         setPesoVariacao(variacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+
+        //POSITIVACAO
+        const positivado = response.data.positivacao?.realizado || 0;
+        const percentualPos = response.data.positivacao?.percentual || 0;
+        const variacaoPos = response.data.positivacao?.variacao || 0;
+        const objetivoPos = response.data.objetivo?.objetivo_positivacao || 0;
+
+        setPositivadoObjetivo(objetivoPos.toLocaleString('pt-BR'));
         setPositivadoRealizado(positivado.toLocaleString('pt-BR'));
+        setPositivadoPercentual(`${percentualPos.toFixed(2)}%`);
+        setPositivadoVariacao(variacaoPos.toLocaleString('pt-BR'));
+
 
       } catch (error) {
         console.error('Erro ao buscar o objetivo de peso:', error);
@@ -114,12 +131,13 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
       />
       <Card
         title="Positivado"
-        value="114.523.742"
+        value={positivadoObjetivo  ?? '...'}
         subtitle="OBJETIVO"
         title2="Realizado"
         value2={positivadoRealizado ?? '...'}
+        percentage={positivadoPercentual}
         subtitle2=" Cobertura do Realizado"
-        variation="75.998.461"
+        variation={positivadoVariacao}
       />
       <Card
         title="MIX"
