@@ -2,46 +2,40 @@ import React, { useState } from 'react';
 import './register.css';
 
 const Register = () => {
+  const token = localStorage.getItem('token'); // ou como você estiver salvando
   const [financeiro, setFinanceiro] = useState('');
   const [mix, setMix] = useState('');
+  const [mesReferencia, setMesReferencia] = useState('');
 
-  const handleSubmitFinanceiro = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const payload = {
+      mes_referencia: mesReferencia,
+    };
+
+    if (financeiro) payload.objetivo_financeiro = financeiro;
+    if (mix) payload.objetivo_mix = mix;
+
     try {
-      const res = await fetch('http://localhost:8000/api/objetivo-financeiro/', {
+      const res = await fetch('http://localhost:8000/objetivos-mensais/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ valor: financeiro }),
+        credentials: 'include', // importante se estiver usando autenticação por sessão/cookie
+        body: JSON.stringify(payload),
       });
+
       if (res.ok) {
-        alert('Objetivo financeiro cadastrado com sucesso!');
+        alert('Objetivos salvos com sucesso!');
         setFinanceiro('');
-      } else {
-        alert('Erro ao cadastrar objetivo financeiro.');
-      }
-    } catch (error) {
-      console.error(error);
-      alert('Erro na requisição.');
-    }
-  };
-
-  const handleSubmitMix = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch('http://localhost:8000/api/objetivo-mix/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ valor: mix }),
-      });
-      if (res.ok) {
-        alert('Objetivo de mix cadastrado com sucesso!');
         setMix('');
+        setMesReferencia('');
       } else {
-        alert('Erro ao cadastrar objetivo de mix.');
+        const erro = await res.json();
+        alert('Erro ao salvar objetivos: ' + JSON.stringify(erro));
       }
     } catch (error) {
       console.error(error);
@@ -53,35 +47,36 @@ const Register = () => {
     <div className="register-container">
       <h2 className="register-title">Cadastro de Objetivos</h2>
 
-      <div className="register-card">
-        <form className="register-form" onSubmit={handleSubmitFinanceiro}>
-          <label htmlFor="financeiro">Objetivo Financeiro (R$):</label>
-          <input
-            type="number"
-            id="financeiro"
-            value={financeiro}
-            onChange={(e) => setFinanceiro(e.target.value)}
-            placeholder="Ex: 50000"
-            required
-          />
-          <button type="submit">Salvar Objetivo Financeiro</button>
-        </form>
-      </div>
+      <form className="register-form" onSubmit={handleSubmit}>
+        <label htmlFor="mes">Mês de Referência (Ex: 2024-06-01):</label>
+        <input
+          type="date"
+          id="mes"
+          value={mesReferencia}
+          onChange={(e) => setMesReferencia(e.target.value)}
+          required
+        />
 
-      <div className="register-card">
-        <form className="register-form" onSubmit={handleSubmitMix}>
-          <label htmlFor="mix">Objetivo de MIX (Qtd. de Produtos):</label>
-          <input
-            type="number"
-            id="mix"
-            value={mix}
-            onChange={(e) => setMix(e.target.value)}
-            placeholder="Ex: 15"
-            required
-          />
-          <button type="submit">Salvar Objetivo de MIX</button>
-        </form>
-      </div>
+        <label htmlFor="financeiro">Objetivo Financeiro (R$):</label>
+        <input
+          type="number"
+          id="financeiro"
+          value={financeiro}
+          onChange={(e) => setFinanceiro(e.target.value)}
+          placeholder="Ex: 50000"
+        />
+
+        <label htmlFor="mix">Objetivo de MIX (Qtd. de Produtos):</label>
+        <input
+          type="number"
+          id="mix"
+          value={mix}
+          onChange={(e) => setMix(e.target.value)}
+          placeholder="Ex: 15"
+        />
+
+        <button type="submit">Salvar Objetivos</button>
+      </form>
     </div>
   );
 };

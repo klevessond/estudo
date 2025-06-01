@@ -129,9 +129,9 @@ class ObjetivoMensalView(APIView):
         return Response({"message": "Sem objetivos cadastrados para este mês."}, status=204)
 
     def post(self, request):
-        data = request.data
-        data['usuario'] = request.user.id
-        serializer = ObjetivoMensalSerializer(data=data)
+        data = request.data.copy()
+        data['usuario'] = request.user.id  # mantenha o ID aqui
+        serializer = ObjetivoMensalSerializer(data=data, context={'request': request})  # adicione o contexto
         if serializer.is_valid():
             objetivo, created = ObjetivoMensal.objects.update_or_create(
                 usuario=request.user,

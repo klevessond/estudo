@@ -10,6 +10,9 @@ class ObjetivoMensal(models.Model):
     objetivo_mix = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
+        db_table = "objetivo_mensal"
+        app_label = 'dashboard'
+        managed = True  # importante
         unique_together = ('mes_referencia', 'usuario')
         verbose_name = 'Objetivo Mensal'
         verbose_name_plural = 'Objetivos Mensais'
