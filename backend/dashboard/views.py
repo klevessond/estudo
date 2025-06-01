@@ -5,6 +5,8 @@ import pandas as pd
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from .models import ObjetivoMensal
+from .serializers import ObjetivoMensalSerializer
 
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo
@@ -106,3 +108,38 @@ class IndicadoresView(APIView):
            },
             "positivacao_detalhada": positivacao
         })
+    
+
+class ObjetivoMensalView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        mes = request.query_params.get('mes')  # Ex: 2024-06
+        if not mes:
+            return Response({"error": "Informe o parâmetro 'mes'."}, status=400)
+
+        objetivos = ObjetivoMensal.objects.filter(
+            usuario=request.user,
+            mes_referencia__year=mes.split("-")[0],
+            mes_referencia__month=mes.split("-")[1]
+        ).first()
+
+        if objetivos:
+            return Response(ObjetivoMensalSerializer(objetivos).data)
+        return Response({"message": "Sem objetivos cadastrados para este mês."}, status=204)
+
+    def post(self, request):
+        data = request.data
+        data['usuario'] = request.user.id
+        serializer = ObjetivoMensalSerializer(data=data)
+        if serializer.is_valid():
+            objetivo, created = ObjetivoMensal.objects.update_or_create(
+                usuario=request.user,
+                mes_referencia=data['mes_referencia'],
+                defaults={
+                    "objetivo_financeiro": data.get('objetivo_financeiro'),
+                    "objetivo_mix": data.get('objetivo_mix')
+                }
+            )
+            return Response(ObjetivoMensalSerializer(objetivo).data)
+        return Response(serializer.errors, status=400)

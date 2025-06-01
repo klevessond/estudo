@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import './Sidebar.css';
 
 const Sidebar = () => {
@@ -11,8 +12,12 @@ const Sidebar = () => {
             </button>
             <ul>
                 <li>{isCollapsed ? '🏠' : 'Home'}</li>
-                <li>{isCollapsed ? '📊' : 'Analise Demografia'}</li>
-                <li>{isCollapsed ? '📄' : 'Monitoramento de Ecarte'}</li>
+
+                <li>
+                    <Link to="/cadastros" style={{ textDecoration: 'none', color: 'inherit' }}>
+                        {isCollapsed ? '📊' : 'Cadastros'}
+                    </Link>
+                </li>
             </ul>
         </aside>
     );
