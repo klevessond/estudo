@@ -40,6 +40,8 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
   const [positivadoRealizado, setPositivadoRealizado] = useState(null);
   const [positivadoPercentual, setPositivadoPercentual] = useState(null);
   const [positivadoVariacao, setPositivadoVariacao] = useState(null);
+  //VENDA
+  const [vendaRealizada, setVendaRealizada] = useState(null);
 
 
    useEffect(() => {
@@ -76,6 +78,10 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
         setPositivadoPercentual(`${percentualPos.toFixed(2)}%`);
         setPositivadoVariacao(variacaoPos.toLocaleString('pt-BR'));
 
+        //VENDA
+        const vendaReal = response.data.vendas?.venda_realizada || 0;
+        setVendaRealizada(vendaReal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+
 
       } catch (error) {
         console.error('Erro ao buscar o objetivo de peso:', error);
@@ -96,8 +102,8 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
       </div>
 
       <Card
-        title="Realizado"
-        value="32.715.084"
+        title="Venda Realizada"
+        value={vendaRealizada ?? '...'}
         subtitle="Faturamento"
         percentage="84,92%"
         subtitle2=" Cobertura Atual"

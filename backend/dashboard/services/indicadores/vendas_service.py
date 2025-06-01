@@ -235,9 +235,14 @@ def buscar_vendido(data_inicio, data_fim):
 
         # O total está em PTE.PesoVendidoTotal - vamos pegar do primeiro registro (se existir)
         peso_realizado = sum(r["Peso"] for r in dados)
+        venda_realizada = sum(r['ValorProdutos'] for r in dados)
+        desconto_total = sum(r['Desconto'] for r in dados)
+        venda_realizada=venda_realizada-desconto_total
+
 
         return {
             "peso_realizado": peso_realizado,
+            "venda_realizada": venda_realizada,
             "detalhamento": dados
         }
 
