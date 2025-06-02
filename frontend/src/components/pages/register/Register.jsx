@@ -48,7 +48,7 @@ const Register = () => {
       <h2 className="register-title">Cadastro de Objetivos</h2>
 
       <form className="register-form" onSubmit={handleSubmit}>
-        <label htmlFor="mes">Mês de Referência (Ex: 2024-06-01):</label>
+        <label htmlFor="mes">Mês de Referência (Ex: 01-06-2025):</label>
         <input
           type="date"
           id="mes"

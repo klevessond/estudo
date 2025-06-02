@@ -42,6 +42,10 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
   const [positivadoVariacao, setPositivadoVariacao] = useState(null);
   //VENDA
   const [vendaRealizada, setVendaRealizada] = useState(null);
+  // OBJETIVOS MENSAIS
+  const [objetivoFinanceiro, setObjetivoFinanceiro] = useState(null);
+  const [objetivoMix, setObjetivoMix] = useState(null);
+
 
 
    useEffect(() => {
@@ -56,6 +60,11 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
             Authorization: `Bearer ${token}`
           }
         });
+        // Objetivo Mensal (sqlite)
+      const objetivoResponse = await axios.get(`http://localhost:8000/objetivo-mensal-resumo/?de=${de}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
         //PESO
         const percentual = response.data.realizado_peso?.percentual || 0;
         const variacao = response.data.realizado_peso?.variacao || 0;
@@ -82,6 +91,12 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
         const vendaReal = response.data.vendas?.venda_realizada || 0;
         setVendaRealizada(vendaReal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 
+        // ----- OBJETIVO FINANCEIRO E MIX (local SQLite) -----
+          const objetivoFin = objetivoResponse.data.objetivo_financeiro || 0;
+          const objetivoMix = objetivoResponse.data.objetivo_mix || 0;
+          setObjetivoFinanceiro(objetivoFin.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+           setObjetivoMix(objetivoMix.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+
 
       } catch (error) {
         console.error('Erro ao buscar o objetivo de peso:', error);
@@ -94,10 +109,11 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
     }
   }, [periodoSelecionado]);
 
+  
   return (
     <div className="indicativos-container">
       <div className="indicativo-stack">
-        <Card title="Objetivo (R$)" value="38.525.281" />
+        <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'} />
         <Card title="Alocado" value="43,92%" subtitle="Evo % vs Ano Ant." />
       </div>
 
@@ -147,8 +163,9 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
       />
       <Card
         title="MIX"
-        value="114.523.742"
-        subtitle="Valor Captado"
+        value={objetivoMix ?? '...'}
+        subtitle="Objetivo de Mix"
+        title2="Realizado"
         percentage="297,27%"
         subtitle2=" Cobertura Captado"
         variation="75.998.461"

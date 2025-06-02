@@ -7,6 +7,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import ObjetivoMensal
 from .serializers import ObjetivoMensalSerializer
+from datetime import datetime
+from .models import ObjetivoMensal
+from .serializers import ObjetivoMensalSerializer
 
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo
@@ -143,3 +146,28 @@ class ObjetivoMensalView(APIView):
             )
             return Response(ObjetivoMensalSerializer(objetivo).data)
         return Response(serializer.errors, status=400)
+    
+class ObjetivoMensalResumoView(APIView):
+    #permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        data_inicio = request.GET.get("de")
+        
+        
+
+        if not data_inicio:
+            return Response({"detail": "Parâmetro 'de' (data de início) é obrigatório."}, status=400)
+
+        try:
+            data_inicio_formatada = datetime.strptime(data_inicio, "%Y-%m-%d")
+            mes_referencia = data_inicio_formatada.strftime("%Y-%m-01")
+        except ValueError:
+            return Response({"detail": "Formato inválido para data de início. Use 'YYYY-MM-DD'."}, status=400)
+
+        try:
+            objetivo = ObjetivoMensal.objects.get(usuario=user, mes_referencia=mes_referencia)
+            serializer = ObjetivoMensalSerializer(objetivo)
+            return Response(serializer.data)
+        except ObjetivoMensal.DoesNotExist:
+            return Response({"detail": "Objetivo mensal não encontrado."}, status=404)
