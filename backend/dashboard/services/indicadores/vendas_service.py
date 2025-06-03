@@ -1,9 +1,11 @@
 from django.db import connections
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 def buscar_vendido(data_inicio, data_fim):
     data_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
     data_fim = datetime.strptime(data_fim, "%Y-%m-%d").date() + timedelta(days=1)
+    data_fim = validar_data(data_fim) + timedelta(days=1)
+
     with connections['dados_industria'].cursor() as cursor:
         cursor.execute(f"""
             DECLARE @P1 datetime2 = '{data_inicio}';
@@ -346,3 +348,13 @@ def buscar_positivacao_por_rota(data_inicio, data_fim):
         "positivacao_realizado_geral": positivados_total,
         "detalhado": dados
     }
+
+def validar_data(data_input):
+    if isinstance(data_input, datetime):
+        return data_input.date()
+    elif isinstance(data_input, date):
+        return data_input
+    elif isinstance(data_input, str):
+        return datetime.strptime(data_input, "%Y-%m-%d").date()
+    else:
+        raise ValueError("Formato de data inválido")

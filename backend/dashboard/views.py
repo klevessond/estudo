@@ -112,19 +112,16 @@ class IndicadoresView(APIView):
         positivacao = buscar_positivacao_por_rota(data_inicio, data_fim)
         positivacao_realizado_geral = positivacao.get("positivacao_realizado_geral", 0)
         objetivo_positivacao = objetivo.get('objetivo_positivacao', 0)
-        percentual_positivacao = (
-                positivacao_realizado_geral / objetivo_positivacao * 100
-                if objetivo_positivacao else 0
-            )
+        percentual_positivacao = safe_divide(positivacao_realizado_geral, objetivo_positivacao) * 100
         variacao_positivacao = positivacao_realizado_geral  - objetivo_positivacao
 
 
          # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
         variacao = vendido.get("peso_realizado", 0) - objetivo.get("objetivo_peso", 0)
-        percentual = (vendido.get("peso_realizado", 0) / objetivo.get("objetivo_peso", 1)) * 100
-        percentual_cobertura = (venda_realizada / objetivo_financeiro * 100) if objetivo_financeiro else 0
+        percentual = safe_divide(vendido.get("peso_realizado", 0), objetivo.get("objetivo_peso", 1)) * 100
+        percentual_cobertura = safe_divide(venda_realizada, objetivo_financeiro) * 100
         variacao_financeira = venda_realizada - objetivo_financeiro
-        alocado_percentual = (venda_realizada / venda_ano_anterior * 100)
+        alocado_percentual = safe_divide(venda_realizada, venda_ano_anterior) * 100
 
         
         
@@ -190,6 +187,21 @@ class ObjetivoMensalView(APIView):
             return Response(ObjetivoMensalSerializer(objetivo).data)
         return Response(serializer.errors, status=400)
     
+
+
+
+def safe_divide(numerator, denominator, default=0):
+    try:
+        numerator = float(numerator)
+        denominator = float(denominator)
+        if denominator == 0:
+            return default
+        return numerator / denominator
+    except (TypeError, ValueError):
+        return default
+    
+
+
 class ObjetivoMensalResumoView(APIView):
     #permission_classes = [IsAuthenticated]
 

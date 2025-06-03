@@ -91,11 +91,12 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
         const vendaReal = response.data.vendas?.venda_realizada || 0;
         setVendaRealizada(vendaReal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 
-        // ----- OBJETIVO FINANCEIRO E MIX (local SQLite) -----
-          const objetivoFin = objetivoResponse.data.objetivo_financeiro || 0;
-          const objetivoMix = objetivoResponse.data.objetivo_mix || 0;
-          setObjetivoFinanceiro(objetivoFin.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-           setObjetivoMix(objetivoMix.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        // OBJETIVO FINANCEIRO E MIX (vindo do response principal)
+        const objetivoFin = response.data.objetivo?.financeiro || 0;
+        const objetivoMixValor = response.data.objetivo?.objetivo_mix || 0;
+
+        setObjetivoFinanceiro(objetivoFin.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        setObjetivoMix(objetivoMixValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 
 
       } catch (error) {
@@ -166,6 +167,7 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
         value={objetivoMix ?? '...'}
         subtitle="Objetivo de Mix"
         title2="Realizado"
+        value2="--"
         percentage="297,27%"
         subtitle2=" Cobertura Captado"
         variation="75.998.461"
