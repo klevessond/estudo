@@ -7,9 +7,14 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import ObjetivoMensal
 from .serializers import ObjetivoMensalSerializer
-from datetime import datetime
+from datetime import datetime,date
 from .models import ObjetivoMensal
 from .serializers import ObjetivoMensalSerializer
+from django.utils.dateparse import parse_date
+from django.contrib.auth import get_user_model
+User = get_user_model()
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo
@@ -79,37 +84,75 @@ class IndicadoresView(APIView):
         if not data_inicio or not data_fim:
             return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
 
+        #  OBJETIVOS
+        # Buscar objetivo peso e positivação do SQL Server
         objetivo = buscar_objetivo(data_inicio, data_fim)
+        objetivo["objetivo_peso"] = round(objetivo.get("objetivo_peso", 0), 2)
+        objetivo["objetivo_positivacao"] = round(objetivo.get("objetivo_positivacao", 0), 2)
+
+        # Buscar objetivo financeiro e mix do banco local
+        objetivo_mensal_data = get_objetivo_mensal_serializado(request.user, data_inicio)
+        objetivo_financeiro = float(objetivo_mensal_data.get("objetivo_financeiro", 0) or 0)
+        objetivo_mix = float(objetivo_mensal_data.get("objetivo_mix", 0) or 0)
+
+        objetivo["financeiro"] = round(float(objetivo_financeiro or 0), 2)
+        objetivo["objetivo_mix"] = round(float(objetivo_mix or 0), 2)
+
+        #  VENDAS REALIZADAS
         vendido = buscar_vendido(data_inicio, data_fim)
+        venda_realizada = vendido.get("valor_realizado", 0)
+        
+         #  VENDAS DO MESMO PERÍODO NO ANO ANTERIOR
+        ano_anterior_inicio = str(int(data_inicio[:4]) - 1) + data_inicio[4:]
+        ano_anterior_fim = str(int(data_fim[:4]) - 1) + data_fim[4:]
+        vendido_ano_anterior = buscar_vendido(ano_anterior_inicio, ano_anterior_fim)
+        venda_ano_anterior = vendido_ano_anterior.get("valor_realizado", 1) or 1  # evita divisão por zero
+
+        #  POSITIVAÇÃO
         positivacao = buscar_positivacao_por_rota(data_inicio, data_fim)
-
-         # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
-        variacao = vendido.get("peso_realizado", 0) - objetivo.get("objetivo_peso", 0)
-        percentual = (vendido.get("peso_realizado", 0) / objetivo.get("objetivo_peso", 1)) * 100
-
         positivacao_realizado_geral = positivacao.get("positivacao_realizado_geral", 0)
         objetivo_positivacao = objetivo.get('objetivo_positivacao', 0)
-        
         percentual_positivacao = (
                 positivacao_realizado_geral / objetivo_positivacao * 100
                 if objetivo_positivacao else 0
             )
         variacao_positivacao = positivacao_realizado_geral  - objetivo_positivacao
 
+
+         # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
+        variacao = vendido.get("peso_realizado", 0) - objetivo.get("objetivo_peso", 0)
+        percentual = (vendido.get("peso_realizado", 0) / objetivo.get("objetivo_peso", 1)) * 100
+        percentual_cobertura = (venda_realizada / objetivo_financeiro * 100) if objetivo_financeiro else 0
+        variacao_financeira = venda_realizada - objetivo_financeiro
+        alocado_percentual = (venda_realizada / venda_ano_anterior * 100)
+
+        
+        
         return Response({
             "objetivo": objetivo,
+            "alocado": {
+                "valor_ano_anterior": round(venda_ano_anterior, 2),
+                "percentual": round(alocado_percentual - 100, 2)  # positivo/negativo
+            },
             "vendas": vendido,
             "realizado_peso": {
                 "percentual": round(percentual, 2),
                 "variacao": round(variacao, 2),
-                
             },
+            "realizado_financeiro": {
+                "valor": round(venda_realizada, 2),
+                "percentual_cobertura": round(percentual_cobertura, 2),
+                "variacao": round(variacao_financeira, 2)
+            },
+            
              "positivacao":{
                 "realizado":positivacao_realizado_geral,
                 "percentual": percentual_positivacao,
                 "variacao": variacao_positivacao
            },
             "positivacao_detalhada": positivacao
+
+
         })
     
 
@@ -153,15 +196,13 @@ class ObjetivoMensalResumoView(APIView):
     def get(self, request):
         user = request.user
         data_inicio = request.GET.get("de")
-        
-        
 
         if not data_inicio:
             return Response({"detail": "Parâmetro 'de' (data de início) é obrigatório."}, status=400)
 
         try:
-            data_inicio_formatada = datetime.strptime(data_inicio, "%Y-%m-%d")
-            mes_referencia = data_inicio_formatada.strftime("%Y-%m-01")
+            data_inicio_formatada = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+            mes_referencia = data_inicio_formatada.replace(day=1)
         except ValueError:
             return Response({"detail": "Formato inválido para data de início. Use 'YYYY-MM-DD'."}, status=400)
 
@@ -171,3 +212,23 @@ class ObjetivoMensalResumoView(APIView):
             return Response(serializer.data)
         except ObjetivoMensal.DoesNotExist:
             return Response({"detail": "Objetivo mensal não encontrado."}, status=404)
+
+
+def get_objetivo_mensal_serializado(user, data_inicio):
+    try:
+        # Em ambiente de teste, você quer forçar como admin
+        if user.is_anonymous:
+            user = User.objects.filter(is_superuser=True).first()
+
+        data_inicio_formatada = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+        mes_referencia = data_inicio_formatada.replace(day=1)
+
+        objetivo = ObjetivoMensal.objects.get(usuario=user, mes_referencia=mes_referencia)
+        serializer = ObjetivoMensalSerializer(objetivo)
+        return serializer.data
+
+    except ObjetivoMensal.DoesNotExist:
+        return {
+            "objetivo_financeiro": 0,
+            "objetivo_mix": 0,
+        }
