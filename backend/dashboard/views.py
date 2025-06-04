@@ -100,13 +100,17 @@ class IndicadoresView(APIView):
 
         #  VENDAS REALIZADAS
         vendido = buscar_vendido(data_inicio, data_fim)
-        venda_realizada = vendido.get("valor_realizado", 0)
+        venda_realizada = vendido.get("venda_realizada", 0)
+        venda_realizada = float(vendido.get("venda_realizada", 0))
+        print(f"[DEBUG] Venda realizada {venda_realizada}")
         
          #  VENDAS DO MESMO PERÍODO NO ANO ANTERIOR
         ano_anterior_inicio = ajustar_data_para_ano_anterior(data_inicio)
         ano_anterior_fim = ajustar_data_para_ano_anterior(data_fim)
+        print(f"[DEBUG] Consultando vendas do ano anterior entre {ano_anterior_inicio} e {ano_anterior_fim}")
         vendido_ano_anterior = buscar_vendido(ano_anterior_inicio, ano_anterior_fim)
-        venda_ano_anterior = vendido_ano_anterior.get("valor_realizado", 1) or 1  # evita divisão por zero
+        venda_ano_anterior = float(vendido_ano_anterior.get("venda_realizada", 1) or 1)
+        venda_ano_anterior = vendido_ano_anterior.get("venda_realizada", 1) or 1  # evita divisão por zero
 
         #  POSITIVAÇÃO
         positivacao = buscar_positivacao_por_rota(data_inicio, data_fim)
