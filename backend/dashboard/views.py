@@ -103,8 +103,8 @@ class IndicadoresView(APIView):
         venda_realizada = vendido.get("valor_realizado", 0)
         
          #  VENDAS DO MESMO PERÍODO NO ANO ANTERIOR
-        ano_anterior_inicio = str(int(data_inicio[:4]) - 1) + data_inicio[4:]
-        ano_anterior_fim = str(int(data_fim[:4]) - 1) + data_fim[4:]
+        ano_anterior_inicio = ajustar_data_para_ano_anterior(data_inicio)
+        ano_anterior_fim = ajustar_data_para_ano_anterior(data_fim)
         vendido_ano_anterior = buscar_vendido(ano_anterior_inicio, ano_anterior_fim)
         venda_ano_anterior = vendido_ano_anterior.get("valor_realizado", 1) or 1  # evita divisão por zero
 
@@ -244,3 +244,11 @@ def get_objetivo_mensal_serializado(user, data_inicio):
             "objetivo_financeiro": 0,
             "objetivo_mix": 0,
         }
+
+def ajustar_data_para_ano_anterior(data_str):
+    data_atual = datetime.strptime(data_str, "%Y-%m-%d")
+    try:
+        return data_atual.replace(year=data_atual.year - 1).strftime("%Y-%m-%d")
+    except ValueError:
+        # Se o dia não existir (ex: 29/02 em ano não bissexto), ajusta para 28/02
+        return data_atual.replace(year=data_atual.year - 1, day=28).strftime("%Y-%m-%d")
