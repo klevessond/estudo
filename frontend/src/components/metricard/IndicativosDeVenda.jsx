@@ -13,19 +13,19 @@ const Card = ({ title,title2, value,value2, subtitle, subtitle2, percentage, var
       <p className="card-value">{value}</p>
       {subtitle && <p className="card-subtitle">{subtitle}</p>}
     </div>
-    <div className="card-header">
-      <h2>{title2}</h2>
-      {icon && <img src={icon} alt="Ícone" className="card-icon" />}
-    </div>
-    <div className="card-group">
+        <div className="card-group">
       <p className="card-value">{value2}</p>
     
+    </div>
+    <div className="card-subtitle">
+        {title2}
+      {icon && <img src={icon} alt="Ícone" className="card-icon" />}
     </div>
     <div className="card-group">
       {percentage && <p className="card-percentage">{percentage}</p>}
       {subtitle2 && <p className="card-subtitle">{subtitle2}</p>}
     </div>
-    {variation && <p className="card-variation">Variação: {variation}</p>}
+    {variation && <p className="card-variation"> {variation} Variação</p>}
   </div>
 );
 
@@ -115,7 +115,7 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
     <div className="indicativos-container">
       <div className="indicativo-stack">
         <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'} />
-        <Card title="Alocado" value="43,92%" subtitle="Evo % vs Ano Ant." />
+        <Card title="Evo % vs Ano Ant." value="43,92%"/>
       </div>
 
       <Card
@@ -145,21 +145,21 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
       <Card
         title="Peso"
         value={peso ?? '...'}
-        subtitle="OBJETIVO"
-        title2="Realizado"
+        subtitle="OBJETIVO KG"
+        title2="Realizado KG"
         value2={pesoRealizado ?? '...'}
         percentage={pesoPercentual}
-        subtitle2=" Cobertura do Realizado"
+        subtitle2=" Cobertura"
         variation={pesoVariacao}
       />
       <Card
         title="Positivado"
         value={positivadoObjetivo  ?? '...'}
         subtitle="OBJETIVO"
-        title2="Realizado"
         value2={positivadoRealizado ?? '...'}
+        title2="Realizado"
         percentage={positivadoPercentual}
-        subtitle2=" Cobertura do Realizado"
+        subtitle2=" Cobertura"
         variation={positivadoVariacao}
       />
       <Card
