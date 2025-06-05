@@ -40,8 +40,12 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
   const [positivadoRealizado, setPositivadoRealizado] = useState(null);
   const [positivadoPercentual, setPositivadoPercentual] = useState(null);
   const [positivadoVariacao, setPositivadoVariacao] = useState(null);
+  
   //VENDA
   const [vendaRealizada, setVendaRealizada] = useState(null);
+  const [vendaPercentual, setVendaPercentual] = useState(null);
+  const [vendaVariacao, setVendaVariacao] = useState(null);
+  
   // OBJETIVOS MENSAIS
   const [objetivoFinanceiro, setObjetivoFinanceiro] = useState(null);
   const [objetivoMix, setObjetivoMix] = useState(null);
@@ -87,9 +91,16 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
         setPositivadoPercentual(`${percentualPos.toFixed(2)}%`);
         setPositivadoVariacao(variacaoPos.toLocaleString('pt-BR'));
 
-        //VENDA
-        const vendaReal = response.data.vendas?.venda_realizada || 0;
-        setVendaRealizada(vendaReal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        
+        // Dados de VENDAS REALIZADAS
+        const realizadoFinanceiro = response.data.realizado_financeiro || {};
+        const valorVenda = realizadoFinanceiro.valor || 0;
+        const percentualVenda = realizadoFinanceiro.percentual_cobertura || 0;
+        const variacaoVenda = realizadoFinanceiro.variacao || 0;
+        
+        setVendaRealizada(valorVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        setVendaPercentual(`${percentualVenda.toFixed(2)}%`);
+        setVendaVariacao(variacaoVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 
         // OBJETIVO FINANCEIRO E MIX (vindo do response principal)
         const objetivoFin = response.data.objetivo?.financeiro || 0;
@@ -122,9 +133,9 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
         title="Venda Realizada"
         value={vendaRealizada ?? '...'}
         subtitle="Faturamento"
-        percentage="84,92%"
+        percentage={vendaPercentual ?? '...'}
         subtitle2=" Cobertura Atual"
-        variation="-5.810.197"
+        variation={vendaVariacao ?? '...'}
       />
       <Card
         title="Alocações"
