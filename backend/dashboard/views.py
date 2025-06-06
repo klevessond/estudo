@@ -111,6 +111,8 @@ class IndicadoresView(APIView):
         vendido_ano_anterior = buscar_vendido(ano_anterior_inicio, ano_anterior_fim)
         venda_ano_anterior = float(vendido_ano_anterior.get("venda_realizada", 1) or 1)
         venda_ano_anterior = vendido_ano_anterior.get("venda_realizada", 1) or 1  # evita divisão por zero
+        
+
 
         #  POSITIVAÇÃO
         positivacao = buscar_positivacao_por_rota(data_inicio, data_fim)
@@ -125,15 +127,22 @@ class IndicadoresView(APIView):
         percentual = safe_divide(vendido.get("peso_realizado", 0), objetivo.get("objetivo_peso", 1)) * 100
         percentual_cobertura = safe_divide(venda_realizada, objetivo_financeiro) * 100
         variacao_financeira = venda_realizada - objetivo_financeiro
-        alocado_percentual = safe_divide(venda_realizada, venda_ano_anterior) * 100
+        venda_realizada_float = float(venda_realizada)
+        venda_ano_anterior_float = float(venda_ano_anterior)
+        evolucao_percentual = safe_divide(
+            venda_realizada_float - venda_ano_anterior_float,
+            venda_ano_anterior_float
+        ) * 100
+        print(f"[DEBUG] venda do ano anterior {venda_ano_anterior}")
+        print(f"[DEBUG] percentual {evolucao_percentual}")
 
         
         
         return Response({
             "objetivo": objetivo,
-            "alocado": {
+            "evolucao": {
                 "valor_ano_anterior": round(venda_ano_anterior, 2),
-                "percentual": round(alocado_percentual - 100, 2)  # positivo/negativo
+                "percentual": round(evolucao_percentual)  # positivo/negativo
             },
             "vendas": vendido,
             "realizado_peso": {

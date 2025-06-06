@@ -45,6 +45,7 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
   const [vendaRealizada, setVendaRealizada] = useState(null);
   const [vendaPercentual, setVendaPercentual] = useState(null);
   const [vendaVariacao, setVendaVariacao] = useState(null);
+  const [evolucaoAnoAnterior, setEvolucaoAnoAnterior] = useState(null);
   
   // OBJETIVOS MENSAIS
   const [objetivoFinanceiro, setObjetivoFinanceiro] = useState(null);
@@ -97,10 +98,13 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
         const valorVenda = realizadoFinanceiro.valor || 0;
         const percentualVenda = realizadoFinanceiro.percentual_cobertura || 0;
         const variacaoVenda = realizadoFinanceiro.variacao || 0;
+        const evolucao = response.data.evolucao.percentual || 0;
+
         
         setVendaRealizada(valorVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setVendaPercentual(`${percentualVenda.toFixed(2)}%`);
         setVendaVariacao(variacaoVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        setEvolucaoAnoAnterior(`${(evolucao).toFixed(2)}%`);
 
         // OBJETIVO FINANCEIRO E MIX (vindo do response principal)
         const objetivoFin = response.data.objetivo?.financeiro || 0;
@@ -126,7 +130,7 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
     <div className="indicativos-container">
       <div className="indicativo-stack">
         <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'} />
-        <Card title="Evo % vs Ano Ant." value="43,92%"/>
+        <Card title="Evo % vs Ano Ant." value={evolucaoAnoAnterior ?? '...'} />
       </div>
 
       <Card
