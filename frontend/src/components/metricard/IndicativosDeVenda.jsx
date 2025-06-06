@@ -30,6 +30,8 @@ const Card = ({ title,title2, value,value2, subtitle, subtitle2, percentage, var
 );
 
 const IndicadoresCards = ({ periodoSelecionado }) => {
+const [loading, setLoading] = useState(false);
+
   //PESO
   const [peso, setPeso] = useState(null);
   const [pesoPercentual, setPesoPercentual] = useState(null);
@@ -56,6 +58,7 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
    useEffect(() => {
     const fetchIndicadores  = async () => {
         const { de, ate } = periodoSelecionado;
+        setLoading(true); // Ativa o loading
         console.log('ENVIANDO PARA BACKEND:', de, ate);
       try {
         const token = localStorage.getItem('token');
@@ -117,6 +120,9 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
       } catch (error) {
         console.error('Erro ao buscar o objetivo de peso:', error);
         setPeso('Erro');
+      } 
+    finally {
+        setLoading(false); // Desativa o loading mesmo com erro
       }
     };
 
@@ -125,8 +131,15 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
     }
   }, [periodoSelecionado]);
 
-  
   return (
+
+    <div style={{ position: 'relative' }}>
+    {loading && (
+      <div className="overlay-loader">
+        <div className="spinner"></div>
+      </div>
+    )}
+
     <div className="indicativos-container">
       <div className="indicativo-stack">
         <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'} />
@@ -188,6 +201,7 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
         variation="75.998.461"
       />
       
+    </div>
     </div>
   );
 };
