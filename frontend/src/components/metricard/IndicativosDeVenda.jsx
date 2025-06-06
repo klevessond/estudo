@@ -66,9 +66,9 @@ const IndicadoresCards = ({ periodoSelecionado }) => {
           }
         });
         // Objetivo Mensal (sqlite)
-      const objetivoResponse = await axios.get(`http://localhost:8000/objetivo-mensal-resumo/?de=${de}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      //const objetivoResponse = await axios.get(`http://localhost:8000/objetivo-mensal-resumo/?de=${de}`, {
+        //headers: { Authorization: `Bearer ${token}` }
+     // });
 
         //PESO
         const percentual = response.data.realizado_peso?.percentual || 0;
