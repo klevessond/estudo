@@ -17,9 +17,8 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
-from dashboard.services.indicadores.objetivos_service import buscar_objetivo
-from dashboard.services.indicadores.vendas_service import buscar_vendido
-from dashboard.services.indicadores.vendas_service import buscar_positivacao_por_rota
+from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
+from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix
 
 # Create your views here.
 
@@ -86,7 +85,7 @@ class IndicadoresView(APIView):
 
         #  OBJETIVOS
         # Buscar objetivo peso e positivação do SQL Server
-        objetivo = buscar_objetivo(data_inicio, data_fim)
+        objetivo = buscar_objetivo_peso_positivacao(data_inicio, data_fim)
         objetivo["objetivo_peso"] = round(objetivo.get("objetivo_peso", 0), 2)
         objetivo["objetivo_positivacao"] = round(objetivo.get("objetivo_positivacao", 0), 2)
 
@@ -112,8 +111,6 @@ class IndicadoresView(APIView):
         venda_ano_anterior = float(vendido_ano_anterior.get("venda_realizada", 1) or 1)
         venda_ano_anterior = vendido_ano_anterior.get("venda_realizada", 1) or 1  # evita divisão por zero
         
-
-
         #  POSITIVAÇÃO
         positivacao = buscar_positivacao_por_rota(data_inicio, data_fim)
         positivacao_realizado_geral = positivacao.get("positivacao_realizado_geral", 0)
@@ -121,7 +118,11 @@ class IndicadoresView(APIView):
         percentual_positivacao = safe_divide(positivacao_realizado_geral, objetivo_positivacao) * 100
         variacao_positivacao = positivacao_realizado_geral  - objetivo_positivacao
 
-
+        #   MIX
+        dados_mix = buscar_venda_mix(data_inicio, data_fim)
+        mix_realizado = dados_mix["mix_realizado"]
+        
+        
          # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
         variacao = vendido.get("peso_realizado", 0) - objetivo.get("objetivo_peso", 0)
         percentual = safe_divide(vendido.get("peso_realizado", 0), objetivo.get("objetivo_peso", 1)) * 100
@@ -129,10 +130,12 @@ class IndicadoresView(APIView):
         variacao_financeira = venda_realizada - objetivo_financeiro
         venda_realizada_float = float(venda_realizada)
         venda_ano_anterior_float = float(venda_ano_anterior)
-        evolucao_percentual = safe_divide(
-            venda_realizada_float - venda_ano_anterior_float,
-            venda_ano_anterior_float
-        ) * 100
+        evolucao_percentual = safe_divide( venda_realizada_float - venda_ano_anterior_float, venda_ano_anterior_float) * 100
+        percentual_mix = safe_divide(mix_realizado,objetivo_mix) * 100
+        variacao_mix = mix_realizado - objetivo_mix
+       
+       
+       
         print(f"[DEBUG] venda do ano anterior {venda_ano_anterior}")
         print(f"[DEBUG] percentual {evolucao_percentual}")
 
@@ -159,6 +162,11 @@ class IndicadoresView(APIView):
                 "realizado":positivacao_realizado_geral,
                 "percentual": percentual_positivacao,
                 "variacao": variacao_positivacao
+           },
+           "realizado_mix":{
+                "realizado":mix_realizado,
+                "percentual":percentual_mix,
+                "variacao":variacao_mix
            },
             "positivacao_detalhada": positivacao
 

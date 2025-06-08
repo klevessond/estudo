@@ -114,7 +114,7 @@ const [loading, setLoading] = useState(false);
         const objetivoMixValor = response.data.objetivo?.objetivo_mix || 0;
 
         setObjetivoFinanceiro(objetivoFin.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-        setObjetivoMix(objetivoMixValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        setObjetivoMix(objetivoMixValor.toString());
 
 
       } catch (error) {
@@ -158,17 +158,19 @@ const [loading, setLoading] = useState(false);
         title="Alocações"
         value="44.511.059"
         subtitle="Fat + A Faturar"
+        title2="Pre-Venda"
+        value2="4.511.059"
         percentage="115,54%"
         subtitle2=" Cobertura Prevista"
         variation="5.985.778"
       />
       <Card
         title="Captado"
-        value="114.523.742"
+        value="0"
         subtitle="Valor Captado"
-        percentage="297,27%"
-        subtitle2=" Cobertura Captado"
-        variation="75.998.461"
+        percentage="0%"
+        subtitle2=" Cobertura"
+        variation="0"
       />
       <Card
         title="Peso"
@@ -193,11 +195,11 @@ const [loading, setLoading] = useState(false);
       <Card
         title="MIX"
         value={objetivoMix ?? '...'}
-        subtitle="Objetivo de Mix"
-        title2="Realizado"
+        subtitle="OBEJETIVO"
         value2="--"
+        title2="Realizado"
         percentage="297,27%"
-        subtitle2=" Cobertura Captado"
+        subtitle2=" Cobertura"
         variation="75.998.461"
       />
       
