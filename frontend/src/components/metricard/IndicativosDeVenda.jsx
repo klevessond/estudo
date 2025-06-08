@@ -48,10 +48,17 @@ const [loading, setLoading] = useState(false);
   const [vendaPercentual, setVendaPercentual] = useState(null);
   const [vendaVariacao, setVendaVariacao] = useState(null);
   const [evolucaoAnoAnterior, setEvolucaoAnoAnterior] = useState(null);
+
+  //MIX
+  const [mixRealizado, setMixRealizado] = useState(null);
+  const [mixPercentual, setMixPercentual] = useState(null);
+  const [mixVariacao, setMixVariacao] = useState(null);
   
   // OBJETIVOS MENSAIS
   const [objetivoFinanceiro, setObjetivoFinanceiro] = useState(null);
   const [objetivoMix, setObjetivoMix] = useState(null);
+
+
 
 
 
@@ -115,6 +122,15 @@ const [loading, setLoading] = useState(false);
 
         setObjetivoFinanceiro(objetivoFin.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setObjetivoMix(objetivoMixValor.toString());
+
+        // MIX
+        const realizadoMix = response.data.realizado_mix?.realizado || 0;
+        const percentualMix = response.data.realizado_mix?.percentual || 0;
+        const variacaoMix = response.data.realizado_mix?.variacao || 0;
+
+        setMixRealizado(realizadoMix.toString());
+        setMixPercentual(`${percentualMix.toFixed(2)}%`);
+        setMixVariacao(variacaoMix.toString());
 
 
       } catch (error) {
@@ -195,14 +211,14 @@ const [loading, setLoading] = useState(false);
       <Card
         title="MIX"
         value={objetivoMix ?? '...'}
-        subtitle="OBEJETIVO"
-        value2="--"
+        subtitle="OBJETIVO"
+        value2={mixRealizado ?? '--'}
         title2="Realizado"
-        percentage="297,27%"
+        percentage={mixPercentual ?? '--'}
         subtitle2=" Cobertura"
-        variation="75.998.461"
+        variation={mixVariacao ?? '...'}
       />
-      
+            
     </div>
     </div>
   );
