@@ -58,6 +58,11 @@ const [loading, setLoading] = useState(false);
   const [objetivoFinanceiro, setObjetivoFinanceiro] = useState(null);
   const [objetivoMix, setObjetivoMix] = useState(null);
 
+  //PRE-VENDA
+  const [alocacaoRealizada, setAlocacaoRealizada] = useState(null);
+  const [alocacaoPrevenda, setAlocacaoPrevenda] = useState(null);
+  const [alocacaoPercentual, setAlocacaoPercentual] = useState(null);
+  const [alocacaoVariacao, setAlocacaoVariacao] = useState(null);
 
 
 
@@ -133,6 +138,19 @@ const [loading, setLoading] = useState(false);
         setMixVariacao(variacaoMix.toString());
 
 
+        // PRE-VENDA
+          const alocacao = response.data['pre-venda'] || {};
+          const valorAlocado = alocacao.valor_alocado || 0;
+          const valorPrevenda = alocacao.valor_prevenda || 0;
+          const percentualAlocado = alocacao.percentual_prevenda_alocado || 0;
+          const variacaoPrevenda = alocacao.variacao_prevenda || 0;
+
+          setAlocacaoRealizada(valorAlocado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+          setAlocacaoPrevenda(valorPrevenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+          setAlocacaoPercentual(`${percentualAlocado.toFixed(2)}%`);
+          setAlocacaoVariacao(variacaoPrevenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+
+
       } catch (error) {
         console.error('Erro ao buscar o objetivo de peso:', error);
         setPeso('Erro');
@@ -172,13 +190,13 @@ const [loading, setLoading] = useState(false);
       />
       <Card
         title="Alocações"
-        value="44.511.059"
+        value={alocacaoRealizada ?? '...'}
         subtitle="Fat + A Faturar"
-        title2="Pre-Venda"
-        value2="4.511.059"
-        percentage="115,54%"
+        title2="Pré-Venda"
+        value2={alocacaoPrevenda ?? '...'}
+        percentage={alocacaoPercentual ?? '...'}
         subtitle2=" Cobertura Prevista"
-        variation="5.985.778"
+        variation={alocacaoVariacao ?? '...'}
       />
       <Card
         title="Captado"

@@ -615,3 +615,51 @@ def buscar_venda_mix(data_inicio, data_fim):
         "mix_realizado": mix_realizado,
         "detalhado": dados
     }
+
+def buscar_pre_venda(data_inicio, data_fim):
+    data_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+    data_fim = datetime.strptime(data_fim, "%Y-%m-%d").date() + timedelta(days=1)
+    data_inicio = validar_data(data_inicio)
+    data_fim = validar_data(data_fim)
+
+    with connections['dados_industria'].cursor() as cursor:
+        cursor.execute(f"""
+            DECLARE @P1 datetime2 = '{data_inicio}';
+            DECLARE @P2 datetime2 = '{data_fim}';
+            SELECT 
+                PD.*,
+                C.Cliente,
+                C.ClienteFantasia,
+                C.CodTabelaPreco AS CodTabelaPrecoCliente,
+                C.CodFormaPagto AS CodFormaRecebCliente,
+                (SELECT SUM(PDI.Qtd1 * PDI.Desconto1)
+                FROM PocketDocumentoItens PDI
+                WHERE PDI.CodPocket = PD.CodPocket
+                AND PDI.CodDoc = PD.CodDoc) AS Desconto,
+                F.Funcionario
+            FROM PocketDocumento PD
+            LEFT JOIN Funcionario F ON PD.CodVendedor = F.CodFuncionario
+            JOIN Cliente C ON PD.CodCliente = C.CodCliente
+            JOIN TipoDocumento TD ON PD.CodTipoDoc = TD.CodTipoDoc
+            JOIN NaturezaOperacao NOPE ON TD.CodNaturezaOperacao = NOPE.CodNaturezaOperacao
+            WHERE PD.Status IN (0, 1)
+            AND (ISNULL(PD.UnidGestora, 0) = 0 OR PD.UnidGestora IN (
+                SELECT UnidGestora FROM UserUsuarioUnidade WHERE ID = 'ESIGMA'))
+            AND TD.TipoOperacao <> 4
+            AND NOPE.Venda = 1
+            AND PD.DataDoc >= @P1
+            AND PD.DataDoc < @P2
+
+
+            """)
+        
+        columns = [col[0] for col in cursor.description]
+        rows = cursor.fetchall()
+        dados = [dict(zip(columns, row)) for row in rows]
+
+        pre_venda_valor = sum(r["Valor"] for r in dados)
+        
+        return {
+        "pre_venda_valor": pre_venda_valor,
+        "detalhado": dados
+    }

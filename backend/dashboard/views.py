@@ -18,7 +18,7 @@ User = get_user_model()
 
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
-from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix
+from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix,buscar_pre_venda
 
 # Create your views here.
 
@@ -122,17 +122,25 @@ class IndicadoresView(APIView):
         dados_mix = buscar_venda_mix(data_inicio, data_fim)
         mix_realizado = dados_mix["mix_realizado"]
         
+        # Pré-venda
+        prevenda = buscar_pre_venda(data_inicio, data_fim)
+        valor_prevenda = prevenda.get("pre_venda_valor", 0)
+        valor_alocado = venda_realizada + valor_prevenda
+       
+
         
          # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
         variacao = vendido.get("peso_realizado", 0) - objetivo.get("objetivo_peso", 0)
         percentual = safe_divide(vendido.get("peso_realizado", 0), objetivo.get("objetivo_peso", 1)) * 100
         percentual_cobertura = safe_divide(venda_realizada, objetivo_financeiro) * 100
-        variacao_financeira = venda_realizada - objetivo_financeiro
+        variacao_financeira = venda_realizada - valor_alocado
         venda_realizada_float = float(venda_realizada)
         venda_ano_anterior_float = float(venda_ano_anterior)
         evolucao_percentual = safe_divide( venda_realizada_float - venda_ano_anterior_float, venda_ano_anterior_float) * 100
         percentual_mix = safe_divide(mix_realizado,objetivo_mix) * 100
         variacao_mix = mix_realizado - objetivo_mix
+        percentual_prevenda_alocado = safe_divide(valor_alocado,objetivo_financeiro)*100
+        variacao_prevenda = valor_alocado-valor_alocado
        
        
        
@@ -146,6 +154,12 @@ class IndicadoresView(APIView):
             "evolucao": {
                 "valor_ano_anterior": round(venda_ano_anterior, 2),
                 "percentual": round(evolucao_percentual)  # positivo/negativo
+            },
+            "pre-venda":{
+                    "valor_prevenda": round(valor_prevenda,2),
+                    "valor_alocado": round(valor_alocado,2),
+                    "percentual_prevenda_alocado": round(percentual_prevenda_alocado,2),
+                    "variacao_prevenda": round(variacao_prevenda,2)
             },
             "vendas": vendido,
             "realizado_peso": {
