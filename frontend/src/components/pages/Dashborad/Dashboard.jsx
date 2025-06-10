@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useEffect } from 'react'; // certifique-se que está importado
 import MetricCard from '../../metricard/MetricCard';
 import BarChart from '../../BarChart/BarChart';
 import PieChart from  '../../Piechart/PieChart';
@@ -24,10 +25,18 @@ const Dashboard = () => {
 
 const [modo, setModo] = useState('geral'); 
 const [colaboradorSelecionado, setColaboradorSelecionado] = useState(null);
-const [periodoSelecionado, setPeriodoSelecionado] = useState({
-    de: '2025-01-01',
-    ate: '2025-01-31'
-  });
+const [periodoSelecionado, setPeriodoSelecionado] = useState(null);
+
+  useEffect(() => {
+  // Força o envio do mês atual assim que a tela é carregada
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+  const de = `${ano}-${mes}-01`;
+  const ate = new Date(ano, mes, 0).toISOString().split('T')[0];
+
+  setPeriodoSelecionado({ de, ate });
+}, []);
     return (
         <div>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
