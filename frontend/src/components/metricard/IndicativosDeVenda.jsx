@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import './IndicativosDeVenda.css';
 import axios from 'axios';
+import api from '../../api';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 
 const Card = ({ title,title2, value,value2, subtitle, subtitle2, percentage, variation, icon }) => (
@@ -75,7 +76,7 @@ const [loading, setLoading] = useState(false);
       try {
         const token = localStorage.getItem('token');
         const { de, ate } = periodoSelecionado;
-        const response = await axios.get(`http://localhost:8000/Indicadores/?de=${de}&ate=${ate}`, {
+        const response = await api.get(`http://localhost:8000/Indicadores/?de=${de}&ate=${ate}`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
