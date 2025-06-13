@@ -140,7 +140,7 @@ class IndicadoresView(APIView):
         percentual_mix = safe_divide(mix_realizado,objetivo_mix) * 100
         variacao_mix = mix_realizado - objetivo_mix
         percentual_prevenda_alocado = safe_divide(valor_alocado,objetivo_financeiro)*100
-        variacao_prevenda = valor_alocado-valor_alocado
+        variacao_prevenda = objetivo_financeiro - valor_alocado 
        
        
        

@@ -119,7 +119,7 @@ const [loading, setLoading] = useState(false);
         
         setVendaRealizada(valorVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setVendaPercentual(`${percentualVenda.toFixed(2)}%`);
-        setVendaVariacao(variacaoVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        setVendaVariacao(Math.abs(variacaoVenda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setEvolucaoAnoAnterior(`${(evolucao).toFixed(2)}%`);
 
         // OBJETIVO FINANCEIRO E MIX (vindo do response principal)
@@ -149,7 +149,7 @@ const [loading, setLoading] = useState(false);
           setAlocacaoRealizada(valorAlocado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
           setAlocacaoPrevenda(valorPrevenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
           setAlocacaoPercentual(`${percentualAlocado.toFixed(2)}%`);
-          setAlocacaoVariacao(variacaoPrevenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+          setAlocacaoVariacao(Math.abs(variacaoPrevenda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 
 
       } catch (error) {
