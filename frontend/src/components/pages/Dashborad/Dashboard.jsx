@@ -43,12 +43,13 @@ const [periodoSelecionado, setPeriodoSelecionado] = useState(null);
             <PeriodoSelector onChange={(dados) => {
                 console.log('RECEBIDO EM DASHBOARD:', dados);
                 if (dados?.de && dados?.ate) {
-                    setPeriodoSelecionado({ de: dados.de, ate: dados.ate });
+                    setPeriodoSelecionado({ de: dados.de, ate: dados.ate, incluirPDV: dados.incluirPDV ?? false }); // garante que sempre vem um valor booleano
+  
                 } else if (dados?.mes) {
                     const [ano, mes] = dados.mes.split('-');
                     const de = `${ano}-${mes}-01`;
                     const ate = new Date(ano, mes, 0).toISOString().split('T')[0];
-                    setPeriodoSelecionado({ de, ate });
+                    setPeriodoSelecionado({ de, ate,incluirPDV: dados.incluirPDV ?? false });
                 }
         }} /><IndicativosDeVenda periodoSelecionado={periodoSelecionado}/>
             </div>

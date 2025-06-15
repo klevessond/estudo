@@ -10,20 +10,21 @@ const PeriodoSelector = ({ defaultValue, label = 'Selecionar período:', onChang
   const [mesAtual, setMesAtual] = useState(mesCorrente);
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  const [incluirPDV, setIncluirPDV] = useState(false);
 
   const aplicarPeriodo = () => {
     if (periodo === 'hoje') {
     console.log('ENVIANDO HOJE', dataHoje);
-    onChange?.({ tipo: 'periodo', de: dataHoje, ate: dataHoje });
+    onChange?.({ tipo: 'periodo', de: dataHoje, ate: dataHoje, incluirPDV: !!incluirPDV });
   } else if (periodo === 'mes') {
     const [ano, mes] = mesAtual.split('-');
     const de = `${ano}-${mes}-01`;
     const ate = new Date(ano, mes, 0).toISOString().split('T')[0];
     console.log('ENVIANDO MÊS', de, ate);
-    onChange?.({ tipo: 'periodo', de, ate });
+    onChange?.({ tipo: 'periodo', de, ate, incluirPDV: !!incluirPDV });
   } else if (periodo === 'periodo' && dataInicio && dataFim) {
     console.log('ENVIANDO PERÍODO', dataInicio, dataFim);
-    onChange?.({ tipo: 'periodo', de: dataInicio, ate: dataFim });
+    onChange?.({ tipo: 'periodo', de: dataInicio, ate: dataFim,incluirPDV: !!incluirPDV });
   }
 };
 
@@ -71,6 +72,15 @@ const PeriodoSelector = ({ defaultValue, label = 'Selecionar período:', onChang
           />
         </div>
       )}
+      <div className="checkbox-pdv">
+        <input
+          type="checkbox"
+          id="checkboxPDV"
+          checked={incluirPDV}
+          onChange={() => setIncluirPDV(!incluirPDV)}
+        />
+        <label htmlFor="checkboxPDV">Vendas PDV</label>
+      </div>
 
       <button onClick={aplicarPeriodo} className="btn-aplicar">Aplicar</button>
     </div>

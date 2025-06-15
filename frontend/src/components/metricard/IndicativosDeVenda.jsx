@@ -70,16 +70,18 @@ const [loading, setLoading] = useState(false);
 
    useEffect(() => {
     const fetchIndicadores  = async () => {
-        const { de, ate } = periodoSelecionado;
+      console.log(periodoSelecionado)
+      const { de, ate, incluirPDV } = periodoSelecionado;
         setLoading(true); // Ativa o loading
-        console.log('ENVIANDO PARA BACKEND:', de, ate);
-      try {
-        const token = localStorage.getItem('token');
-        const { de, ate } = periodoSelecionado;
-        const response = await api.get(`http://localhost:8000/Indicadores/?de=${de}&ate=${ate}`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+
+        try {
+          const token = localStorage.getItem('token');
+
+          // Adiciona o parâmetro incluirPDV como true ou false na URL
+          const response = await api.get(`http://localhost:8000/Indicadores/?de=${de}&ate=${ate}&incluirPDV=${incluirPDV}`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
         });
         // Objetivo Mensal (sqlite)
       //const objetivoResponse = await axios.get(`http://localhost:8000/objetivo-mensal-resumo/?de=${de}`, {

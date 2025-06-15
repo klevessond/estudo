@@ -19,7 +19,7 @@ User = get_user_model()
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
 from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix,buscar_pre_venda
-
+from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv
 # Create your views here.
 
 def get_dados_sql(request):
@@ -79,6 +79,8 @@ class IndicadoresView(APIView):
     def get(self, request):
         data_inicio = request.GET.get('de')
         data_fim = request.GET.get('ate')
+        incluir_pdv = request.query_params.get('incluirPDV', 'false').lower() == 'true'
+        print(f"[DEBUG] PDV ?? {incluir_pdv}")
 
         if not data_inicio or not data_fim:
             return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
@@ -101,6 +103,14 @@ class IndicadoresView(APIView):
         vendido = buscar_vendido(data_inicio, data_fim)
         venda_realizada = vendido.get("venda_realizada", 0)
         venda_realizada = float(vendido.get("venda_realizada", 0))
+        peso_realizado = vendido.get("peso_realizado", 0)
+        if incluir_pdv:
+            dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
+            print(f"[DEBUG] Vendas PDV {dados_pdv["valor_pdv"]} e peso {dados_pdv["peso_pdv"]}")
+            venda_realizada += float(dados_pdv["valor_pdv"])
+            peso_realizado += float(dados_pdv["peso_pdv"])
+
+
         print(f"[DEBUG] Venda realizada {venda_realizada}")
         
          #  VENDAS DO MESMO PERÍODO NO ANO ANTERIOR
@@ -130,8 +140,8 @@ class IndicadoresView(APIView):
 
         
          # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
-        variacao = vendido.get("peso_realizado", 0) - objetivo.get("objetivo_peso", 0)
-        percentual = safe_divide(vendido.get("peso_realizado", 0), objetivo.get("objetivo_peso", 1)) * 100
+        variacao = peso_realizado - objetivo.get("objetivo_peso", 0)
+        percentual = safe_divide(peso_realizado, objetivo.get("objetivo_peso", 1)) * 100
         percentual_cobertura = safe_divide(venda_realizada, objetivo_financeiro) * 100
         variacao_financeira = venda_realizada - valor_alocado
         venda_realizada_float = float(venda_realizada)
@@ -141,6 +151,8 @@ class IndicadoresView(APIView):
         variacao_mix = mix_realizado - objetivo_mix
         percentual_prevenda_alocado = safe_divide(valor_alocado,objetivo_financeiro)*100
         variacao_prevenda = objetivo_financeiro - valor_alocado 
+
+        
        
        
        
