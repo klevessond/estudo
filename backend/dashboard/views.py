@@ -79,8 +79,7 @@ class IndicadoresView(APIView):
     def get(self, request):
         data_inicio = request.GET.get('de')
         data_fim = request.GET.get('ate')
-        incluir_pdv = request.query_params.get('incluirPDV', 'false').lower() == 'true'
-        print(f"[DEBUG] PDV ?? {incluir_pdv}")
+        
 
         if not data_inicio or not data_fim:
             return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
@@ -104,11 +103,7 @@ class IndicadoresView(APIView):
         venda_realizada = vendido.get("venda_realizada", 0)
         venda_realizada = float(vendido.get("venda_realizada", 0))
         peso_realizado = vendido.get("peso_realizado", 0)
-        if incluir_pdv:
-            dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
-            print(f"[DEBUG] Vendas PDV {dados_pdv["valor_pdv"]} e peso {dados_pdv["peso_pdv"]}")
-            venda_realizada += float(dados_pdv["valor_pdv"])
-            peso_realizado += float(dados_pdv["peso_pdv"])
+        
 
 
         print(f"[DEBUG] Venda realizada {venda_realizada}")
@@ -299,3 +294,23 @@ def ajustar_data_para_ano_anterior(data_str):
     except ValueError:
         # Se o dia não existir (ex: 29/02 em ano não bissexto), ajusta para 28/02
         return data_atual.replace(year=data_atual.year - 1, day=28).strftime("%Y-%m-%d")
+    
+
+class IndicadoresPDV(APIView):
+    def get(self, request):
+        data_inicio = request.GET.get("de")
+        data_fim = request.GET.get("ate")
+        if not data_inicio or not data_fim:
+            return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
+
+        try:
+            dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
+            print(f"[DEBUG] Vendas PDV {dados_pdv["valor_pdv"]} e peso {dados_pdv["peso_pdv"]}")
+            venda_realizada_PDV= float(dados_pdv["valor_pdv"])
+            peso_realizado_PDV = float(dados_pdv["peso_pdv"])
+            return Response({"vendas_pdv":{
+                            "venda_realizada":venda_realizada_PDV, 
+                            "peso_realizado":peso_realizado_PDV
+            }})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)

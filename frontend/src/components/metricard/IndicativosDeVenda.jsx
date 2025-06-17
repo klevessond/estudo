@@ -71,14 +71,14 @@ const [loading, setLoading] = useState(false);
    useEffect(() => {
     const fetchIndicadores  = async () => {
       console.log(periodoSelecionado)
-      const { de, ate, incluirPDV } = periodoSelecionado;
+      const { de, ate } = periodoSelecionado;
         setLoading(true); // Ativa o loading
 
         try {
           const token = localStorage.getItem('token');
 
-          // Adiciona o parâmetro incluirPDV como true ou false na URL
-          const response = await api.get(`http://localhost:8000/Indicadores/?de=${de}&ate=${ate}&incluirPDV=${incluirPDV}`, {
+          // Adiciona o parâmetro 
+          const response = await api.get(`http://localhost:8000/Indicadores/?de=${de}&ate=${ate}`, {
             headers: {
               Authorization: `Bearer ${token}`
             }
