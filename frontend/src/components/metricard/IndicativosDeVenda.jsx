@@ -4,6 +4,7 @@ import axios from 'axios';
 import api from '../../api';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 
+
 const Card = ({ title,title2, value,value2, subtitle, subtitle2, percentage, variation, icon }) => (
   <div className="indicativo-card">
     <div className="card-header">
@@ -30,7 +31,7 @@ const Card = ({ title,title2, value,value2, subtitle, subtitle2, percentage, var
   </div>
 );
 
-const IndicadoresCards = ({ periodoSelecionado }) => {
+const IndicadoresCards = ({ periodoSelecionado,somarPDV  }) => {
 const [loading, setLoading] = useState(false);
 
   //PESO
@@ -167,6 +168,45 @@ const [loading, setLoading] = useState(false);
       fetchIndicadores ();
     }
   }, [periodoSelecionado]);
+
+  useEffect(() => {
+  const fetchPDV = async () => {
+    if (!somarPDV || !periodoSelecionado?.de || !periodoSelecionado?.ate) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const { de, ate } = periodoSelecionado;
+
+      const responsePDV = await api.get(`http://localhost:8000/indicadores/pdv/?de=${de}&ate=${ate}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const valorPDV = responsePDV.data.venda_realizada || 0;
+
+      // Soma ao valor já exibido
+      const valorAtual = parseFloat(
+        (vendaRealizada ?? '0')
+          .replace(/\./g, '')
+          .replace('R$', '')
+          .replace(',', '.')
+      ) || 0;
+
+      const totalSomado = valorAtual + valorPDV;
+
+      setVendaRealizada(totalSomado.toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }));
+    } catch (err) {
+      console.error("Erro ao buscar vendas de PDV:", err);
+    }
+  };
+
+  fetchPDV();
+}, [somarPDV]);
+
 
   return (
 

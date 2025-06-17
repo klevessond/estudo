@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './ResumoVendas.css';
 
-const PeriodoSelector = ({ defaultValue, label = 'Selecionar período:', onChange }) => {
+const PeriodoSelector = ({ defaultValue, label = 'Selecionar período:', onChange, onSomarPDV }) => {
   const hoje = new Date();
   const mesCorrente = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
   const dataHoje = hoje.toISOString().split('T')[0];
@@ -72,17 +72,10 @@ const PeriodoSelector = ({ defaultValue, label = 'Selecionar período:', onChang
           />
         </div>
       )}
-      <div className="checkbox-pdv">
-        <input
-          type="checkbox"
-          id="checkboxPDV"
-          checked={incluirPDV}
-          onChange={() => setIncluirPDV(!incluirPDV)}
-        />
-        <label htmlFor="checkboxPDV">Vendas PDV</label>
-      </div>
-
       <button onClick={aplicarPeriodo} className="btn-aplicar">Aplicar</button>
+       <div className="checkbox-pdv">
+        <button onClick={() => onSomarPDV?.()}>Somar Vendas PDV</button>
+      </div>
     </div>
   );
 };
