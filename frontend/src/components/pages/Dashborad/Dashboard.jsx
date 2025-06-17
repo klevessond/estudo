@@ -26,7 +26,7 @@ const Dashboard = () => {
 const [modo, setModo] = useState('geral'); 
 const [colaboradorSelecionado, setColaboradorSelecionado] = useState(null);
 const [periodoSelecionado, setPeriodoSelecionado] = useState(null);
-const [somarPDV, setSomarPDV] = useState(false);
+const [usarPDV, setUsarPDV] = useState(false);
 
   useEffect(() => {
   // Força o envio do mês atual assim que a tela é carregada
@@ -53,8 +53,9 @@ const [somarPDV, setSomarPDV] = useState(false);
                     setPeriodoSelecionado({ de, ate });
                 }
         }} 
-        onSomarPDV={() => setSomarPDV(true)}
-        /><IndicativosDeVenda periodoSelecionado={periodoSelecionado} somarPDV={somarPDV}/>
+       usarPDV={usarPDV}
+       onTogglePDV={() => setUsarPDV(prev => !prev)}
+        /><IndicativosDeVenda periodoSelecionado={periodoSelecionado} usarPDV={usarPDV}/>
             </div>
             <div style={{ margin: '1rem 0', display: 'flex', gap: '0.75rem' }}>
                 <button

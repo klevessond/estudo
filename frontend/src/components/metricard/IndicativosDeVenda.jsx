@@ -31,7 +31,7 @@ const Card = ({ title,title2, value,value2, subtitle, subtitle2, percentage, var
   </div>
 );
 
-const IndicadoresCards = ({ periodoSelecionado,somarPDV  }) => {
+const IndicadoresCards = ({ periodoSelecionado,usarPDV   }) => {
 const [loading, setLoading] = useState(false);
 
   //PESO
@@ -171,7 +171,7 @@ const [loading, setLoading] = useState(false);
 
   useEffect(() => {
   const fetchPDV = async () => {
-    if (!somarPDV || !periodoSelecionado?.de || !periodoSelecionado?.ate) return;
+    if (!usarPDV  || !periodoSelecionado?.de || !periodoSelecionado?.ate) return;
 
     try {
       const token = localStorage.getItem('token');
@@ -205,7 +205,7 @@ const [loading, setLoading] = useState(false);
   };
 
   fetchPDV();
-}, [somarPDV]);
+}, [usarPDV ]);
 
 
   return (

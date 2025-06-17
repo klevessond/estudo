@@ -213,3 +213,16 @@
   cursor: pointer;
   font-weight: bold;
 }
+
+.btn-pdv {
+  background-color: #ccc;
+  border: none;
+  padding: 8px 16px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.btn-pdv.ativo {
+  background-color: #4caf50;
+  color: white;
+}
