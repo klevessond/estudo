@@ -68,6 +68,9 @@ const [loading, setLoading] = useState(false);
 
 //VALOR PARA CALCULO COM OU SEM PDV
    const [vendaRealizadaBase, setVendaRealizadaBase] = useState(null);
+   const [valorPDVBase, setValorPDVBase] = useState(null);
+   const [vendaPDVFormatada, setVendaPDVFormatada] = useState(null);
+   const [vendaTotalFormatada, setVendaTotalFormatada] = useState(null);
 
 
 
@@ -75,6 +78,7 @@ const [loading, setLoading] = useState(false);
     const fetchIndicadores  = async () => {
       console.log(periodoSelecionado)
       const { de, ate } = periodoSelecionado;
+      setValorPDVBase(null); // sempre que um novo período for buscado
         setLoading(true); // Ativa o loading
 
         try {
@@ -157,9 +161,8 @@ const [loading, setLoading] = useState(false);
           setAlocacaoVariacao(Math.abs(variacaoPrevenda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 
       //VALORES atual para soma posterior com o PDV
-          
-
-          setVendaRealizadaBase(valorVenda);
+         
+      setVendaRealizadaBase(valorVenda);
 
       } catch (error) {
         console.error('Erro ao buscar o objetivo de peso:', error);
@@ -176,52 +179,74 @@ const [loading, setLoading] = useState(false);
   }, [periodoSelecionado]);
 
 useEffect(() => {
-  const fetchPDV = async () => {
-    if (vendaRealizadaBase === null || !periodoSelecionado?.de || !periodoSelecionado?.ate) return;
+  const atualizarValoresPDV = (valorPDV) => {
+    const novoValor = usarPDV
+      ? vendaRealizadaBase + valorPDV
+      : vendaRealizadaBase;
 
+    setVendaRealizada(novoValor.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }));
+    // NOVO BLOCO: preenche detalhes extras só se PDV estiver ativo
+    if (usarPDV) {
+      setVendaPDVFormatada(valorPDV.toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }));
+      setVendaTotalFormatada(novoValor.toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }));
+    } else {
+      setVendaPDVFormatada(null);
+      setVendaTotalFormatada(null);
+    }
+
+    const objetivoFin = parseFloat(objetivoFinanceiro?.replace(/[^\d,-]/g, '').replace(',', '.') || '0');
+    const percentualCorrigido = objetivoFin ? (novoValor / objetivoFin) * 100 : 0;
+    const variacaoCorrigida = novoValor - objetivoFin;
+
+    setVendaPercentual(`${percentualCorrigido.toFixed(2)}%`);
+    setVendaVariacao(Math.abs(variacaoCorrigida).toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }));
+  };
+
+  const fetchPDV = async () => {
+    setLoading(true); // Ativa o loading visual
     try {
       const token = localStorage.getItem('token');
       const { de, ate } = periodoSelecionado;
 
       const responsePDV = await api.get(`http://localhost:8000/indicadores/pdv/?de=${de}&ate=${ate}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-     const valorPDV = responsePDV.data.vendas_pdv?.venda_realizada || 0;
-      console.log('[PDV] Valor retornado do backend:', valorPDV);
-      console.log('[PDV] Valor base sem PDV:', vendaRealizadaBase);
-      const novoValor = usarPDV
-        ? vendaRealizadaBase + valorPDV
-        : vendaRealizadaBase;
+      const valorPDV = responsePDV.data.vendas_pdv?.venda_realizada || 0;
+      setValorPDVBase(valorPDV);
+      atualizarValoresPDV(valorPDV);
 
-        console.log('[PDV] Novo valor total (com ou sem PDV):', novoValor);
-        
-        setVendaRealizada(novoValor.toLocaleString('pt-BR', {
-          style: 'currency',
-          currency: 'BRL',
-        }));
-
-        // Recalcular cobertura e variação
-        const objetivoFin = parseFloat(objetivoFinanceiro?.replace(/[^\d,-]/g, '').replace(',', '.') || '0');
-        const valorParaCalculo = usarPDV ? novoValor : vendaRealizadaBase;
-
-        const percentualCorrigido = objetivoFin ? (valorParaCalculo / objetivoFin) * 100 : 0;
-        const variacaoCorrigida = valorParaCalculo - objetivoFin;
-
-        setVendaPercentual(`${percentualCorrigido.toFixed(2)}%`);
-        setVendaVariacao(Math.abs(variacaoCorrigida).toLocaleString('pt-BR', {
-          style: 'currency',
-          currency: 'BRL',
-        }));
     } catch (err) {
       console.error("Erro ao buscar vendas de PDV:", err);
     }
+    setLoading(false); // Desativa o loading ao finalizar a requisição
   };
 
-  fetchPDV();
-}, [usarPDV, periodoSelecionado, vendaRealizadaBase]);
+  if (vendaRealizadaBase === null || !periodoSelecionado?.de || !periodoSelecionado?.ate) return;
+
+  if (usarPDV) {
+    if (valorPDVBase !== null) {
+      atualizarValoresPDV(valorPDVBase); // ✅ já temos, usa local
+    } else {
+      fetchPDV(); // ✅ busca só se necessário
+    }
+  } else {
+    atualizarValoresPDV(valorPDVBase || 0); // ✅ remove PDV localmente
+  }
+
+}, [usarPDV, periodoSelecionado, vendaRealizadaBase, valorPDVBase, objetivoFinanceiro]);
   return (
 
     <div style={{ position: 'relative' }}>
@@ -239,12 +264,23 @@ useEffect(() => {
 
       <Card
         title="Venda Realizada"
-        value={vendaRealizada ?? '...'}
+        value={
+          usarPDV
+            ? (
+                <>
+                  <div>Venda: {vendaRealizada}</div>
+                  <div>PDV: {vendaPDVFormatada}</div>
+                  Total: {vendaTotalFormatada}
+                </>
+              )
+            : vendaRealizada
+        }
         subtitle="Faturamento"
         percentage={vendaPercentual ?? '...'}
         subtitle2=" Cobertura Atual"
         variation={vendaVariacao ?? '...'}
       />
+
       <Card
         title="Alocações"
         value={alocacaoRealizada ?? '...'}
