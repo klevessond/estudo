@@ -177,7 +177,7 @@ const [loading, setLoading] = useState(false);
 
 useEffect(() => {
   const fetchPDV = async () => {
-    if (!usarPDV || !periodoSelecionado?.de || !periodoSelecionado?.ate || vendaRealizadaBase === null) return;
+    if (vendaRealizadaBase === null || !periodoSelecionado?.de || !periodoSelecionado?.ate) return;
 
     try {
       const token = localStorage.getItem('token');
@@ -205,11 +205,13 @@ useEffect(() => {
 
         // Recalcular cobertura e variação
         const objetivoFin = parseFloat(objetivoFinanceiro?.replace(/[^\d,-]/g, '').replace(',', '.') || '0');
-        const percentualVendaPDV = (objetivoFin ? (novoValor / objetivoFin) * 100 : 0);
-        const variacaoPDV = novoValor - objetivoFin;
+        const valorParaCalculo = usarPDV ? novoValor : vendaRealizadaBase;
 
-        setVendaPercentual(`${percentualVendaPDV.toFixed(2)}%`);
-        setVendaVariacao(Math.abs(variacaoPDV).toLocaleString('pt-BR', {
+        const percentualCorrigido = objetivoFin ? (valorParaCalculo / objetivoFin) * 100 : 0;
+        const variacaoCorrigida = valorParaCalculo - objetivoFin;
+
+        setVendaPercentual(`${percentualCorrigido.toFixed(2)}%`);
+        setVendaVariacao(Math.abs(variacaoCorrigida).toLocaleString('pt-BR', {
           style: 'currency',
           currency: 'BRL',
         }));
