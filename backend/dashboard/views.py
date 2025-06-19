@@ -138,7 +138,7 @@ class IndicadoresView(APIView):
         variacao = peso_realizado - objetivo.get("objetivo_peso", 0)
         percentual = safe_divide(peso_realizado, objetivo.get("objetivo_peso", 1)) * 100
         percentual_cobertura = safe_divide(venda_realizada, objetivo_financeiro) * 100
-        variacao_financeira = venda_realizada - valor_alocado
+        variacao_financeira = venda_realizada - objetivo_financeiro
         venda_realizada_float = float(venda_realizada)
         venda_ano_anterior_float = float(venda_ano_anterior)
         evolucao_percentual = safe_divide( venda_realizada_float - venda_ano_anterior_float, venda_ano_anterior_float) * 100
