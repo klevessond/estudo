@@ -71,6 +71,10 @@ const [loading, setLoading] = useState(false);
    const [valorPDVBase, setValorPDVBase] = useState(null);
    const [vendaPDVFormatada, setVendaPDVFormatada] = useState(null);
    const [vendaTotalFormatada, setVendaTotalFormatada] = useState(null);
+   const [pesoRealizadoBase, setPesoRealizadoBase] = useState(null);
+   const [pesoPDVBase, setPesoPDVBase] = useState(null);
+   const [pesoPDVFormatado, setPesoPDVFormatado] = useState(null);
+   const [pesoTotalFormatado, setPesoTotalFormatado] = useState(null);
 
 
 
@@ -160,9 +164,10 @@ const [loading, setLoading] = useState(false);
           setAlocacaoPercentual(`${percentualAlocado.toFixed(2)}%`);
           setAlocacaoVariacao(Math.abs(variacaoPrevenda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 
-      //VALORES atual para soma posterior com o PDV
-         
-      setVendaRealizadaBase(valorVenda);
+        //VALORES atual para soma posterior com o PDV
+          setVendaRealizadaBase(valorVenda);
+         setPesoRealizado(realizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+          setPesoRealizadoBase(realizado);
 
       } catch (error) {
         console.error('Erro ao buscar o objetivo de peso:', error);
@@ -179,7 +184,7 @@ const [loading, setLoading] = useState(false);
   }, [periodoSelecionado]);
 
 useEffect(() => {
-  const atualizarValoresPDV = (valorPDV) => {
+  const atualizarValoresPDV = (valorPDV, pesoPDV) => {
     const novoValor = usarPDV
       ? vendaRealizadaBase + valorPDV
       : vendaRealizadaBase;
@@ -212,6 +217,34 @@ useEffect(() => {
       style: 'currency',
       currency: 'BRL',
     }));
+
+    const novoPeso = usarPDV
+        ? pesoRealizadoBase + pesoPDV
+        : pesoRealizadoBase;
+
+      setPesoRealizado(novoPeso.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2
+      }));
+
+      // Exibe separadamente o PDV
+      if (usarPDV) {
+        setPesoPDVFormatado(pesoPDV.toLocaleString('pt-BR', {
+          minimumFractionDigits: 2
+        }));
+        setPesoTotalFormatado(novoPeso.toLocaleString('pt-BR', {
+          minimumFractionDigits: 2
+        }));
+      } else {
+        setPesoPDVFormatado(null);
+        setPesoTotalFormatado(null);
+      }
+
+      const objetivoPeso = parseFloat((peso || '0').replace(/[^\d,-]/g, '').replace(',', '.'));
+      const percentualPeso = objetivoPeso ? (novoPeso / objetivoPeso) * 100 : 0;
+      const variacaoPeso = novoPeso - objetivoPeso;
+
+      setPesoPercentual(`${percentualPeso.toFixed(2)}%`);
+      setPesoVariacao(variacaoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
   };
 
   const fetchPDV = async () => {
@@ -226,7 +259,9 @@ useEffect(() => {
 
       const valorPDV = responsePDV.data.vendas_pdv?.venda_realizada || 0;
       setValorPDVBase(valorPDV);
-      atualizarValoresPDV(valorPDV);
+      const pesoPDV = responsePDV.data.vendas_pdv?.peso_realizado || 0;
+      setPesoPDVBase(pesoPDV);
+      atualizarValoresPDV(valorPDV, pesoPDV);
 
     } catch (err) {
       console.error("Erro ao buscar vendas de PDV:", err);
@@ -237,13 +272,13 @@ useEffect(() => {
   if (vendaRealizadaBase === null || !periodoSelecionado?.de || !periodoSelecionado?.ate) return;
 
   if (usarPDV) {
-    if (valorPDVBase !== null) {
-      atualizarValoresPDV(valorPDVBase); // ✅ já temos, usa local
-    } else {
+    if (valorPDVBase != null && pesoPDVBase != null) {
+        atualizarValoresPDV(valorPDVBase, pesoPDVBase);
+      }else {
       fetchPDV(); // ✅ busca só se necessário
     }
   } else {
-    atualizarValoresPDV(valorPDVBase || 0); // ✅ remove PDV localmente
+   atualizarValoresPDV(valorPDVBase || 0, pesoPDVBase || 0); // ✅ remove PDV localmente
   }
 
 }, [usarPDV, periodoSelecionado, vendaRealizadaBase, valorPDVBase, objetivoFinanceiro]);
@@ -268,9 +303,9 @@ useEffect(() => {
           usarPDV
             ? (
                 <>
-                  <div>Venda: {vendaRealizada}</div>
+                  <div>{vendaRealizadaBase?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
                   <div>PDV: {vendaPDVFormatada}</div>
-                  Total: {vendaTotalFormatada}
+                  <div>Total: {vendaTotalFormatada}</div>
                 </>
               )
             : vendaRealizada
@@ -301,14 +336,27 @@ useEffect(() => {
       />
       <Card
         title="Peso"
-        value={peso ?? '...'}
-        subtitle="OBJETIVO KG"
+        value={
+          usarPDV
+            ? (
+                <>
+                  <div>{peso}</div>
+                  <div><p className="card-subtitle">OBJETIVO KG</p></div>
+                  <div>Realizado: {pesoRealizadoBase?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                  <div>PDV: {pesoPDVFormatado}</div>
+                  <div>Total: {pesoTotalFormatado}</div>
+                </>
+              )
+            : peso ?? '...'
+        }
+        subtitle={usarPDV ? '' : "OBJETIVO KG"}
         title2="Realizado KG"
-        value2={pesoRealizado ?? '...'}
+        value2={usarPDV ? pesoTotalFormatado : pesoRealizado ?? '...'}
         percentage={pesoPercentual}
         subtitle2=" Cobertura"
         variation={pesoVariacao}
       />
+
       <Card
         title="Positivado"
         value={positivadoObjetivo  ?? '...'}
