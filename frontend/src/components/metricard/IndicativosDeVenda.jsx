@@ -336,22 +336,20 @@ useEffect(() => {
       />
       <Card
         title="Peso"
-        value={
+        value={peso ?? '...'}
+        subtitle="OBJETIVO KG"
+        title2="Realizado KG"
+        value2={
           usarPDV
             ? (
                 <>
-                  <div>{peso}</div>
-                  <div><p className="card-subtitle">OBJETIVO KG</p></div>
-                  <div>Realizado: {pesoRealizadoBase?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                  <div>{pesoRealizadoBase?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                   <div>PDV: {pesoPDVFormatado}</div>
                   <div>Total: {pesoTotalFormatado}</div>
                 </>
               )
-            : peso ?? '...'
+            : pesoRealizado ?? '...'
         }
-        subtitle={usarPDV ? '' : "OBJETIVO KG"}
-        title2="Realizado KG"
-        value2={usarPDV ? pesoTotalFormatado : pesoRealizado ?? '...'}
         percentage={pesoPercentual}
         subtitle2=" Cobertura"
         variation={pesoVariacao}
