@@ -308,9 +308,14 @@ class IndicadoresPDV(APIView):
             print(f"[DEBUG] Vendas PDV {dados_pdv["valor_pdv"]} e peso {dados_pdv["peso_pdv"]}")
             venda_realizada_PDV= float(dados_pdv["valor_pdv"])
             peso_realizado_PDV = float(dados_pdv["peso_pdv"])
+            ano_anterior_inicio_PDV = ajustar_data_para_ano_anterior(data_inicio)
+            ano_anterior_fim_PDV = ajustar_data_para_ano_anterior(data_fim)
+            dados_pdv_anoanterior = buscar_vendas_pdv(ano_anterior_inicio_PDV, ano_anterior_fim_PDV)
+
             return Response({"vendas_pdv":{
                             "venda_realizada":venda_realizada_PDV, 
-                            "peso_realizado":peso_realizado_PDV
+                            "peso_realizado":peso_realizado_PDV,
+                            "venda_realizada_ano_anterior":dados_pdv_anoanterior["valor_pdv"],
             }})
         except Exception as e:
             return Response({"error": str(e)}, status=500)
