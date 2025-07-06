@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './IndicativosDeVenda.css';
+import ReactSpeedometer from 'react-d3-speedometer';
 import axios from 'axios';
 import api from '../../api';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
@@ -64,6 +65,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV }) => {
   const [valorAnoAnteriorBase, setValorAnoAnteriorBase] = useState(null);
   const [vendaPDVAnoAnterior, setVendaPDVAnoAnterior] = useState(null);
   const [evolucao_venda_vendapdv, setEvolucao_venda_vendapdv] = useState(null);
+  const [modo, setModo] = useState('indicadores');
 
   useEffect(() => {
     const fetchIndicadores = async () => {
@@ -240,14 +242,69 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV }) => {
     }
   }, [vendaRealizadaBase, valorAnoAnteriorBase, vendaPDVAnoAnterior]);
 
+
   return (
+    
     <div style={{ position: 'relative' }}>
       {loading && (
         <div className="overlay-loader">
           <div className="spinner"></div>
         </div>
       )}
+      <div className="modo-toggle">
+      <button
+        onClick={() => setModo('indicadores')}
+        className={modo === 'indicadores' ? 'ativo-indicadores' : ''}
+      >
+        🎯 Indicadores
+      </button>
 
+      <button
+        onClick={() => setModo('graficos')}
+        className={modo === 'graficos' ? 'ativo-graficos' : ''}
+      >
+        📊 Graficos
+      </button>
+    </div>
+      {modo === 'graficos' ? (
+  <div className="dashboard-graficos">
+    <h2>Velocímetros de Meta</h2>
+
+    <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+      
+            <div>
+        <h4>Venda</h4>
+        <ReactSpeedometer
+          maxValue={100}
+          value={parseFloat((vendaPercentual || '0').replace('%', ''))}
+          segments={5}
+          height={160}
+        />
+      </div>
+
+      
+      <div>
+        <h4>Peso</h4>
+        <ReactSpeedometer
+          maxValue={100}
+          value={parseFloat((pesoPercentual || '0').replace('%', ''))}
+          segments={5}
+          height={160}
+        />
+      </div>
+
+      <div>
+        <h4>Positivação</h4>
+        <ReactSpeedometer
+          maxValue={100}
+          value={parseFloat((positivadoPercentual || '0').replace('%', ''))}
+          segments={5}
+          height={160}
+        />
+      </div>
+    </div>
+  </div>
+) : (
       <div className="indicativos-container">
         <div className="indicativo-stack">
           <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'} />
@@ -334,6 +391,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV }) => {
       />
             
     </div>
+)}
     </div>
   );
 };

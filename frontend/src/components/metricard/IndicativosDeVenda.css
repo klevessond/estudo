@@ -151,3 +151,35 @@
   to { transform: rotate(360deg); }
 }
 
+.modo-toggle {
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 1rem;
+}
+
+.modo-toggle button {
+  padding: 0.8rem 1.5rem;
+  font-size: 1rem;
+  font-weight: bold;
+  border-radius: 8px;
+  border: none;
+  background-color: #f0f0f0;
+  color: #333;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.modo-toggle button:hover {
+  background-color: #e0e0e0;
+}
+
+.modo-toggle button.ativo-indicadores {
+  background-color: #007bff;
+  color: white;
+}
+
+.modo-toggle button.ativo-graficos {
+  background-color: #28a745;
+  color: white;
+}

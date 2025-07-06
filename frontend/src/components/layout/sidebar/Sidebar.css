@@ -1,16 +1,16 @@
 /* Sidebar.css */
 .sidebar {
-    width: 8%;
+    width: 70px; /* fixo, ideal para desktop */
     background-color: #f4f4f4;
     padding: 1rem;
     transition: width 0.3s ease;
     position: relative;
+    overflow-x: hidden;
 }
 
 .sidebar.collapsed {
     width: 60px;
 }
-
 .toggle-button {
     position: absolute;
     right: -12px;
