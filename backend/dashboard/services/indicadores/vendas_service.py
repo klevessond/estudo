@@ -663,3 +663,81 @@ def buscar_pre_venda(data_inicio, data_fim):
         "pre_venda_valor": pre_venda_valor,
         "detalhado": dados
     }
+
+def buscar_vendas_por_vendedor(data_inicio, data_fim):
+   
+    data_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+    data_fim = datetime.strptime(data_fim, "%Y-%m-%d").date() + timedelta(days=1)
+    data_inicio = validar_data(data_inicio)
+    data_fim = validar_data(data_fim)
+
+    with connections['dados_industria'].cursor() as cursor:
+        cursor.execute(f"""
+        DECLARE @P1 datetime2 = '{data_inicio}'; 
+        DECLARE @P2 datetime2 = '{data_fim}';
+
+        SELECT codcampo,
+               Campo, 
+               COUNT(DISTINCT QtdClientes) AS QtdClientes,
+               CAST(SUM(ValorProdutos - Desconto) AS FLOAT) AS ValorLiquido,
+               CAST(SUM(Peso) AS FLOAT) AS PesoTotal
+        FROM (
+            select Cliente.CodCliente as QtdClientes,
+              Cast(Funcionario.CodFuncionario as VarChar) as CodCampo,
+              Funcionario.Funcionario as Campo,
+              sum(
+                case NaturezaOperacao.Venda 
+                  when 1 then PedidoVendaItens.quantidade * PedidoVendaItens.qtdembalagem
+                  else 0
+                end) As Qtd,
+              sum(
+                case NaturezaOperacao.Venda 
+                  when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / Material.QtdVolume) 
+                  else 0
+                end) As QtdEmbalagem,
+              sum(
+                case NaturezaOperacao.Venda 
+                  when 1 then (PedidoVendaItens.Quantidade * PedidoVendaItens.QtdEmbalagem * Material.VolumeBruto)
+                  else 0
+                end) As Volume,
+              sum(
+                case NaturezaOperacao.Venda 
+                  when 1 then (PedidoVendaItens.Quantidade * PedidoVendaItens.QtdEmbalagem * Material.PesoBruto)
+                  else 0
+                end) As Peso,
+              case NaturezaOperacao.Venda 
+                when 1 then sum(dbo.Round2(PedidoVendaItens.quantidade * (PedidoVendaItens.ValorEmbalagem)))
+                else 0
+              end As ValorProdutos,
+              sum(
+                case NaturezaOperacao.Venda 
+                  when 1 then dbo.Round2(PedidoVendaItens.DescontoRef + (PedidoVendaItens.Desconto * PedidoVendaItens.quantidade))
+                  else 0
+                end) As Desconto
+            from PedidoVenda 
+            left join PedidoVendaItens on PedidoVenda.CodPedidoVenda = PedidoVendaItens.CodPedidoVenda
+            left join Material on PedidoVendaItens.CodMaterial = Material.CodMaterial
+            left join Cliente on PedidoVenda.CodCliente = Cliente.CodCliente
+            left join Funcionario on PedidoVenda.CodVendedor = Funcionario.CodFuncionario
+            left join NaturezaOperacao on PedidoVenda.CodNaturezaOperacao = NaturezaOperacao.CodNaturezaOperacao
+            where Material.EmbRetornavel = 0
+              and PedidoVenda.Status = 0
+              and (NaturezaOperacao.Venda = 1)
+              and PedidoVenda.UnidGestora in (1, 2, 3, 4, 5, 6, 8, 9, 10)
+              and PedidoVenda.DataVenda >= @P1
+              and PedidoVenda.DataVenda < @P2
+            group by Funcionario.CodFuncionario, Funcionario.Funcionario, PedidoVenda.UnidGestora, NaturezaOperacao.Venda, Cliente.CodCliente
+        ) Consulta
+        GROUP BY CodCampo, Campo
+        ORDER BY Campo
+    """
+        )
+        columns = [col[0] for col in cursor.description]
+        rows = cursor.fetchall()
+        dados = [dict(zip(columns, row)) for row in rows]
+
+       
+        
+        return {
+        "vendas_por_vendedor": dados
+    }

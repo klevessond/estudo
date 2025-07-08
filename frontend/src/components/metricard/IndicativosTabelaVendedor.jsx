@@ -205,7 +205,7 @@ const table = useReactTable({
   return (
     <div className="indicativos-tabela" style={{ overflowX: 'auto', paddingBottom: '0.5rem' }}>
       <h3 style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
-        Acompanhamento de desvios por Colaboradores
+        Acompanhamento de vendas por Colaboradores
       </h3>
       <input
             type="text"

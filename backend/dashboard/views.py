@@ -8,8 +8,10 @@ from rest_framework.permissions import IsAuthenticated
 from .models import ObjetivoMensal
 from .serializers import ObjetivoMensalSerializer
 from datetime import datetime,date
-from .models import ObjetivoMensal
-from .serializers import ObjetivoMensalSerializer
+from decimal import Decimal
+from collections import defaultdict
+from dashboard.services.indicadores.cache_utils import get_cached_data
+from rest_framework.decorators import api_view
 from django.utils.dateparse import parse_date
 from django.contrib.auth import get_user_model
 User = get_user_model()
@@ -18,7 +20,7 @@ User = get_user_model()
 
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
-from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix,buscar_pre_venda
+from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv
 # Create your views here.
 
@@ -128,7 +130,8 @@ class IndicadoresView(APIView):
         mix_realizado = dados_mix["mix_realizado"]
         
         # Pré-venda
-        prevenda = buscar_pre_venda(data_inicio, data_fim)
+        chave = f"prevenda_{data_inicio}_{data_fim}"
+        prevenda = get_cached_data(chave, lambda: buscar_pre_venda(data_inicio, data_fim))
         valor_prevenda = prevenda.get("pre_venda_valor", 0)
         valor_alocado = venda_realizada + valor_prevenda
        
@@ -297,6 +300,7 @@ def ajustar_data_para_ano_anterior(data_str):
     
 
 class IndicadoresPDV(APIView):
+
     def get(self, request):
         data_inicio = request.GET.get("de")
         data_fim = request.GET.get("ate")
@@ -319,3 +323,36 @@ class IndicadoresPDV(APIView):
             }})
         except Exception as e:
             return Response({"error": str(e)}, status=500)
+        
+
+class VendasPorVendedorView(APIView):
+    def get(self, request):
+        data_inicio = request.GET.get("de")
+        data_fim = request.GET.get("ate")
+
+        if not data_inicio or not data_fim:
+            return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
+
+    
+        resultado = buscar_vendas_por_vendedor(data_inicio, data_fim)
+        chave = f"prevenda_{data_inicio}_{data_fim}"
+        prevenda = get_cached_data(chave, lambda: buscar_pre_venda(data_inicio, data_fim))
+
+        # Agrupar valor de pré-venda por vendedor
+        prevenda_por_vendedor = defaultdict(float)
+        for item in prevenda.get("detalhado", []):
+            cod_vendedor = str(item.get("CodVendedor"))
+            valor = float(item.get("Valor", 0))
+            prevenda_por_vendedor[cod_vendedor] += valor
+
+        # Inserir valor alocado em cada vendedor do resultado
+        for vendedor in resultado.get("vendas_por_vendedor", []):
+            codcampo = str(vendedor.get("codcampo")).strip()
+            valor_prevenda = prevenda_por_vendedor.get(codcampo, 0)
+            vendedor["pre-venda"]=round(valor_prevenda, 2)
+            vendedor["alocado"] = round(vendedor.get("ValorLiquido", 0) + valor_prevenda, 2)
+
+        return Response({
+            "resultado": resultado,
+            "prevenda": prevenda
+        })
