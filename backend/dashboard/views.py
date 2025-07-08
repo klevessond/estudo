@@ -354,5 +354,5 @@ class VendasPorVendedorView(APIView):
 
         return Response({
             "resultado": resultado,
-            "prevenda": prevenda
+            
         })

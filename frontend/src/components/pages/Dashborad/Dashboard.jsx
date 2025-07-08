@@ -91,7 +91,7 @@ const [usarPDV, setUsarPDV] = useState(false);
 
                 <div style={{ flex: 1 }}>
                 {modo === 'geral' && (
-                    <IndicativosTabelaVendedor
+                    <IndicativosTabelaVendedor periodoSelecionado={periodoSelecionado}
                     onSelecionarColaborador={colab => {
                         setColaboradorSelecionado(colab);
                         setModo('individual');
