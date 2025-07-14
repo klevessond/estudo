@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useEffect } from 'react'; // certifique-se que está importado
+// Dashboard.jsx
+import React, { useState, useEffect } from 'react';
 import MetricCard from '../../metricard/MetricCard';
 import BarChart from '../../BarChart/BarChart';
 import PieChart from  '../../Piechart/PieChart';
@@ -16,102 +16,96 @@ import IndicativosTabelaVendedor from '../../metricard/IndicativosTabelaVendedor
 import PeriodoSelector from '../../ResumoVendas/PeriodoSelector';
 import BarChartColaboradores from '../../BarChart/BarChartColaboradores';
 import CardsDetalhadosVendedor from '../../metricard/CardsDetalhadosVendedor';
-
 import './Dashboard.css';
 
-
-
 const Dashboard = () => {
-
-const [modo, setModo] = useState('geral'); 
-const [colaboradorSelecionado, setColaboradorSelecionado] = useState(null);
-const [periodoSelecionado, setPeriodoSelecionado] = useState(null);
-const [usarPDV, setUsarPDV] = useState(false);
+  const [modo, setModo] = useState('geral'); 
+  const [colaboradorSelecionado, setColaboradorSelecionado] = useState(null);
+  const [periodoSelecionado, setPeriodoSelecionado] = useState(null);
+  const [usarPDV, setUsarPDV] = useState(false);
+  const [vendasColaboradores, setVendasColaboradores] = useState([]);
 
   useEffect(() => {
-  // Força o envio do mês atual assim que a tela é carregada
-  const hoje = new Date();
-  const ano = hoje.getFullYear();
-  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-  const de = `${ano}-${mes}-01`;
-  const ate = new Date(ano, mes, 0).toISOString().split('T')[0];
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+    const de = `${ano}-${mes}-01`;
+    const ate = new Date(ano, mes, 0).toISOString().split('T')[0];
+    setPeriodoSelecionado({ de, ate });
+  }, []);
 
-  setPeriodoSelecionado({ de, ate });
-}, []);
-    return (
-        <div>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-            <PeriodoSelector onChange={(dados) => {
-                console.log('RECEBIDO EM DASHBOARD:', dados);
-                if (dados?.de && dados?.ate) {
-                    setPeriodoSelecionado({ de: dados.de, ate: dados.ate}); // garante que sempre vem um valor booleano
-  
-                } else if (dados?.mes) {
-                    const [ano, mes] = dados.mes.split('-');
-                    const de = `${ano}-${mes}-01`;
-                    const ate = new Date(ano, mes, 0).toISOString().split('T')[0];
-                    setPeriodoSelecionado({ de, ate });
-                }
-        }} 
-       usarPDV={usarPDV}
-       onTogglePDV={() => setUsarPDV(prev => !prev)}
-        /><IndicativosDeVenda periodoSelecionado={periodoSelecionado} usarPDV={usarPDV}/>
-            </div>
-            <div style={{ margin: '1rem 0', display: 'flex', gap: '0.75rem' }}>
-                <button
-                    className={`btn-modo ${modo === 'geral' ? 'ativo' : ''}`}
-                    onClick={() => setModo('geral')}
-                >
-                    Geral
-                </button>
-                <button
-                    className={`btn-modo ${modo === 'individual' ? 'ativo' : ''}`}
-                    onClick={() => setModo('individual')}
-                    disabled={!colaboradorSelecionado}
-                    style={{ opacity: !colaboradorSelecionado ? 0.5 : 1 }}
-                >
-                    Individual
-                </button>
-                </div>
-            <div style={{ display: 'flex', flexDirection: 'row', gap: '1rem', alignItems: 'flex-start' }}>
-            <div style={{ flex: 2 }}>
-                {modo === 'geral' && (
-                    <>
-                    <BarChartColaboradores />
-                    </>
-                )}
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+        <PeriodoSelector 
+          onChange={(dados) => {
+            if (dados?.de && dados?.ate) {
+              setPeriodoSelecionado({ de: dados.de, ate: dados.ate });
+            } else if (dados?.mes) {
+              const [ano, mes] = dados.mes.split('-');
+              const de = `${ano}-${mes}-01`;
+              const ate = new Date(ano, mes, 0).toISOString().split('T')[0];
+              setPeriodoSelecionado({ de, ate });
+            }
+          }} 
+          usarPDV={usarPDV}
+          onTogglePDV={() => setUsarPDV(prev => !prev)}
+        />
+        <IndicativosDeVenda periodoSelecionado={periodoSelecionado} usarPDV={usarPDV} />
+      </div>
 
-                {modo === 'individual' && colaboradorSelecionado && (
-                    <>
-                    <CardsColaborador colaborador={colaboradorSelecionado} />
-                    {colaboradorSelecionado.colaborador.includes('Ana Paula Silva Peixoto') }
-                    </>
-                )}
-                </div>
+      <div style={{ margin: '1rem 0', display: 'flex', gap: '0.75rem' }}>
+        <button
+          className={`btn-modo ${modo === 'geral' ? 'ativo' : ''}`}
+          onClick={() => setModo('geral')}
+        >
+          Geral
+        </button>
+        <button
+          className={`btn-modo ${modo === 'individual' ? 'ativo' : ''}`}
+          onClick={() => setModo('individual')}
+          disabled={!colaboradorSelecionado}
+          style={{ opacity: !colaboradorSelecionado ? 0.5 : 1 }}
+        >
+          Individual
+        </button>
+      </div>
 
-                <div style={{ flex: 1 }}>
-                {modo === 'geral' && (
-                    <IndicativosTabelaVendedor periodoSelecionado={periodoSelecionado}
-                    onSelecionarColaborador={colab => {
-                        setColaboradorSelecionado(colab);
-                        setModo('individual');
-                    }}
-                    />
-                )}
+      <div style={{ display: 'flex', flexDirection: 'row', gap: '1rem', alignItems: 'flex-start' }}>
+        <div style={{ flex: 2 }}>
+          {modo === 'geral' && (
+            <BarChartColaboradores dados={vendasColaboradores} />
+          )}
 
-                {modo === 'individual' && colaboradorSelecionado && (
-                    colaboradorSelecionado.colaborador.includes('Ana Paula Silva Peixoto') && (
-                    <CardsDetalhadosVendedor />
-                    )
-                )}
-                </div>
-
-            </div>
-                
-            
-             
+          {modo === 'individual' && colaboradorSelecionado && (
+            <>
+              <CardsColaborador colaborador={colaboradorSelecionado} />
+              {colaboradorSelecionado.colaborador}
+            </>
+          )}
         </div>
-    );
+
+        <div style={{ flex: 1 }}>
+          {modo === 'geral' && (
+            <IndicativosTabelaVendedor 
+              periodoSelecionado={periodoSelecionado}
+              onSelecionarColaborador={colab => {
+                setColaboradorSelecionado(colab);
+                setModo('individual');
+              }}
+              onDadosAtualizados={setVendasColaboradores}
+            />
+          )}
+
+          {modo === 'individual' && colaboradorSelecionado && (
+            colaboradorSelecionado.colaborador.includes('Ana Paula Silva Peixoto') && (
+              <CardsDetalhadosVendedor />
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Dashboard;

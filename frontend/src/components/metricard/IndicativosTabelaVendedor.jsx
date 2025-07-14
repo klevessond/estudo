@@ -1,5 +1,5 @@
 // IndicativosTabelaVendedor.jsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -7,41 +7,34 @@ import {
   getSortedRowModel,
   flexRender,
 } from '@tanstack/react-table';
-import api from '../../api';
 
+import api from '../../api';
 import './IndicativosTabelaVendedor.css';
 
-const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador }) => {
+const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador, onDadosAtualizados }) => {
   const [globalFilter, setGlobalFilter] = useState('');
   const [data, setData] = useState([]);
 
   useEffect(() => {
     const fetchData = async () => {
-      const inicio = periodoSelecionado?.de;
-      const fim = periodoSelecionado?.ate;
-
-      if (!inicio || !fim) return;
-
+      if (!periodoSelecionado?.de || !periodoSelecionado?.ate) return;
       try {
-        const token = localStorage.getItem('token');
-        const response = await api.get(`/vendas-por-vendedor/?de=${inicio}&ate=${fim}`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-
+        const response = await api.get(`/vendas-por-vendedor/?de=${periodoSelecionado.de}&ate=${periodoSelecionado.ate}`);
         const json = response.data;
 
         const tabela = json.resultado.vendas_por_vendedor.map(vendedor => ({
-          colaborador: vendedor.Campo?.trim() || '',
-          faturado: vendedor.ValorLiquido || 0,
-          aFaturar: vendedor["pre-venda"] ?? 0,
-          alocado: vendedor.alocado || vendedor.ValorLiquido || 0,
+          colaborador: vendedor.Campo.trim(),
+          faturado: vendedor.ValorLiquido,
+          aFaturar: json.resultado?.prevenda?.detalhado
+            ?.filter(p => p.CodVendedor?.toString() === vendedor.codcampo?.toString())
+            .reduce((acc, cur) => acc + cur.Valor, 0) || 0,
+          alocado: vendedor.alocado || vendedor.ValorLiquido,
           cobertura: 0,
-          variacao: 0
+          variacao: 0,
         }));
 
         setData(tabela);
+        onDadosAtualizados?.(tabela);
       } catch (error) {
         console.error('Erro ao buscar dados de vendas por vendedor:', error);
       }
@@ -50,7 +43,7 @@ const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador
     fetchData();
   }, [periodoSelecionado]);
 
-  const columns = useMemo(() => [
+  const columns = React.useMemo(() => [
     {
       accessorKey: 'colaborador',
       header: 'Colaborador',
@@ -91,7 +84,9 @@ const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador
   const table = useReactTable({
     data,
     columns,
-    state: { globalFilter },
+    state: {
+      globalFilter,
+    },
     onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
