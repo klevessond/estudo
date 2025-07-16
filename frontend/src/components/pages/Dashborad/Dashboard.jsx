@@ -18,9 +18,11 @@ import BarChartColaboradores from '../../BarChart/BarChartColaboradores';
 import CardsDetalhadosVendedor from '../../metricard/CardsDetalhadosVendedor';
 import './Dashboard.css';
 
+
 const Dashboard = () => {
   const [modo, setModo] = useState('geral'); 
   const [colaboradorSelecionado, setColaboradorSelecionado] = useState(null);
+  const [objetivosVendedores, setObjetivosVendedores] = useState([]);
   const [periodoSelecionado, setPeriodoSelecionado] = useState(null);
   const [usarPDV, setUsarPDV] = useState(false);
   const [vendasColaboradores, setVendasColaboradores] = useState([]);
@@ -51,7 +53,7 @@ const Dashboard = () => {
           usarPDV={usarPDV}
           onTogglePDV={() => setUsarPDV(prev => !prev)}
         />
-        <IndicativosDeVenda periodoSelecionado={periodoSelecionado} usarPDV={usarPDV} />
+        <IndicativosDeVenda periodoSelecionado={periodoSelecionado} usarPDV={usarPDV} onObjetivosRecebidos={setObjetivosVendedores} />
       </div>
 
       <div style={{ margin: '1rem 0', display: 'flex', gap: '0.75rem' }}>
@@ -79,7 +81,7 @@ const Dashboard = () => {
 
           {modo === 'individual' && colaboradorSelecionado && (
             <>
-              <CardsColaborador colaborador={colaboradorSelecionado} />
+              <CardsColaborador colaborador={colaboradorSelecionado} objetivosVendedores={objetivosVendedores} />
               {colaboradorSelecionado.colaborador}
             </>
           )}
@@ -94,6 +96,7 @@ const Dashboard = () => {
                 setModo('individual');
               }}
               onDadosAtualizados={setVendasColaboradores}
+              onObjetivosRecebidos={setObjetivosVendedores}
             />
           )}
 

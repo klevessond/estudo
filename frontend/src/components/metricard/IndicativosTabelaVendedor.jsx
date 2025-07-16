@@ -11,7 +11,7 @@ import {
 import api from '../../api';
 import './IndicativosTabelaVendedor.css';
 
-const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador, onDadosAtualizados }) => {
+const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador, onDadosAtualizados,onObjetivosRecebidos  }) => {
   const [globalFilter, setGlobalFilter] = useState('');
   const [data, setData] = useState([]);
 
@@ -22,8 +22,19 @@ const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador
         const response = await api.get(`/vendas-por-vendedor/?de=${periodoSelecionado.de}&ate=${periodoSelecionado.ate}`);
         const json = response.data;
 
+        // Extrair objetivos dos vendedores
+        if (response.data.objetivo?.detalhamento) {
+          const objetivos = response.data.objetivo.detalhamento.map(item => ({
+            codFuncionario: item.CodFuncionario,
+            objetivo: item.ObjetivoTotalVendedor,
+            nomeFuncionario: item.Funcionario
+          }));
+          onObjetivosRecebidos(objetivos);
+        }
+        
         const tabela = json.resultado.vendas_por_vendedor.map(vendedor => ({
           colaborador: vendedor.Campo.trim(),
+          codFuncionario: Number(vendedor.codcampo),
           faturado: vendedor.ValorLiquido,
           aFaturar: json.resultado?.prevenda?.detalhado
             ?.filter(p => p.CodVendedor?.toString() === vendedor.codcampo?.toString())
@@ -31,6 +42,7 @@ const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador
           alocado: vendedor.alocado || vendedor.ValorLiquido,
           cobertura: 0,
           variacao: 0,
+          pesototalvendido:vendedor.PesoTotal
         }));
 
         setData(tabela);
@@ -41,7 +53,7 @@ const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador
     };
 
     fetchData();
-  }, [periodoSelecionado]);
+  }, [periodoSelecionado, onObjetivosRecebidos]);
 
   const columns = React.useMemo(() => [
     {

@@ -30,7 +30,7 @@ const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, v
   </div>
 );
 
-const IndicadoresCards = ({ periodoSelecionado, usarPDV }) => {
+const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos }) => {
   const [loading, setLoading] = useState(false);
 
   const [peso, setPeso] = useState(null);
@@ -78,6 +78,22 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV }) => {
         const response = await api.get(`http://localhost:8000/Indicadores/?de=${de}&ate=${ate}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
+
+        console.log('Dados completos da API:', response.data); // Log para depuração
+
+        // Extrair objetivos dos vendedores
+        if (response.data.objetivo?.detalhamento) {
+          const objetivos = response.data.objetivo.detalhamento.map(item => ({
+            codFuncionario: item.CodFuncionario,
+            objetivo: item.ObjetivoTotalVendedor,
+            nomeFuncionario: item.Funcionario
+          }));
+          
+          console.log('Objetivos extraídos:', objetivos); // Log para depuração
+          if (onObjetivosRecebidos) {
+            onObjetivosRecebidos(objetivos);
+          }
+        }
 
         const percentual = response.data.realizado_peso?.percentual || 0;
         const variacao = response.data.realizado_peso?.variacao || 0;
@@ -152,7 +168,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV }) => {
     if (periodoSelecionado?.de && periodoSelecionado?.ate) {
       fetchIndicadores();
     }
-  }, [periodoSelecionado]);
+  }, [periodoSelecionado, onObjetivosRecebidos]);
 
   useEffect(() => {
     const atualizarValoresPDV = (valorPDV, pesoPDV) => {
@@ -242,9 +258,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV }) => {
     }
   }, [vendaRealizadaBase, valorAnoAnteriorBase, vendaPDVAnoAnterior]);
 
-
   return (
-    
     <div style={{ position: 'relative' }}>
       {loading && (
         <div className="overlay-loader">
@@ -252,146 +266,139 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV }) => {
         </div>
       )}
       <div className="modo-toggle">
-      <button
-        onClick={() => setModo('indicadores')}
-        className={modo === 'indicadores' ? 'ativo-indicadores' : ''}
-      >
-        🎯 Indicadores
-      </button>
-
-      <button
-        onClick={() => setModo('graficos')}
-        className={modo === 'graficos' ? 'ativo-graficos' : ''}
-      >
-        📊 Graficos
-      </button>
-    </div>
+        <button
+          onClick={() => setModo('indicadores')}
+          className={modo === 'indicadores' ? 'ativo-indicadores' : ''}
+        >
+          🎯 Indicadores
+        </button>
+        <button
+          onClick={() => setModo('graficos')}
+          className={modo === 'graficos' ? 'ativo-graficos' : ''}
+        >
+          📊 Graficos
+        </button>
+      </div>
       {modo === 'graficos' ? (
-  <div className="dashboard-graficos">
-    <h2>Velocímetros de Meta</h2>
-
-    <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-      
+        <div className="dashboard-graficos">
+          <h2>Velocímetros de Meta</h2>
+          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
             <div>
-        <h4>Venda</h4>
-        <ReactSpeedometer
-          maxValue={100}
-          value={parseFloat((vendaPercentual || '0').replace('%', ''))}
-          segments={5}
-          height={160}
-        />
-      </div>
-
-      
-      <div>
-        <h4>Peso</h4>
-        <ReactSpeedometer
-          maxValue={100}
-          value={parseFloat((pesoPercentual || '0').replace('%', ''))}
-          segments={5}
-          height={160}
-        />
-      </div>
-
-      <div>
-        <h4>Positivação</h4>
-        <ReactSpeedometer
-          maxValue={100}
-          value={parseFloat((positivadoPercentual || '0').replace('%', ''))}
-          segments={5}
-          height={160}
-        />
-      </div>
-    </div>
-  </div>
-) : (
-      <div className="indicativos-container">
-        <div className="indicativo-stack">
-          <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'} />
-          <Card title="Evo % vs Ano Ant." value={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'} />
+              <h4>Venda</h4>
+              <ReactSpeedometer
+                maxValue={100}
+                value={parseFloat((vendaPercentual || '0').replace('%', ''))}
+                segments={5}
+                height={160}
+              />
+            </div>
+            <div>
+              <h4>Peso</h4>
+              <ReactSpeedometer
+                maxValue={100}
+                value={parseFloat((pesoPercentual || '0').replace('%', ''))}
+                segments={5}
+                height={160}
+              />
+            </div>
+            <div>
+              <h4>Positivação</h4>
+              <ReactSpeedometer
+                maxValue={100}
+                value={parseFloat((positivadoPercentual || '0').replace('%', ''))}
+                segments={5}
+                height={160}
+              />
+            </div>
+          </div>
         </div>
+      ) : (
+        <div className="indicativos-container">
+          <div className="indicativo-stack">
+            <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'} />
+            <Card title="Evo % vs Ano Ant." value={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'} />
+          </div>
 
-      <Card
-        title="Venda Realizada"
-        value={
-          usarPDV
-            ? (
-                <>
-                  <div>{vendaRealizadaBase?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-                  <div>PDV: {vendaPDVFormatada}</div>
-                  <div>Total: {vendaTotalFormatada}</div>
-                </>
-              )
-            : vendaRealizada
-        }
-        subtitle="Faturamento"
-        percentage={vendaPercentual ?? '...'}
-        subtitle2=" Cobertura Atual"
-        variation={vendaVariacao ?? '...'}
-      />
+          <Card
+            title="Venda Realizada"
+            value={
+              usarPDV
+                ? (
+                    <>
+                      <div>{vendaRealizadaBase?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                      <div>PDV: {vendaPDVFormatada}</div>
+                      <div>Total: {vendaTotalFormatada}</div>
+                    </>
+                  )
+                : vendaRealizada
+            }
+            subtitle="Faturamento"
+            percentage={vendaPercentual ?? '...'}
+            subtitle2=" Cobertura Atual"
+            variation={vendaVariacao ?? '...'}
+          />
 
-      <Card
-        title="Alocações"
-        value={alocacaoRealizada ?? '...'}
-        subtitle="Fat + A Faturar"
-        title2="Pré-Venda"
-        value2={alocacaoPrevenda ?? '...'}
-        percentage={alocacaoPercentual ?? '...'}
-        subtitle2=" Cobertura Prevista"
-        variation={alocacaoVariacao ?? '...'}
-      />
-      <Card
-        title="Captado"
-        value="0"
-        subtitle="Valor Captado"
-        percentage="0%"
-        subtitle2=" Cobertura"
-        variation="0"
-      />
-      <Card
-        title="Peso"
-        value={peso ?? '...'}
-        subtitle="OBJETIVO KG"
-        title2="Realizado KG"
-        value2={
-          usarPDV
-            ? (
-                <>
-                  <div>{pesoRealizadoBase?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                  <div>PDV: {pesoPDVFormatado}</div>
-                  <div>Total: {pesoTotalFormatado}</div>
-                </>
-              )
-            : pesoRealizado ?? '...'
-        }
-        percentage={pesoPercentual}
-        subtitle2=" Cobertura"
-        variation={pesoVariacao}
-      />
+          <Card
+            title="Alocações"
+            value={alocacaoRealizada ?? '...'}
+            subtitle="Fat + A Faturar"
+            title2="Pré-Venda"
+            value2={alocacaoPrevenda ?? '...'}
+            percentage={alocacaoPercentual ?? '...'}
+            subtitle2=" Cobertura Prevista"
+            variation={alocacaoVariacao ?? '...'}
+          />
+          <Card
+            title="Captado"
+            value="0"
+            subtitle="Valor Captado"
+            percentage="0%"
+            subtitle2=" Cobertura"
+            variation="0"
+          />
+          <Card
+            title="Peso"
+            value={peso ?? '...'}
+            subtitle="OBJETIVO KG"
+            title2="Realizado KG"
+            value2={
+              usarPDV
+                ? (
+                    <>
+                      <div>{pesoRealizadoBase?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                      <div>PDV: {pesoPDVFormatado}</div>
+                      <div>Total: {pesoTotalFormatado}</div>
+                    </>
+                  )
+                : pesoRealizado ?? '...'
+            }
+            percentage={pesoPercentual}
+            subtitle2=" Cobertura"
+            variation={pesoVariacao}
+          />
 
-      <Card
-        title="Positivado"
-        value={positivadoObjetivo  ?? '...'}
-        subtitle="OBJETIVO"
-        value2={positivadoRealizado ?? '...'}
-        title2="Realizado"
-        percentage={positivadoPercentual}
-        subtitle2=" Cobertura"
-        variation={positivadoVariacao}
-      />
-      <Card
-        title="MIX"
-        value={objetivoMix ?? '...'}
-        subtitle="OBJETIVO"
-        value2={mixRealizado ?? '--'}
-        title2="Realizado"
-        percentage={mixPercentual ?? '--'}
-        subtitle2=" Cobertura"
-        variation={mixVariacao ?? '...'}
-      />
-            
-    </div>
-)}
+          <Card
+            title="Positivado"
+            value={positivadoObjetivo ?? '...'}
+            subtitle="OBJETIVO"
+            value2={positivadoRealizado ?? '...'}
+            title2="Realizado"
+            percentage={positivadoPercentual}
+            subtitle2=" Cobertura"
+            variation={positivadoVariacao}
+          />
+          <Card
+            title="MIX"
+            value={objetivoMix ?? '...'}
+            subtitle="OBJETIVO"
+            value2={mixRealizado ?? '--'}
+            title2="Realizado"
+            percentage={mixPercentual ?? '--'}
+            subtitle2=" Cobertura"
+            variation={mixVariacao ?? '...'}
+          />
+        </div>
+      )}
     </div>
   );
 };
