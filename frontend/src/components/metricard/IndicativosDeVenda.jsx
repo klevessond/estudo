@@ -86,7 +86,9 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
           const objetivos = response.data.objetivo.detalhamento.map(item => ({
             codFuncionario: item.CodFuncionario,
             objetivo: item.ObjetivoTotalVendedor,
-            nomeFuncionario: item.Funcionario
+            obrotatotal:item.PositivacaoTotalVendedor,
+            nomeFuncionario: item.Funcionario,
+            
           }));
           
           console.log('Objetivos extraídos:', objetivos); // Log para depuração

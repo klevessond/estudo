@@ -1,0 +1,44 @@
+/* CardsColaborador.css */
+.card {
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+}
+
+.card-title {
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.progress-container {
+  width: 100%;
+  height: 20px;
+  background-color: #e0e0e0;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 0.5rem 0;
+}
+
+.progress-bar {
+  height: 100%;
+  transition: all 0.3s ease;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+/* Cores baseadas na porcentagem */
+.progress-low {
+  background-color: #F44336; /* Vermelho para <50% */
+}
+
+.progress-medium {
+  background-color: #FFC107; /* Amarelo para 50-99% */
+}
+
+.progress-high {
+  background-color: #4CAF50; /* Verde para >=100% */
+}

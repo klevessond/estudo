@@ -27,6 +27,7 @@ const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador
           const objetivos = response.data.objetivo.detalhamento.map(item => ({
             codFuncionario: item.CodFuncionario,
             objetivo: item.ObjetivoTotalVendedor,
+            obrotatotal:item.PositivacaoTotalVendedor,
             nomeFuncionario: item.Funcionario
           }));
           onObjetivosRecebidos(objetivos);
@@ -42,7 +43,9 @@ const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador
           alocado: vendedor.alocado || vendedor.ValorLiquido,
           cobertura: 0,
           variacao: 0,
-          pesototalvendido:vendedor.PesoTotal
+          pesototalvendido:vendedor.PesoTotal,
+          qtdClientes:vendedor.QtdClientes
+          
         }));
 
         setData(tabela);
