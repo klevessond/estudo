@@ -1,84 +1,101 @@
-import React, { useState } from 'react';
-import './register.css';
 
-const Register = () => {
-  const token = localStorage.getItem('token'); // ou como você estiver salvando
-  const [financeiro, setFinanceiro] = useState('');
-  const [mix, setMix] = useState('');
+import React, { useEffect, useState } from 'react';
+
+const RegisterObjetivosVendedores = () => {
+  const [vendedores, setVendedores] = useState([]);
+  const [objetivos, setObjetivos] = useState({});
   const [mesReferencia, setMesReferencia] = useState('');
+  const token = localStorage.getItem('token');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  useEffect(() => {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
+    const dataInicio = firstDay.toISOString().split('T')[0];
+    const dataFim = lastDay.toISOString().split('T')[0];
+
+    fetch(`http://localhost:8000/vendas-por-vendedor/?de=${dataInicio}&ate=${dataFim}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        const lista = data.vendas_por_vendedor || [];
+        setVendedores(lista);
+        console.log("Resposta da API:", data);
+        const initialObjetivos = {};
+        lista.forEach(v => {
+          initialObjetivos[v.vendedor_id] = '';
+        });
+        setObjetivos(initialObjetivos);
+      })
+      .catch(err => {
+        console.error("Erro ao buscar vendedores:", err);
+        setVendedores([]);
+      });
+  }, [token]);
+
+  const handleChange = (id, value) => {
+    setObjetivos(prev => ({ ...prev, [id]: value }));
+  };
+
+  const handleSubmit = async () => {
     const payload = {
       mes_referencia: mesReferencia,
+      objetivos: vendedores.map(v => ({
+        vendedor_id: v.vendedor_id,
+        nome_vendedor: v.nome_vendedor,
+        objetivo_financeiro: parseFloat(objetivos[v.vendedor_id]) || 0
+      }))
     };
 
-    if (financeiro) payload.objetivo_financeiro = financeiro;
-    if (mix) payload.objetivo_mix = mix;
+    const res = await fetch('http://localhost:8000/objetivos-vendedores/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
 
-    try {
-      const res = await fetch('http://localhost:8000/objetivos-mensais/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        credentials: 'include', // importante se estiver usando autenticação por sessão/cookie
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        alert('Objetivos salvos com sucesso!');
-        setFinanceiro('');
-        setMix('');
-        setMesReferencia('');
-      } else {
-        const erro = await res.json();
-        alert('Erro ao salvar objetivos: ' + JSON.stringify(erro));
-      }
-    } catch (error) {
-      console.error(error);
-      alert('Erro na requisição.');
+    if (res.ok) {
+      alert('Objetivos cadastrados com sucesso!');
+    } else {
+      alert('Erro ao cadastrar objetivos.');
     }
   };
 
   return (
-    <div className="register-container">
-      <h2 className="register-title">Cadastro de Objetivos</h2>
+    <div>
+      <h2>Cadastro de Objetivos por Vendedor</h2>
+      <label>Mês de Referência:</label>
+      <input type="month" value={mesReferencia} onChange={e => setMesReferencia(e.target.value)} />
 
-      <form className="register-form" onSubmit={handleSubmit}>
-        <label htmlFor="mes">Mês de Referência (Ex: 01-06-2025):</label>
-        <input
-          type="date"
-          id="mes"
-          value={mesReferencia}
-          onChange={(e) => setMesReferencia(e.target.value)}
-          required
-        />
-
-        <label htmlFor="financeiro">Objetivo Financeiro (R$):</label>
-        <input
-          type="number"
-          id="financeiro"
-          value={financeiro}
-          onChange={(e) => setFinanceiro(e.target.value)}
-          placeholder="Ex: 50000"
-        />
-
-        <label htmlFor="mix">Objetivo de MIX (Qtd. de Produtos):</label>
-        <input
-          type="number"
-          id="mix"
-          value={mix}
-          onChange={(e) => setMix(e.target.value)}
-          placeholder="Ex: 15"
-        />
-
-        <button type="submit">Salvar Objetivos</button>
-      </form>
+      <table>
+        <thead>
+          <tr>
+            <th>Vendedor</th>
+            <th>Objetivo Financeiro (R$)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {vendedores.map(v => (
+            <tr key={v.vendedor_id}>
+              <td>{v.nome_vendedor}</td>
+              <td>
+                <input
+                  type="number"
+                  value={objetivos[v.vendedor_id] || ''}
+                  onChange={e => handleChange(v.vendedor_id, e.target.value)}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button onClick={handleSubmit}>Salvar Objetivos</button>
     </div>
   );
 };
 
-export default Register;
+export default RegisterObjetivosVendedores;

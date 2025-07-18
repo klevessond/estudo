@@ -5,7 +5,7 @@ import pandas as pd
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import ObjetivoMensal
+from .models import ObjetivoMensal,ObjetivoMensalVendedor
 from .serializers import ObjetivoMensalSerializer
 from datetime import datetime,date
 from decimal import Decimal
@@ -356,3 +356,39 @@ class VendasPorVendedorView(APIView):
             "resultado": resultado,
             
         })
+
+
+class ObjetivoMensalVendedorView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data
+        mes_referencia = data.get("mes_referencia")
+        objetivos = data.get("objetivos", [])
+        total_empresa = 0
+
+        for obj in objetivos:
+            vendedor_id = obj["vendedor_id"]
+            nome = obj["nome_vendedor"]
+            valor = obj["objetivo_financeiro"]
+            valormix = obj["objetivo_mix"]
+            total_empresa += float(valor)
+
+            ObjetivoMensalVendedor.objects.update_or_create(
+                mes_referencia=mes_referencia,
+                vendedor_id=vendedor_id,
+                defaults={
+                    "nome_vendedor": nome,
+                    "objetivo_financeiro": valor,
+                    "objetivo_mix":valormix
+                }
+            )
+
+        # Atualiza ou cria o objetivo total da empresa no modelo ObjetivoMensal
+        ObjetivoMensal.objects.update_or_create(
+            usuario=request.user,
+            mes_referencia=mes_referencia,
+            defaults={"objetivo_financeiro": total_empresa,"objetivo_mix":valormix}
+        )
+
+        return Response({"message": "Objetivos cadastrados com sucesso."})

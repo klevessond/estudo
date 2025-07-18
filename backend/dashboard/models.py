@@ -19,3 +19,19 @@ class ObjetivoMensal(models.Model):
 
     def __str__(self):
         return f"{self.usuario.username} - {self.mes_referencia.strftime('%Y-%m')} (R$ {self.objetivo_financeiro}, MIX {self.objetivo_mix})"
+
+class ObjetivoMensalVendedor(models.Model):
+    mes_referencia = models.DateField()
+    vendedor_id = models.CharField(max_length=255)
+    nome_vendedor = models.CharField(max_length=255)
+    objetivo_financeiro = models.DecimalField(max_digits=12, decimal_places=2)
+    objetivo_mix = models.DecimalField(max_digits=12, decimal_places=2)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['mes_referencia', 'vendedor_id']
+        verbose_name = 'Objetivo Financeiro por Vendedor'
+        verbose_name_plural = 'Objetivos Financeiros por Vendedor'
+
+    def __str__(self):
+        return f"{self.nome_vendedor} - {self.mes_referencia}"
