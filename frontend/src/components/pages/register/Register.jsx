@@ -1,9 +1,9 @@
-
 import React, { useEffect, useState } from 'react';
 
 const RegisterObjetivosVendedores = () => {
   const [vendedores, setVendedores] = useState([]);
-  const [objetivos, setObjetivos] = useState({});
+  const [objetivosFinanceiros, setObjetivosFinanceiros] = useState({});
+  const [objetivosMix, setObjetivosMix] = useState({});
   const [mesReferencia, setMesReferencia] = useState('');
   const token = localStorage.getItem('token');
 
@@ -20,14 +20,16 @@ const RegisterObjetivosVendedores = () => {
     })
       .then(res => res.json())
       .then(data => {
-        const lista = data.vendas_por_vendedor || [];
+        const lista = data.resultado?.vendas_por_vendedor || [];
         setVendedores(lista);
-        console.log("Resposta da API:", data);
-        const initialObjetivos = {};
+        const objetivos = {};
+        const mix = {};
         lista.forEach(v => {
-          initialObjetivos[v.vendedor_id] = '';
+          objetivos[v.codcampo] = '';
+          mix[v.codcampo] = '';
         });
-        setObjetivos(initialObjetivos);
+        setObjetivosFinanceiros(objetivos);
+        setObjetivosMix(mix);
       })
       .catch(err => {
         console.error("Erro ao buscar vendedores:", err);
@@ -35,17 +37,22 @@ const RegisterObjetivosVendedores = () => {
       });
   }, [token]);
 
-  const handleChange = (id, value) => {
-    setObjetivos(prev => ({ ...prev, [id]: value }));
+  const handleFinanceiroChange = (id, value) => {
+    setObjetivosFinanceiros(prev => ({ ...prev, [id]: value }));
   };
 
+  const handleMixChange = (id, value) => {
+    setObjetivosMix(prev => ({ ...prev, [id]: value }));
+  };
+  const dataFormatada = `${mesReferencia}-01`; // Adiciona o dia 01
   const handleSubmit = async () => {
     const payload = {
-      mes_referencia: mesReferencia,
+      mes_referencia: dataFormatada,
       objetivos: vendedores.map(v => ({
-        vendedor_id: v.vendedor_id,
-        nome_vendedor: v.nome_vendedor,
-        objetivo_financeiro: parseFloat(objetivos[v.vendedor_id]) || 0
+        vendedor_id: v.codcampo,
+        nome_vendedor: v.Campo.trim(),
+        objetivo_financeiro: parseFloat(objetivosFinanceiros[v.codcampo]) || 0,
+        objetivo_mix: parseFloat(objetivosMix[v.codcampo]) || 0
       }))
     };
 
@@ -76,17 +83,25 @@ const RegisterObjetivosVendedores = () => {
           <tr>
             <th>Vendedor</th>
             <th>Objetivo Financeiro (R$)</th>
+            <th>Objetivo Mix</th>
           </tr>
         </thead>
         <tbody>
           {vendedores.map(v => (
-            <tr key={v.vendedor_id}>
-              <td>{v.nome_vendedor}</td>
+            <tr key={v.codcampo}>
+              <td>{v.Campo.trim()}</td>
               <td>
                 <input
                   type="number"
-                  value={objetivos[v.vendedor_id] || ''}
-                  onChange={e => handleChange(v.vendedor_id, e.target.value)}
+                  value={objetivosFinanceiros[v.codcampo] || ''}
+                  onChange={e => handleFinanceiroChange(v.codcampo, e.target.value)}
+                />
+              </td>
+              <td>
+                <input
+                  type="number"
+                  value={objetivosMix[v.codcampo] || ''}
+                  onChange={e => handleMixChange(v.codcampo, e.target.value)}
                 />
               </td>
             </tr>
