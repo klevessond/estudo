@@ -1,3 +1,4 @@
+import './register.css'
 import React, { useEffect, useState } from 'react';
 
 const RegisterObjetivosVendedores = () => {
@@ -90,45 +91,68 @@ const RegisterObjetivosVendedores = () => {
     }
   };
 
-  return (
-    <div>
-      <h2>Cadastro de Objetivos por Vendedor</h2>
+return (
+  <div className="register-container">
+    <h2 className="register-title">Cadastro de Objetivos por Vendedor</h2>
+
+    <div className="register-card register-form">
       <label>Mês de Referência:</label>
       <input type="month" value={mesReferencia} onChange={e => setMesReferencia(e.target.value)} />
+    </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Vendedor</th>
-            <th>Objetivo Financeiro (R$)</th>
-            <th>Objetivo Mix</th>
-          </tr>
-        </thead>
-        <tbody>
-          {vendedores.map(v => (
-            <tr key={v.codcampo}>
-              <td>{v.Campo.trim()}</td>
-              <td>
-                <input
-                  type="number"
-                  value={objetivosFinanceiros[v.codcampo] || ''}
-                  onChange={e => handleFinanceiroChange(v.codcampo, e.target.value)}
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  value={objetivosMix[v.codcampo] || ''}
-                  onChange={e => handleMixChange(v.codcampo, e.target.value)}
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="register-card">
+      <table className="register-table">
+  <thead>
+    <tr>
+      <th>Vendedor</th>
+      <th>Objetivo Financeiro (R$)</th>
+      <th>Objetivo Mix</th>
+    </tr>
+  </thead>
+  <tbody>
+    {vendedores.map(v => (
+      <tr key={v.codcampo}>
+        <td>{v.Campo.trim()}</td>
+        <td>
+          <input
+            type="number"
+            value={objetivosFinanceiros[v.codcampo] || ''}
+            onChange={e => handleFinanceiroChange(v.codcampo, e.target.value)}
+          />
+        </td>
+        <td>
+          <input
+            type="number"
+            value={objetivosMix[v.codcampo] || ''}
+            onChange={e => handleMixChange(v.codcampo, e.target.value)}
+          />
+        </td>
+      </tr>
+    ))}
+
+    {/* Linha de totalização */}
+    <tr className="register-total-row">
+      <td><strong>Total Empresa</strong></td>
+      <td>
+        <strong>
+          {Object.values(objetivosFinanceiros).reduce((acc, val) => acc + (parseFloat(val) || 0), 0).toFixed(2)}
+        </strong>
+      </td>
+      <td>
+        <strong>
+          {Object.values(objetivosMix).reduce((acc, val) => acc + (parseFloat(val) || 0), 0).toFixed(2)}
+        </strong>
+      </td>
+    </tr>
+  </tbody>
+</table>
+    </div>
+
+    <div className="register-card register-form">
       <button onClick={handleSubmit}>Salvar Objetivos</button>
     </div>
-  );
+  </div>
+);
 };
 
 export default RegisterObjetivosVendedores;

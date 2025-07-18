@@ -1,81 +1,86 @@
-/* Container principal da página de cadastro */
+/* Container geral */
 .register-container {
-  max-width: 1000px;
-  margin: 30px auto;
-  background-color: #ffffff;
   padding: 24px;
-  border-radius: 12px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  background-color: #f9fbfd;
+  font-family: 'Segoe UI', sans-serif;
+  color: #003366;
 }
 
-/* Título da seção */
+/* Título */
 .register-title {
   font-size: 1.6rem;
-  font-weight: bold;
-  margin-bottom: 16px;
-  color: #333;
-  text-align: center;
+  margin-bottom: 20px;
+  color: #003366;
 }
 
-/* Cada seção de formulário como um card */
+/* Cartões de seção */
 .register-card {
-  background-color: #f9f9f9;
-  padding: 20px;
+  background-color: #ffffff;
+  border: 1px solid #d6e4f0;
   border-radius: 8px;
-  border: 1px solid #e0e0e0;
+  padding: 16px;
+  margin-bottom: 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* Layout dos campos */
-.register-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.register-form label {
-  font-weight: bold;
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.register-form input,
-.register-form select {
-  padding: 10px;
-  border: 1px solid #ccc;
+/* Inputs do formulário */
+.register-form input[type="month"] {
+  padding: 8px 12px;
+  border: 1px solid #c0d7eb;
   border-radius: 6px;
   font-size: 14px;
+  background-color: #f9fbff;
 }
 
+/* Botão */
 .register-form button {
-  padding: 10px 16px;
-  background-color: #0074c2;
+  background-color: #3399ff;
   color: white;
-  font-weight: bold;
+  padding: 10px 20px;
   border: none;
   border-radius: 6px;
+  font-size: 14px;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.3s;
 }
 
 .register-form button:hover {
-  background-color: #005fa3;
+  background-color: #267acc;
 }
 
-/* Responsivo */
-@media (max-width: 768px) {
-  .register-container {
-    padding: 16px;
-  }
+/* Tabela */
+.register-table {
+  width: 100%;
+  border-collapse: collapse;
+}
 
-  .register-card {
-    padding: 16px;
-  }
+.register-table th {
+  background-color: #e6f0fa;
+  color: #003366;
+  text-align: left;
+  padding: 12px 8px;
+  border-bottom: 2px solid #c0d7eb;
+}
 
-  .register-title {
-    font-size: 1.4rem;
-  }
+.register-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+/* Inputs da tabela */
+.register-table input[type="number"] {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #c0d7eb;
+  border-radius: 6px;
+  background-color: #f9fbff;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+/* Linha de totalização */
+.register-total-row td {
+  background-color: #e6f0fa;
+  font-weight: bold;
+  color: #003366;
+  border-top: 2px solid #c0d7eb;
 }
