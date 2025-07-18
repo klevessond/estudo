@@ -358,8 +358,30 @@ class VendasPorVendedorView(APIView):
         })
 
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from .models import ObjetivoMensalVendedor, ObjetivoMensal
+
 class ObjetivoMensalVendedorView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Espera receber: /objetivos-vendedores/?mes=2025-07
+        mes = request.query_params.get('mes_referencia')
+        if not mes:
+            return Response({"error": "Informe o parâmetro 'mes' no formato YYYY-MM."}, status=400)
+        objetivos = ObjetivoMensalVendedor.objects.filter(mes_referencia=mes)
+        resultado = []
+        for obj in objetivos:
+            resultado.append({
+                "vendedor_id": obj.vendedor_id,
+                "nome_vendedor": obj.nome_vendedor,
+                "objetivo_financeiro": float(obj.objetivo_financeiro),
+                "objetivo_mix": float(obj.objetivo_mix)
+            })
+
+        return Response({"objetivos": resultado})
 
     def post(self, request):
         data = request.data
@@ -380,7 +402,7 @@ class ObjetivoMensalVendedorView(APIView):
                 defaults={
                     "nome_vendedor": nome,
                     "objetivo_financeiro": valor,
-                    "objetivo_mix":valormix
+                    "objetivo_mix": valormix
                 }
             )
 
@@ -388,7 +410,10 @@ class ObjetivoMensalVendedorView(APIView):
         ObjetivoMensal.objects.update_or_create(
             usuario=request.user,
             mes_referencia=mes_referencia,
-            defaults={"objetivo_financeiro": total_empresa,"objetivo_mix":valormix}
+            defaults={
+                "objetivo_financeiro": total_empresa,
+                "objetivo_mix": valormix
+            }
         )
 
         return Response({"message": "Objetivos cadastrados com sucesso."})

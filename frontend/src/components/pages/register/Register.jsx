@@ -8,34 +8,51 @@ const RegisterObjetivosVendedores = () => {
   const token = localStorage.getItem('token');
 
   useEffect(() => {
-    const today = new Date();
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-    const dataInicio = firstDay.toISOString().split('T')[0];
-    const dataFim = lastDay.toISOString().split('T')[0];
+  const dataInicio = firstDay.toISOString().split('T')[0];
+  const dataFim = lastDay.toISOString().split('T')[0];
 
-    fetch(`http://localhost:8000/vendas-por-vendedor/?de=${dataInicio}&ate=${dataFim}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        const lista = data.resultado?.vendas_por_vendedor || [];
-        setVendedores(lista);
-        const objetivos = {};
-        const mix = {};
-        lista.forEach(v => {
-          objetivos[v.codcampo] = '';
-          mix[v.codcampo] = '';
-        });
-        setObjetivosFinanceiros(objetivos);
-        setObjetivosMix(mix);
-      })
-      .catch(err => {
-        console.error("Erro ao buscar vendedores:", err);
-        setVendedores([]);
+  const mesReferenciaAtual = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+  setMesReferencia(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`);
+
+  // Primeiro busca os vendedores
+  fetch(`http://localhost:8000/vendas-por-vendedor/?de=${dataInicio}&ate=${dataFim}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+    .then(res => res.json())
+    .then(async data => {
+      const lista = data.resultado?.vendas_por_vendedor || [];
+      setVendedores(lista);
+
+      const objetivosFinanceirosTemp = {};
+      const objetivosMixTemp = {};
+
+      // Busca objetivos já cadastrados
+      const resposta = await fetch(`http://localhost:8000/objetivos-vendedores/?mes_referencia=${mesReferenciaAtual}`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-  }, [token]);
+
+      const dados = await resposta.json();
+      const existentes = dados.objetivos || [];
+
+      // Preenche os campos com base nos objetivos existentes
+      lista.forEach(v => {
+        const objExistente = existentes.find(e => e.vendedor_id === v.codcampo);
+        objetivosFinanceirosTemp[v.codcampo] = objExistente ? objExistente.objetivo_financeiro : '';
+        objetivosMixTemp[v.codcampo] = objExistente ? objExistente.objetivo_mix : '';
+      });
+
+      setObjetivosFinanceiros(objetivosFinanceirosTemp);
+      setObjetivosMix(objetivosMixTemp);
+    })
+    .catch(err => {
+      console.error("Erro ao buscar vendedores ou objetivos existentes:", err);
+      setVendedores([]);
+    });
+}, [token]);
 
   const handleFinanceiroChange = (id, value) => {
     setObjetivosFinanceiros(prev => ({ ...prev, [id]: value }));
@@ -44,8 +61,9 @@ const RegisterObjetivosVendedores = () => {
   const handleMixChange = (id, value) => {
     setObjetivosMix(prev => ({ ...prev, [id]: value }));
   };
-  const dataFormatada = `${mesReferencia}-01`; // Adiciona o dia 01
+
   const handleSubmit = async () => {
+    const dataFormatada = `${mesReferencia}-01`;
     const payload = {
       mes_referencia: dataFormatada,
       objetivos: vendedores.map(v => ({
