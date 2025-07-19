@@ -79,23 +79,49 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
           headers: { Authorization: `Bearer ${token}` }
         });
 
-        console.log('Dados completos da API:', response.data); // Log para depuração
+        console.log('IndicativosDeVenda Dados completos da API:', response.data); // Log para depuração
+        console.log('IndicativosDeVenda Existe objetivo.detalhamento?', !!response.data.objetivo?.detalhamento);
 
-        // Extrair objetivos dos vendedores
-        if (response.data.objetivo?.detalhamento) {
-          const objetivos = response.data.objetivo.detalhamento.map(item => ({
-            codFuncionario: item.CodFuncionario,
-            objetivo: item.ObjetivoTotalVendedor,
-            obrotatotal:item.PositivacaoTotalVendedor,
-            nomeFuncionario: item.Funcionario,
-            
-          }));
-          
-          console.log('Objetivos extraídos:', objetivos); // Log para depuração
-          if (onObjetivosRecebidos) {
-            onObjetivosRecebidos(objetivos);
-          }
-        }
+      const objetivos = [];
+
+            // Dados do objetivo.detalhamento
+            if (Array.isArray(response.data.objetivo?.detalhamento)) {
+              const detalhamento = response.data.objetivo.detalhamento.map(item => ({
+                codFuncionario: Number(item.CodFuncionario),
+                nomeFuncionario: item.Funcionario,
+                objetivo: item.ObjetivoTotalVendedor || 0,
+                obrotatotal: item.PositivacaoTotalVendedor || 0,
+              }));
+              objetivos.push(...detalhamento);
+            }
+
+            // Dados de objetivos_vendedores
+            if (Array.isArray(response.data.objetivos_vendedores)) {
+              const vendedores = response.data.objetivos_vendedores.map(item => ({
+                codFuncionario: Number(item.vendedor_id),  // unifica com CodFuncionario
+                objetivo_financeiro: item.objetivo_financeiro || 0,
+                objetivo_mix: item.objetivo_mix || 0,
+                nomeFuncionario: item.nome_vendedor,
+              }));
+              objetivos.push(...vendedores);
+            }
+
+            // Unificação baseada no codFuncionario
+            const objetivosUnificados = objetivos.reduce((acc, curr) => {
+              const existente = acc.find(o => o.codFuncionario === curr.codFuncionario);
+              if (!existente) {
+                acc.push(curr);
+              } else {
+                Object.assign(existente, { ...existente, ...curr }); // une os dados
+              }
+              return acc;
+            }, []);
+
+            console.log('Objetivos unificados:', objetivosUnificados);
+
+            if (onObjetivosRecebidos) {
+              onObjetivosRecebidos(objetivosUnificados);
+            }
 
         const percentual = response.data.realizado_peso?.percentual || 0;
         const variacao = response.data.realizado_peso?.variacao || 0;

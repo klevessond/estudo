@@ -14,11 +14,16 @@ const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
       obj => obj.codFuncionario === codFuncionario
     );
     
+    
     // Valores com fallback para 0
     const objetivoPeso = dadosColaborador?.objetivo || 0;
     const obrotaTotal = dadosColaborador?.obrotatotal || 0;
     const pesototalvendido = colaborador.pesototalvendido || 0;
     const qtdClientes = colaborador.qtdClientes || 0;
+    const objetivoFinanceiro = dadosColaborador?.objetivo_financeiro || 0;
+    const percentualFinanceiro = objetivoFinanceiro > 0 ? (colaborador.faturado / objetivoFinanceiro) * 100 : 0;
+    const faturado = colaborador.faturado || 0;
+    const variacaoFinanceira = objetivoFinanceiro ? (faturado - objetivoFinanceiro) : 0;
 
     // Cálculo da porcentagem de positivação (clientes atendidos)
     const porcentagemPositivação = obrotaTotal > 0 
@@ -51,9 +56,24 @@ const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
           {/* Card Faturado */}
           <div className="card" style={{ background: '#eafaf1' }}>
-            <div className="card-title">Faturado:</div>
-            R$ {colaborador.faturado.toLocaleString('pt-BR')}
-          </div>
+          <div className="card-title">Faturado:</div>
+          <div>R$ {colaborador.faturado.toLocaleString('pt-BR')}</div>
+
+          {objetivoFinanceiro > 0 && (
+            <>
+              <div className="progress-container">
+                <div
+                  className={`progress-bar ${getProgressClass(percentualFinanceiro)}`}
+                  style={{ width: `${Math.min(percentualFinanceiro, 100)}%` }}
+                />
+              </div>
+              <div className="progress-info">
+                <span>Objetivo: R$ {objetivoFinanceiro.toLocaleString('pt-BR')}</span>
+                <strong>{percentualFinanceiro.toFixed(1)}%</strong>
+              </div>
+            </>
+          )}
+        </div>
 
           {/* Card A Faturar */}
           <div className="card" style={{ background: '#eaf2fa' }}>
@@ -67,11 +87,11 @@ const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
             R$ {colaborador.alocado.toLocaleString('pt-BR')}
           </div>
 
-          {/* Card Variação */}
-          <div className="card" style={{ background: '#f1faff' }}>
-            <div className="card-title">Variação:</div>
-            R$ {colaborador.variacao.toLocaleString('pt-BR')}
-          </div>
+            {/* Card Variação */}
+            <div className="card" style={{ background: '#f1faff' }}>
+              <div className="card-title">Variação:</div>
+              R$ {variacaoFinanceira.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
 
 
           {/* Card Positivação */}
@@ -95,8 +115,8 @@ const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
 
           {/* Card Peso */}
           <div className="card" style={{ background: '#eafae1' }}>
-            <div className="card-title">Peso Vendido:</div>
-            {pesototalvendido.toLocaleString('pt-BR')} kg
+            <div className="card-title">Peso Vendido: </div>
+            {pesototalvendido.toLocaleString('pt-BR')}  kg 
             
             <div className="progress-container">
               <div 
@@ -106,7 +126,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
             </div>
             
             <div className="progress-info">
-              <span>Objetivo: {objetivoPeso.toLocaleString('pt-BR')} kg</span>
+              <span>Objetivo:  {objetivoPeso.toLocaleString('pt-BR')} kg</span>
               <strong>{porcentagemPeso.toFixed(1)}%</strong>
             </div>
           </div>

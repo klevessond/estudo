@@ -19,20 +19,12 @@ const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador
     const fetchData = async () => {
       if (!periodoSelecionado?.de || !periodoSelecionado?.ate) return;
       try {
+        console.log('Iniciando fetchData - IndicativosTabelaVendedor');
         const response = await api.get(`/vendas-por-vendedor/?de=${periodoSelecionado.de}&ate=${periodoSelecionado.ate}`);
         const json = response.data;
 
-        // Extrair objetivos dos vendedores
-        if (response.data.objetivo?.detalhamento) {
-          const objetivos = response.data.objetivo.detalhamento.map(item => ({
-            codFuncionario: item.CodFuncionario,
-            objetivo: item.ObjetivoTotalVendedor,
-            obrotatotal:item.PositivacaoTotalVendedor,
-            nomeFuncionario: item.Funcionario
-          }));
-          onObjetivosRecebidos(objetivos);
-        }
-        
+        console.log('IndicativosTabelaVendedor Resposta completa da API:', json);
+       
         const tabela = json.resultado.vendas_por_vendedor.map(vendedor => ({
           colaborador: vendedor.Campo.trim(),
           codFuncionario: Number(vendedor.codcampo),

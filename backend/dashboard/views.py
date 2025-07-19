@@ -96,7 +96,7 @@ class IndicadoresView(APIView):
         objetivo_mensal_data = get_objetivo_mensal_serializado(request.user, data_inicio)
         objetivo_financeiro = float(objetivo_mensal_data.get("objetivo_financeiro", 0) or 0)
         objetivo_mix = float(objetivo_mensal_data.get("objetivo_mix", 0) or 0)
-
+        objetivos_vendedores = get_objetivos_vendedores_por_mes(data_inicio)
         objetivo["financeiro"] = round(float(objetivo_financeiro or 0), 2)
         objetivo["objetivo_mix"] = round(float(objetivo_mix or 0), 2)
 
@@ -161,6 +161,7 @@ class IndicadoresView(APIView):
         
         return Response({
             "objetivo": objetivo,
+            "objetivos_vendedores": objetivos_vendedores,
             "evolucao": {
                 "valor_ano_anterior": round(venda_ano_anterior, 2),
                 "percentual": round(evolucao_percentual)  # positivo/negativo
@@ -357,12 +358,6 @@ class VendasPorVendedorView(APIView):
             
         })
 
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from .models import ObjetivoMensalVendedor, ObjetivoMensal
-
 class ObjetivoMensalVendedorView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -417,3 +412,20 @@ class ObjetivoMensalVendedorView(APIView):
         )
 
         return Response({"message": "Objetivos cadastrados com sucesso."})
+    
+
+
+def get_objetivos_vendedores_por_mes(data_inicio):
+    # Extrai o mês no formato YYYY-MM
+    mes_referencia = data_inicio
+
+    objetivos = ObjetivoMensalVendedor.objects.filter(mes_referencia=mes_referencia)
+    resultado = []
+    for obj in objetivos:
+        resultado.append({
+            "vendedor_id": obj.vendedor_id,
+            "nome_vendedor": obj.nome_vendedor,
+            "objetivo_financeiro": float(obj.objetivo_financeiro),
+            "objetivo_mix": float(obj.objetivo_mix)
+        })
+    return resultado

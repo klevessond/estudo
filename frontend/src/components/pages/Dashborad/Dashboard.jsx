@@ -36,6 +36,18 @@ const Dashboard = () => {
     setPeriodoSelecionado({ de, ate });
   }, []);
 
+  useEffect(() => {
+  console.log('[Dashboard] objetivosVendedores atualizados:', objetivosVendedores);
+}, [objetivosVendedores]);
+
+useEffect(() => {
+  console.log('[Dashboard] vendasColaboradores atualizados:', vendasColaboradores);
+}, [vendasColaboradores]);
+
+useEffect(() => {
+  console.log('[Dashboard] colaboradorSelecionado atualizado:', colaboradorSelecionado);
+}, [colaboradorSelecionado]);
+
   return (
     <div>
       <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
@@ -54,6 +66,7 @@ const Dashboard = () => {
           onTogglePDV={() => setUsarPDV(prev => !prev)}
         />
         <IndicativosDeVenda periodoSelecionado={periodoSelecionado} usarPDV={usarPDV} onObjetivosRecebidos={setObjetivosVendedores} />
+          
       </div>
 
       <div style={{ margin: '1rem 0', display: 'flex', gap: '0.75rem' }}>
