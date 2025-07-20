@@ -29,9 +29,7 @@ const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador
           colaborador: vendedor.Campo.trim(),
           codFuncionario: Number(vendedor.codcampo),
           faturado: vendedor.ValorLiquido,
-          aFaturar: json.resultado?.prevenda?.detalhado
-            ?.filter(p => p.CodVendedor?.toString() === vendedor.codcampo?.toString())
-            .reduce((acc, cur) => acc + cur.Valor, 0) || 0,
+          aFaturar: vendedor["pre-venda"] || 0,
           alocado: vendedor.alocado || vendedor.ValorLiquido,
           cobertura: 0,
           variacao: 0,
