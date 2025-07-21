@@ -67,10 +67,10 @@ const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
                   style={{ width: `${Math.min(percentualFinanceiro, 100)}%` }}
                 />
               </div>
-              <div className="progress-info">
-                <span>Objetivo: R$ {objetivoFinanceiro.toLocaleString('pt-BR')}</span>
-                <strong>{percentualFinanceiro.toFixed(1)}%</strong>
-              </div>
+              
+                <div><span>Objetivo: R$ {objetivoFinanceiro.toLocaleString('pt-BR')}</span></div>
+                <span>Progresso: </span><strong>{percentualFinanceiro.toFixed(1)}%</strong>
+             
             </>
           )}
         </div>
@@ -105,11 +105,9 @@ const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
                 style={{ width: `${Math.min(porcentagemPositivação, 100)}%` }}
               />
             </div>
+            <div><span>Objetivo:  {qtdClientes}</span></div>
+             <span>Progresso:</span><strong>{porcentagemPositivação.toFixed(1)}%</strong>
             
-            <div className="progress-info">
-              <span>Progresso:</span>
-              <strong>{porcentagemPositivação.toFixed(1)}%</strong>
-            </div>
           </div>
 
 
@@ -125,10 +123,9 @@ const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
               />
             </div>
             
-            <div className="progress-info">
-              <span>Objetivo:  {objetivoPeso.toLocaleString('pt-BR')} kg</span>
-              <strong>{porcentagemPeso.toFixed(1)}%</strong>
-            </div>
+              <div><span>Objetivo:  {objetivoPeso.toLocaleString('pt-BR')} kg</span></div>
+              <span>Progresso: </span><strong>{porcentagemPeso.toFixed(1)}%</strong>
+            
           </div>
         </div>
       </div>
