@@ -3,7 +3,7 @@ import './CardsColaborador.css';
 import ReactSpeedometer from 'react-d3-speedometer';
 
 const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
-  const [modo, setModo] = React.useState('indicadores');
+  const [modo, setModo] = React.useState('graficos');
   if (!colaborador) return null;
 
   const codFuncionario = Number(colaborador.codFuncionario);

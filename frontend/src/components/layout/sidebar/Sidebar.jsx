@@ -11,7 +11,12 @@ const Sidebar = () => {
                 {isCollapsed ? '→' : '←'}
             </button>
             <ul>
-                <li>{isCollapsed ? '🏠' : 'Home'}</li>
+                <li>
+                    <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+                        {isCollapsed ? '🏠' : 'Home'}
+                    </Link>
+
+                </li>
 
                 <li>
                     <Link to="/cadastros" style={{ textDecoration: 'none', color: 'inherit' }}>
