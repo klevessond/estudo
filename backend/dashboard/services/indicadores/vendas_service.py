@@ -680,8 +680,23 @@ def buscar_vendas_por_vendedor(data_inicio, data_fim):
                Campo, 
                COUNT(DISTINCT QtdClientes) AS QtdClientes,
                CAST(SUM(ValorProdutos - Desconto) AS FLOAT) AS ValorLiquido,
-               CAST(SUM(Peso) AS FLOAT) AS PesoTotal
-        FROM (
+               CAST(SUM(Peso) AS FLOAT) AS PesoTotal,
+                       	-- MIX (produtos distintos vendidos)
+    (
+        SELECT COUNT(DISTINCT PVI.CodMaterial)
+        FROM PedidoVendaItens PVI
+        LEFT JOIN PedidoVenda PV ON PV.CodPedidoVenda = PVI.CodPedidoVenda
+        LEFT JOIN Material M ON PVI.CodMaterial = M.CodMaterial
+        LEFT JOIN NaturezaOperacao NOP ON PV.CodNaturezaOperacao = NOP.CodNaturezaOperacao
+        WHERE 
+            PV.Status = 0
+            AND NOP.Venda = 1
+            AND PV.UnidGestora IN (1, 2, 3, 4, 5, 6, 8, 9, 10)
+            AND PV.DataVenda >= @P1
+            AND PV.DataVenda < @P2
+            AND M.EmbRetornavel = 0
+            AND PV.CodVendedor = CAST(Consulta.CodCampo AS INT)
+    ) AS Mix        FROM (
             select Cliente.CodCliente as QtdClientes,
               Cast(Funcionario.CodFuncionario as VarChar) as CodCampo,
               Funcionario.Funcionario as Campo,

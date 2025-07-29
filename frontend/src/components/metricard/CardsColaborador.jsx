@@ -24,6 +24,10 @@ const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
   const porcentagemPositivação = obrotaTotal > 0 ? (qtdClientes / obrotaTotal) * 100 : 0;
   const porcentagemPeso = objetivoPeso > 0 ? (pesototalvendido / objetivoPeso) * 100 : 0;
 
+  const mixRealizado = colaborador.mix || 0;
+  const objetivoMix = dadosColaborador?.objetivo_mix || 0;
+  const porcentagemMix = objetivoMix > 0 ? (mixRealizado / objetivoMix) * 100 : 0;
+
   const getProgressClass = (percentage) => {
     if (percentage >= 100) return 'progress-high';
     if (percentage >= 50) return 'progress-medium';
@@ -90,6 +94,16 @@ const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
                 height={160}
               />
             </div>
+            {/* 🆕 Gráfico de Mix */}
+                <div>
+                  <h4>Mix</h4>
+                  <ReactSpeedometer
+                    maxValue={100}
+                    value={parseFloat(porcentagemMix.toFixed(1))}
+                    segments={5}
+                    height={160}
+                  />
+                </div>
           </div>
         </div>
       ) : (
@@ -157,6 +171,20 @@ const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
             <div>Objetivo: {objetivoPeso.toLocaleString('pt-BR')} kg</div>
             <div>Progresso: {porcentagemPeso.toFixed(1)}%</div>
           </div>
+             
+              <div className="card" style={{ background: '#f3e8ff' }}>
+                <div className="card-title">Mix de Produtos:</div>
+                <div>{mixRealizado} / {objetivoMix} itens</div>
+                <div className="progress-container">
+                  <div
+                    className={`progress-bar ${getProgressClass(porcentagemMix)}`}
+                    style={{ width: `${Math.min(porcentagemMix, 100)}%` }}
+                  />
+                </div>
+                <div>Objetivo: {objetivoMix} itens</div>
+                <div>Progresso: {porcentagemMix.toFixed(1)}%</div>
+              </div>
+
         </div>
       )}
     </>

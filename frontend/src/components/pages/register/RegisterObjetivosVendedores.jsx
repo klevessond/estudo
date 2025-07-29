@@ -8,7 +8,7 @@ const RegisterObjetivosVendedores = () => {
   const token = localStorage.getItem('token');
 
   useEffect(() => {
-    fetch('http://localhost:8000/vendas-por-vendedor/', {
+    fetch('/vendas-por-vendedor/', {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -36,7 +36,7 @@ const RegisterObjetivosVendedores = () => {
       }))
     };
 
-    const res = await fetch('http://localhost:8000/objetivos-vendedores/', {
+    const res = await fetch('/objetivos-vendedores/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

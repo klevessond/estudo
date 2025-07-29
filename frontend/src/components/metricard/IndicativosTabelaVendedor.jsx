@@ -34,7 +34,8 @@ const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador
           cobertura: 0,
           variacao: 0,
           pesototalvendido:vendedor.PesoTotal,
-          qtdClientes:vendedor.QtdClientes
+          qtdClientes:vendedor.QtdClientes,
+          mix:vendedor.Mix
           
         }));
 
@@ -57,28 +58,32 @@ const IndicativosTabelaVendedor = ({ periodoSelecionado, onSelecionarColaborador
     {
       accessorKey: 'faturado',
       header: 'Faturado R$',
-      cell: info => info.getValue().toLocaleString('pt-BR'),
+      cell: info => (
+      <span style={{ fontWeight: 600 }}>
+        {info.getValue().toLocaleString('pt-BR')}
+        </span>
+      ),
     },
     {
       accessorKey: 'aFaturar',
       header: 'A Faturar R$',
-      cell: info => info.getValue().toLocaleString('pt-BR'),
+      cell: info => 
+        info.getValue().toLocaleString('pt-BR'),
     },
     {
       accessorKey: 'alocado',
       header: 'Alocado R$',
       cell: info => info.getValue().toLocaleString('pt-BR'),
     },
-    {
-      accessorKey: 'cobertura',
-      header: 'Cob %',
-      cell: info => (
-        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '1.25rem', color: 'green', fontWeight: 'bold' }}>⬆</span>
-          <span style={{ fontWeight: 600 }}>{info.getValue().toFixed(2)}%</span>
-        </span>
-      ),
-    },
+{
+    accessorKey: 'mix', // ← novo campo vindo da API
+    header: 'Mix (Qtd. Produtos)', // ← novo título da coluna
+    cell: info => (
+      <span style={{ fontWeight: 600 }}>
+        {info.getValue()} itens
+      </span>
+    ),
+  },
     {
       accessorKey: 'variacao',
       header: 'Variação R$',
