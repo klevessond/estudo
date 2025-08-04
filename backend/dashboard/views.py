@@ -15,8 +15,18 @@ from rest_framework.decorators import api_view
 from django.utils.dateparse import parse_date
 from django.contrib.auth import get_user_model
 User = get_user_model()
-from django.contrib.auth import get_user_model
-User = get_user_model()
+
+from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
+from rest_framework.validators import UniqueValidator
+from rest_framework import status
+from rest_framework.permissions import IsAdminUser
+from .models import Profile
+from dashboard.services.usuarios.funcionario_service import listar_funcionarios
+
+
+
+
 
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
@@ -429,3 +439,101 @@ def get_objetivos_vendedores_por_mes(data_inicio):
             "objetivo_mix": float(obj.objetivo_mix)
         })
     return resultado
+
+class UserRegisterSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(
+        required=True,
+        validators=[UniqueValidator(queryset=User.objects.all())]
+    )
+    password = serializers.CharField(
+        write_only=True, required=True, validators=[validate_password]
+    )
+    password2 = serializers.CharField(write_only=True, required=True)
+    phone = serializers.CharField(required=True, max_length=20)
+    # Campos do funcionário
+    cod_funcionario = serializers.IntegerField(required=True)
+    cod_unid_gestora = serializers.IntegerField(required=True)
+    entregador = serializers.BooleanField(required=True)
+    supervisor = serializers.BooleanField(required=True)
+    transportador = serializers.BooleanField(required=True)
+    transportador_aux = serializers.BooleanField(required=True)
+    vendedor = serializers.BooleanField(required=True)
+    cobrador = serializers.BooleanField(required=True)
+    
+    class Meta:
+        model = User
+        fields = (
+            'username', 'password', 'password2', 'email',
+            'first_name', 'last_name', 'phone',
+            'cod_funcionario', 'cod_unid_gestora',
+            'entregador', 'supervisor', 'transportador',
+            'transportador_aux', 'vendedor', 'cobrador'
+        )
+        extra_kwargs = {
+            'first_name': {'required': True},
+            'last_name': {'required': True},
+            'phone': {'required': True},
+            'cod_funcionario': {'required': True},
+            'cod_unid_gestora': {'required': True},
+            'entregador': {'required': True},
+            'supervisor': {'required': True},
+            'transportador': {'required': True},
+            'transportador_aux': {'required': True},
+            'vendedor': {'required': True},
+            'cobrador': {'required': True}
+        }
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password2']:
+            raise serializers.ValidationError({"password": "As senhas não coincidem."})
+        return attrs
+
+    def create(self, validated_data):
+        phone = validated_data.pop('phone')
+        cod_funcionario = validated_data.pop('cod_funcionario')
+        cod_unid_gestora = validated_data.pop('cod_unid_gestora')
+        entregador = validated_data.pop('entregador')
+        supervisor = validated_data.pop('supervisor')
+        transportador = validated_data.pop('transportador')
+        transportador_aux = validated_data.pop('transportador_aux')
+        vendedor = validated_data.pop('vendedor')
+        cobrador = validated_data.pop('cobrador')
+        user = User.objects.create(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            first_name=validated_data['first_name'],
+            last_name=validated_data['last_name']
+        )
+        user.set_password(validated_data['password'])
+        user.save()
+        Profile.objects.create(
+            user=user,
+            phone=phone,
+            cod_funcionario=cod_funcionario,
+            cod_unid_gestora=cod_unid_gestora,
+            entregador=entregador,
+            supervisor=supervisor,
+            transportador=transportador,
+            transportador_aux=transportador_aux,
+            vendedor=vendedor,
+            cobrador=cobrador
+        )
+        return user
+
+class RegisterView(APIView):
+    #permission_classes = [IsAdminUser]
+    def post(self, request):
+        serializer = UserRegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"message": "Usuário registrado com sucesso!"},
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class FuncionariosListView(APIView):
+    def get(self, request):
+        search = request.query_params.get('search', '')
+        funcionarios = listar_funcionarios(search=search)
+        return Response(funcionarios)

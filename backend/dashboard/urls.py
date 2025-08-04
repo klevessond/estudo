@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from .views import IndicadoresView, ObjetivoMensalView,ObjetivoMensalResumoView,IndicadoresPDV,VendasPorVendedorView,ObjetivoMensalVendedorView
+from .views import RegisterView,FuncionariosListView
 
 urlpatterns = [
     path('dados-sql/', views.get_dados_sql, name='get_dados_sql'),
@@ -11,5 +12,7 @@ urlpatterns = [
     path('objetivos-vendedores/', ObjetivoMensalVendedorView.as_view()),
     path("indicadores/pdv/", IndicadoresPDV.as_view(), name="indicadores-pdv"),
     path("vendas-por-vendedor/", VendasPorVendedorView.as_view(), name='VendasPorVendedorView'),
+    path('register/', RegisterView.as_view(), name='register'),
+    path('funcionarios/', FuncionariosListView.as_view(), name='funcionarios-list'),
 
 ]

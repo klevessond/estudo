@@ -5,7 +5,10 @@ import Layout from './components/layout/layout.jsx';
 import PivotVendas from './components/pages/PivotVendas.jsx';
 import Login from './components/pages/Login.jsx';
 import PrivateRoute from './components/routes/PrivateRoute.jsx';
-import Register from './components/pages/register/Register.jsx'
+import Register from './components/pages/register/Register.jsx';
+import RegisterUser from'./components/pages/register/RegisterUser.jsx'
+
+
 
 const App = () => {
   return (
@@ -42,6 +45,7 @@ const App = () => {
               </PrivateRoute>
             }
 />
+            <Route path="/cadastro_user" element={<RegisterUser />} />
       </Routes>
     </Router>
   );
