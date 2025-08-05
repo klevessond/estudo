@@ -1,0 +1,65 @@
+.editar-user-container {
+  display: flex;
+  align-items: flex-start;
+  padding: 20px;
+  margin-left: 60px; /* Aproxima do menu lateral */
+}
+
+.editar-user-form {
+  width: 350px;
+  background-color: #f9f9f9;
+  padding: 25px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  margin-right: 40px; /* Espaço entre form e lista de usuários */
+}
+
+.editar-user-list {
+  flex: 1;
+  border-left: 1px solid #ccc;
+  padding-left: 40px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #c0d7eb;
+  border-radius: 6px;
+  background-color: #f9fbff;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+button.submit-button {
+  width: 100%;
+  padding: 12px;
+  background-color: #3399ff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 12px;
+}
+
+button.submit-button:hover {
+  background-color: #267acc;
+}
+
+.mensagem-feedback {
+  margin-bottom: 10px;
+  padding: 10px;
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+  border-radius: 5px;
+}

@@ -7,6 +7,7 @@ import Login from './components/pages/Login.jsx';
 import PrivateRoute from './components/routes/PrivateRoute.jsx';
 import Register from './components/pages/register/Register.jsx';
 import RegisterUser from'./components/pages/register/RegisterUser.jsx'
+import EditarUsuario from './components/pages/register/EditarUsuario.jsx';
 
 
 
@@ -51,6 +52,16 @@ const App = () => {
           <PrivateRoute>
             <Layout>
               <RegisterUser />
+            </Layout>
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/editar-usuario/:id"
+        element={
+          <PrivateRoute>
+            <Layout>
+              <EditarUsuario />
             </Layout>
           </PrivateRoute>
         }

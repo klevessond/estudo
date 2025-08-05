@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './RegisterUser.css';
 
+
+
 const RegisterUser = () => {
   const [formData, setFormData] = useState({
     username: '', email: '', first_name: '', last_name: '', phone: '',
@@ -233,6 +235,9 @@ useEffect(() => {
             <li key={user.id} onClick={() => handleUsuarioClick(user)}>
               <strong>{user.username}</strong><br />
               <small>{user.email}</small>
+              <button onClick={() => navigate(`/editar-usuario/${user.id}`)}>
+                Editar
+              </button>
             </li>
           ))}
         </ul>
