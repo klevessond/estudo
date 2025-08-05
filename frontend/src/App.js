@@ -45,7 +45,16 @@ const App = () => {
               </PrivateRoute>
             }
 />
-            <Route path="/cadastro_user" element={<RegisterUser />} />
+      <Route
+        path="/cadastro_user"
+        element={
+          <PrivateRoute>
+            <Layout>
+              <RegisterUser />
+            </Layout>
+          </PrivateRoute>
+        }
+      />
       </Routes>
     </Router>
   );

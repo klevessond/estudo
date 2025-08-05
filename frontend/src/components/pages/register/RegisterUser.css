@@ -1,189 +1,189 @@
-.register-user-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  background-color: #f8f9fa;
-  padding: 20px;
+/* Container geral */
+.register-container {
+  padding: 24px;
+  background-color: #f9fbfd;
+  font-family: 'Segoe UI', sans-serif;
+  color: #003366;
 }
 
-.register-user-card {
-  background: white;
-  padding: 2rem;
+/* Título */
+.register-title {
+  font-size: 1.6rem;
+  margin-bottom: 20px;
+  color: #003366;
+}
+
+/* Cartões de seção */
+.register-card {
+  background-color: #ffffff;
+  border: 1px solid #d6e4f0;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Inputs do formulário */
+.register-form input[type="month"] {
+  padding: 8px 12px;
+  border: 1px solid #c0d7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: #f9fbff;
+}
+
+/* Botão */
+.register-form button {
+  background-color: #3399ff;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.register-form button:hover {
+  background-color: #267acc;
+}
+
+/* Tabela */
+.register-table {
   width: 100%;
-  max-width: 500px;
-  border: 1px solid #3498db;
+  border-collapse: collapse;
 }
 
-.register-user-card h2 {
-  margin-bottom: 1.5rem;
-  text-align: center;
-  color: #2c3e50;
-  font-size: 1.8rem;
-  font-weight: 600;
+.register-table th {
+  background-color: #e6f0fa;
+  color: #003366;
+  text-align: left;
+  padding: 12px 8px;
+  border-bottom: 2px solid #c0d7eb;
 }
 
+.register-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+/* Inputs da tabela */
+.register-table input[type="number"] {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #c0d7eb;
+  border-radius: 6px;
+  background-color: #f9fbff;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+/* Linha de totalização */
+.register-total-row td {
+  background-color: #e6f0fa;
+  font-weight: bold;
+  color: #003366;
+  border-top: 2px solid #c0d7eb;
+}
 .form-group {
-  margin-bottom: 1.5rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #34495e;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
 }
 
 .form-group input {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-  transition: border-color 0.3s ease;
+  padding: 10px;
+  border: 1px solid #c0d7eb;
+  border-radius: 6px;
+  background-color: #f9fbff;
+  font-size: 14px;
+  box-sizing: border-box;
 }
 
-.form-group input:focus {
-  outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-}
-
-.form-group input:invalid {
-  border-color: #e74c3c;
-}
-
-.error {
-  color: #e74c3c;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
-  display: block;
-}
-
-button {
+button.submit-button {
   width: 100%;
-  padding: 0.75rem;
-  background-color: #3498db;
+  padding: 12px;
+  background-color: #3399ff;
   color: white;
   border: none;
-  border-radius: 4px;
-  font-size: 1rem;
+  border-radius: 6px;
+  font-size: 16px;
   font-weight: 500;
   cursor: pointer;
-  margin-top: 1rem;
-  transition: background-color 0.3s ease;
+  margin-top: 12px;
 }
 
-button:hover {
-  background-color: #2980b9;
+button.submit-button:hover {
+  background-color: #267acc;
 }
 
-button:disabled {
-  background-color: #95a5a6;
-  cursor: not-allowed;
+.register-card {
+  max-width: 600px;
+  margin: 0 auto;
 }
 
-.login-link {
-  text-align: center;
-  margin-top: 1.5rem;
-  color: #3498db;
-  text-decoration: none;
-  display: inline-block;
-  width: 100%;
+.container {
+  display: flex;
+  gap: 2rem;
 }
 
-.login-link:hover {
-  text-decoration: underline;
+.form-col {
+  flex: 1;
 }
 
-/* Responsividade */
-@media (max-width: 576px) {
-  .register-user-card {
-    padding: 1.5rem;
-  }
-  
-  .register-user-card h2 {
-    font-size: 1.5rem;
-  }
-}
-
-/* Estilos para busca de funcionário */
-.funcionario-search {
-  position: relative;
-  margin-bottom: 1.5rem;
-}
-
-.funcionarios-dropdown {
-  position: absolute;
-  width: 100%;
-  max-height: 300px;
+.usuarios-col {
+  flex: 1;
+  max-height: 600px;
   overflow-y: auto;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  margin-top: 0.25rem;
-  z-index: 10;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-left: 1px solid #ccc;
+  padding-left: 1rem;
 }
 
-.funcionarios-dropdown ul {
+.lista-usuarios {
   list-style: none;
   padding: 0;
-  margin: 0;
 }
 
-.funcionarios-dropdown li {
-  padding: 0.75rem 1rem;
-  cursor: pointer;
-  border-bottom: 1px solid #eee;
-  transition: background-color 0.2s;
-}
-
-.funcionarios-dropdown li:hover {
-  background-color: #f8f9fa;
-}
-
-.funcionario-name {
-  font-weight: 500;
-  margin-bottom: 0.25rem;
-}
-
-.funcionario-roles {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.funcionario-roles span {
-  background-color: #e3f2fd;
-  color: #1976d2;
-  padding: 0.25rem 0.5rem;
+.lista-usuarios li {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  margin-bottom: 0.5rem;
   border-radius: 4px;
-  font-size: 0.8rem;
-}
-
-.selected-funcionario {
-  margin-top: 0.5rem;
-  padding: 0.75rem;
-  background-color: #f0f8ff;
-  border-radius: 6px;
-  border-left: 3px solid #3498db;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.clear-funcionario {
-  background: none;
-  border: none;
-  color: #e74c3c;
-  font-size: 1.2rem;
   cursor: pointer;
-  padding: 0 0.5rem;
 }
 
-.required {
-  color: #e74c3c;
+.lista-usuarios li:hover {
+  background-color: #f2f2f2;
 }
+
+.register-user-container {
+  display: flex;
+  align-items: flex-start;
+  padding: 20px;
+  margin-left: 60px; /* Aproxima do menu lateral */
+}
+
+.register-user-form {
+  width: 350px;
+  background-color: #f9f9f9;
+  padding: 25px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  margin-right: 40px; /* Espaço entre form e lista de usuários */
+}
+
+.register-user-list {
+  flex: 1;
+  border-left: 1px solid #ccc;
+  padding-left: 40px;
+}
+.mensagem-feedback {
+  margin-bottom: 10px;
+  padding: 10px;
+  background-color: #d4edda; /* verde claro para sucesso */
+  color: #155724;
+  border: 1px solid #c3e6cb;
+  border-radius: 5px;
+}
+

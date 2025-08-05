@@ -14,6 +14,8 @@ from dashboard.services.indicadores.cache_utils import get_cached_data
 from rest_framework.decorators import api_view
 from django.utils.dateparse import parse_date
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import User
+
 User = get_user_model()
 
 from rest_framework import serializers
@@ -536,4 +538,10 @@ class FuncionariosListView(APIView):
     def get(self, request):
         search = request.query_params.get('search', '')
         funcionarios = listar_funcionarios(search=search)
-        return Response(funcionarios)
+        users = User.objects.filter(username__icontains=search).values(
+            'id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff'
+        )
+        return Response({
+            "funcionarios_sql": funcionarios,
+            "usuarios_django": list(users)
+            })

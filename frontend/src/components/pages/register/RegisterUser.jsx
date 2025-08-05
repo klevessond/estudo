@@ -1,29 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './RegisterUser.css';
 
 const RegisterUser = () => {
   const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    first_name: '',
-    last_name: '',
-    phone: '',
-    password: '',
-    password2: '',
-    cod_funcionario: '',
-    cod_unid_gestora: '',
-    entregador: false,
-    supervisor: false,
-    transportador: false,
-    transportador_aux: false,
-    vendedor: false,
-    cobrador: false,
-    funcionario_nome: ''
+    username: '', email: '', first_name: '', last_name: '', phone: '',
+    password: '', password2: '', cod_funcionario: '', cod_unid_gestora: '',
+    entregador: false, supervisor: false, transportador: false, transportador_aux: false,
+    vendedor: false, cobrador: false, funcionario_nome: ''
   });
 
   const [funcionarios, setFuncionarios] = useState([]);
+  const [usuariosDjango, setUsuariosDjango] = useState([]);
+  const [usuarioSelecionado, setUsuarioSelecionado] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFuncionarios, setShowFuncionarios] = useState(false);
   const [errors, setErrors] = useState({});
@@ -31,17 +20,42 @@ const RegisterUser = () => {
   const navigate = useNavigate();
   const apiBase = `http://${window.location.hostname}:8000`;
 
-  // Buscar funcionários ao digitar
-  useEffect(() => {
-    if (searchTerm.length > 2) {
-      axios.get(`${apiBase}/funcionarios/?search=${searchTerm}`)
-        .then(response => setFuncionarios(response.data))
-        .catch(err => console.error('Erro ao buscar funcionários:', err));
-    } else {
-      setFuncionarios([]);
-    }
-  }, [searchTerm, apiBase]);
+  const handleUsuarioClick = (usuario) => {
+    setUsuarioSelecionado(usuario);
+    setFormData({
+      ...formData,
+      username: usuario.username || '',
+      first_name: usuario.first_name || '',
+      last_name: usuario.last_name || '',
+      email: usuario.email || '',
+      phone: usuario.phone || '',
+      cod_funcionario: '',
+      funcionario_nome: ''
+    });
+    setSearchTerm('');
+  };
 
+  // Busca funcionários com base no campo de busca
+useEffect(() => {
+  if (searchTerm.length > 2) {
+    fetch(`http://localhost:8000/funcionarios/?search=${searchTerm}`)
+      .then(response => response.json())
+      .then(data => {
+        setFuncionarios(data.funcionarios_sql);
+      })
+      .catch(error => console.error('Erro ao buscar funcionários:', error));
+  }
+}, [searchTerm]);
+
+// Carrega todos os usuários do Django ao iniciar o componente
+useEffect(() => {
+  fetch('http://localhost:8000/funcionarios/')
+    .then(response => response.json())
+    .then(data => {
+      setUsuariosDjango(data.usuarios_django);
+    })
+    .catch(error => console.error('Erro ao carregar usuários Django:', error));
+}, []);
   const handleSelectFuncionario = (funcionario) => {
     setFormData({
       ...formData,
@@ -61,86 +75,55 @@ const RegisterUser = () => {
   const handlePhoneChange = (e) => {
     let value = e.target.value.replace(/\D/g, '');
     if (value.length > 11) value = value.substring(0, 11);
-    
     if (value.length > 0) {
       value = `(${value.substring(0, 2)}) ${value.substring(2)}`;
-      if (value.length > 9) {
-        value = `${value.substring(0, 10)}-${value.substring(10)}`;
-      }
+      if (value.length > 9) value = `${value.substring(0, 10)}-${value.substring(10)}`;
     }
-    
-    setFormData({
-      ...formData,
-      phone: value
-    });
+    setFormData({ ...formData, phone: value });
   };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData({
-      ...formData,
-      [name]: type === 'checkbox' ? checked : value
-    });
-    
-    // Limpa erros quando o usuário começa a digitar
-    if (errors[name]) {
+    setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
+    if (errors[name]) setErrors({ ...errors, [name]: null });
+    if ((name === 'password' || name === 'password2') && formData.password && formData.password2) {
       setErrors({
         ...errors,
-        [name]: null
+        password2: formData.password !== formData.password2 ? 'As senhas não coincidem' : null
       });
-    }
-    
-    // Verifica se as senhas coincidem
-    if ((name === 'password' || name === 'password2') && formData.password && formData.password2) {
-      if (formData.password !== formData.password2) {
-        setErrors({
-          ...errors,
-          password2: 'As senhas não coincidem'
-        });
-      } else if (errors.password2 === 'As senhas não coincidem') {
-        setErrors({
-          ...errors,
-          password2: null
-        });
-      }
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validações adicionais
     if (!formData.cod_funcionario) {
-      setErrors({...errors, cod_funcionario: 'Selecione um funcionário'});
+      setErrors({ ...errors, cod_funcionario: 'Selecione um funcionário' });
       return;
     }
-    
     if (formData.password !== formData.password2) {
-      setErrors({
-        ...errors,
-        password2: 'As senhas não coincidem'
-      });
+      setErrors({ ...errors, password2: 'As senhas não coincidem' });
       return;
     }
-    
     setIsSubmitting(true);
-    
     try {
-      // Remove formatação do telefone antes de enviar
-      const dataToSend = {
-        ...formData,
-        phone: formData.phone.replace(/\D/g, '')
-      };
-      
-      const response = await axios.post(`${apiBase}/register/`, dataToSend);
-      alert('Usuário cadastrado com sucesso!');
-      navigate('/login');
-    } catch (error) {
-      if (error.response && error.response.data) {
-        setErrors(error.response.data);
+      const dataToSend = { ...formData, phone: formData.phone.replace(/\D/g, '') };
+      const response = await fetch(`${apiBase}/register/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(dataToSend)
+      });
+
+      if (response.ok) {
+        alert('Usuário cadastrado com sucesso!');
+        navigate('/login');
       } else {
-        alert('Erro ao cadastrar usuário. Por favor, tente novamente.');
+        const errorData = await response.json();
+        setErrors(errorData);
       }
+    } catch (error) {
+      alert('Erro ao cadastrar usuário. Por favor, tente novamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -148,57 +131,22 @@ const RegisterUser = () => {
 
   return (
     <div className="register-user-container">
-      <div className="register-user-card">
-        <h2>Cadastro de Usuário</h2>
+      <div className="register-user-form">
+        <h2 className="register-title">Cadastro de Usuário</h2>
         <form onSubmit={handleSubmit}>
-          {/* Campos básicos do usuário (mantidos como estavam) */}
-          <div className="form-group">
-            <label>Nome de usuário:</label>
-            <input
-              type="text"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              required
-            />
-            {errors.username && <span className="error">{errors.username}</span>}
-          </div>
-
-          <div className="form-group">
-            <label>Email:</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-            />
-            {errors.email && <span className="error">{errors.email}</span>}
-          </div>
-
-          <div className="form-group">
-            <label>Nome:</label>
-            <input
-              type="text"
-              name="first_name"
-              value={formData.first_name}
-              onChange={handleChange}
-              required
-            />
-            {errors.first_name && <span className="error">{errors.first_name}</span>}
-          </div>
-
-          <div className="form-group">
-            <label>Sobrenome:</label>
-            <input
-              type="text"
-              name="last_name"
-              value={formData.last_name}
-              onChange={handleChange}
-              required
-            />
-            {errors.last_name && <span className="error">{errors.last_name}</span>}
-          </div>
+          {['username', 'email', 'first_name', 'last_name'].map((field, idx) => (
+            <div className="form-group" key={idx}>
+              <label>{field.replace('_', ' ')}:</label>
+              <input
+                type="text"
+                name={field}
+                value={formData[field]}
+                onChange={handleChange}
+                required
+              />
+              {errors[field] && <span className="error">{errors[field]}</span>}
+            </div>
+          ))}
 
           <div className="form-group">
             <label>Telefone:</label>
@@ -214,31 +162,20 @@ const RegisterUser = () => {
             {errors.phone && <span className="error">{errors.phone}</span>}
           </div>
 
-          <div className="form-group">
-            <label>Senha:</label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-            />
-            {errors.password && <span className="error">{errors.password}</span>}
-          </div>
+          {['password', 'password2'].map((field, idx) => (
+            <div className="form-group" key={idx}>
+              <label>{field === 'password2' ? 'Confirme a senha' : 'Senha'}:</label>
+              <input
+                type="password"
+                name={field}
+                value={formData[field]}
+                onChange={handleChange}
+                required
+              />
+              {errors[field] && <span className="error">{errors[field]}</span>}
+            </div>
+          ))}
 
-          <div className="form-group">
-            <label>Confirme a senha:</label>
-            <input
-              type="password"
-              name="password2"
-              value={formData.password2}
-              onChange={handleChange}
-              required
-            />
-            {errors.password2 && <span className="error">{errors.password2}</span>}
-          </div>
-
-          {/* Novo campo de busca de funcionário */}
           <div className="form-group funcionario-search">
             <label>Funcionário: <span className="required">*</span></label>
             <input
@@ -252,35 +189,24 @@ const RegisterUser = () => {
               required
             />
             {errors.cod_funcionario && <span className="error">{errors.cod_funcionario}</span>}
-            
             {formData.funcionario_nome && (
               <div className="selected-funcionario">
                 <span>{formData.funcionario_nome}</span>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="clear-funcionario"
                   onClick={() => {
-                    setFormData({
-                      ...formData,
-                      cod_funcionario: '',
-                      funcionario_nome: ''
-                    });
+                    setFormData({ ...formData, cod_funcionario: '', funcionario_nome: '' });
                     setSearchTerm('');
                   }}
-                >
-                  ×
-                </button>
+                >×</button>
               </div>
             )}
-
             {showFuncionarios && funcionarios.length > 0 && (
               <div className="funcionarios-dropdown">
                 <ul>
                   {funcionarios.map(func => (
-                    <li 
-                      key={func.CodFuncionario}
-                      onClick={() => handleSelectFuncionario(func)}
-                    >
+                    <li key={func.CodFuncionario} onClick={() => handleSelectFuncionario(func)}>
                       <div className="funcionario-name">{func.Funcionario}</div>
                       <div className="funcionario-roles">
                         {func.Vendedor && <span>Vendedor</span>}
@@ -298,6 +224,18 @@ const RegisterUser = () => {
             {isSubmitting ? 'Cadastrando...' : 'Cadastrar'}
           </button>
         </form>
+      </div>
+
+      <div className="register-user-list">
+        <h3>Usuários Cadastrados</h3>
+        <ul className="lista-usuarios">
+          {usuariosDjango.map(user => (
+            <li key={user.id} onClick={() => handleUsuarioClick(user)}>
+              <strong>{user.username}</strong><br />
+              <small>{user.email}</small>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
