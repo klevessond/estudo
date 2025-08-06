@@ -17,46 +17,94 @@ function EditarUsuario() {
   });
   const [funcionarios, setFuncionarios] = useState([]);
 
-  useEffect(() => {
-    fetch(`http://localhost:8000/usuario/${id}/`)
-      .then(res => res.json())
-      .then(data => setUsuario({
+useEffect(() => {
+  console.log('🔄 Buscando dados do usuário e funcionários para ID:', id);
+
+
+  fetch(`http://localhost:8000/usuario/${id}/`)
+    .then(res => {
+      console.log('📦 Resposta do usuário recebida:', res);
+      return res.json();
+    })
+    .then(data => {
+      const cod_funcionario = data.profile?.cod_funcionario?.toString() || '';
+      console.log('🧠 Dados do usuário:', data);
+      setUsuario({
         ...usuario,
         username: data.username || '',
         email: data.email || '',
         first_name: data.first_name || '',
         last_name: data.last_name || '',
-        telefone: data.telefone || '',
-        funcionario: data.funcionario || ''
-      }));
+        telefone: data.profile?.phone || '',
+       funcionario: cod_funcionario
+      });
 
-    fetch("http://localhost:8000/funcionarios/")
-      .then(res => res.json())
-      .then(data => setFuncionarios(data.funcionarios_sql || []));
-  }, [id]);
+      // Buscar a lista geral de funcionários
+      fetch("http://localhost:8000/funcionarios/")
+        .then(res => res.json())
+        .then(dataFunc => {
+          let lista = dataFunc.funcionarios_sql || [];
+
+          // Se o funcionário do usuário não estiver na lista, buscá-lo separadamente
+          if (cod_funcionario && !lista.some(f => f.CodFuncionario.toString() === cod_funcionario)) {
+            fetch(`http://localhost:8000/funcionarios/${cod_funcionario}/`)
+              .then(res => res.json())
+              .then(func => {
+                console.log("👤 Funcionário individual adicionado:", func);
+                lista.push(func); // Adiciona o funcionário ausente
+                setFuncionarios(lista);
+              });
+          } else {
+            setFuncionarios(lista);
+          }
+        });
+    })
+    .catch(err => console.error('❌ Erro ao buscar usuário ou funcionários:', err));
+}, [id]);
 
   const handleSubmit = (e) => {
-    e.preventDefault();
+  e.preventDefault();
+  console.log('🚀 Enviando dados do formulário:', usuario);
 
-    if (usuario.password !== usuario.confirmPassword) {
-      alert("As senhas não coincidem!");
-      return;
-    }
-
-    fetch(`http://localhost:8000/usuario/${id}/`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(usuario),
-    })
-      .then(res => {
-        if (res.ok) {
-          alert("Usuário atualizado com sucesso!");
-          navigate('/cadastro_user');
-        } else {
-          alert("Erro ao atualizar usuário.");
-        }
-      });
+  if (usuario.password !== usuario.confirmPassword) {
+    alert("As senhas não coincidem!");
+    return;
+  }
+    // Só inclui a senha se ela for informada
+  if (usuario.password && usuario.password.trim() !== "") {
+    payload.password = usuario.password;
+  }
+  // Monta o payload com os campos obrigatórios
+  const payload = {
+    username: usuario.username,
+    email: usuario.email,
+    first_name: usuario.first_name,
+    last_name: usuario.last_name,
+    telefone: usuario.telefone,
+    funcionario: usuario.funcionario,
   };
+
+  // Só inclui senha se foi informada
+  if (usuario.password) {
+    payload.password = usuario.password;
+  }
+
+  fetch(`http://localhost:8000/usuario/${id}/`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify(payload),
+  })
+    .then(res => {
+      console.log('📨 Resposta do PUT:', res);
+      if (res.ok) {
+        alert("Usuário atualizado com sucesso!");
+        navigate('/cadastro_user');
+      } else {
+        alert("Erro ao atualizar usuário.");
+      }
+    })
+    .catch(err => console.error('❌ Erro ao atualizar usuário:', err));
+};
 
  return (
   <div className="editar-user-container">
@@ -134,13 +182,15 @@ function EditarUsuario() {
 
       <div className="form-group">
         <select
+          name="funcionario"
           value={usuario.funcionario}
           onChange={e => setUsuario({ ...usuario, funcionario: e.target.value })}
+          required
         >
-          <option value="">Selecione o Funcionário</option>
-          {funcionarios.map(f => (
+          <option value="">Selecione um funcionário</option>
+          {funcionarios.map((f) => (
             <option key={f.CodFuncionario} value={f.CodFuncionario}>
-              {f.Funcionario.trim()}
+              {f.Funcionario}
             </option>
           ))}
         </select>

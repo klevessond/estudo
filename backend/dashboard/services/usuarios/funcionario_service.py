@@ -54,3 +54,19 @@ def obter_funcionario_por_codigo(cod_funcionario):
         columns = [col[0] for col in cursor.description]
         rows = cursor.fetchall()
         return dict(zip(columns, rows[0])) if rows else None
+
+def get_funcionario_por_codigo(cod_funcionario):
+    with connections['dados_industria'].cursor() as cursor:
+        cursor.execute("""
+            SELECT CodFuncionario, Funcionario
+            FROM Funcionario
+            WHERE CodFuncionario = %s
+              AND Ativo = 1
+        """, [cod_funcionario])
+        row = cursor.fetchone()
+        if row:
+            return {
+                "CodFuncionario": row[0],
+                "Funcionario": row[1]
+            }
+        return None

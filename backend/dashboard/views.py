@@ -24,7 +24,7 @@ from rest_framework.validators import UniqueValidator
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser
 from .models import Profile
-from dashboard.services.usuarios.funcionario_service import listar_funcionarios
+from dashboard.services.usuarios.funcionario_service import listar_funcionarios,get_funcionario_por_codigo
 
 
 
@@ -565,3 +565,11 @@ class UsuarioDetailView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except User.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+def funcionario_detail(request, cod_funcionario):
+    if request.method == 'GET':
+        funcionario = get_funcionario_por_codigo(cod_funcionario)
+        if funcionario:
+            return JsonResponse(funcionario, safe=False)
+        else:
+            return JsonResponse({'error': 'Funcionário não encontrado'}, status=404)
