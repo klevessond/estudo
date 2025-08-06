@@ -51,7 +51,7 @@ function EditarUsuario() {
       .then(res => {
         if (res.ok) {
           alert("Usuário atualizado com sucesso!");
-          navigate('/uscadastro_users');
+          navigate('/cadastro_user');
         } else {
           alert("Erro ao atualizar usuário.");
         }

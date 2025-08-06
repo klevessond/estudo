@@ -491,6 +491,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        print("dados de cadastro",validated_data)
         phone = validated_data.pop('phone')
         cod_funcionario = validated_data.pop('cod_funcionario')
         cod_unid_gestora = validated_data.pop('cod_unid_gestora')
@@ -508,18 +509,17 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         )
         user.set_password(validated_data['password'])
         user.save()
-        Profile.objects.create(
-            user=user,
-            phone=phone,
-            cod_funcionario=cod_funcionario,
-            cod_unid_gestora=cod_unid_gestora,
-            entregador=entregador,
-            supervisor=supervisor,
-            transportador=transportador,
-            transportador_aux=transportador_aux,
-            vendedor=vendedor,
-            cobrador=cobrador
-        )
+        profile, created = Profile.objects.get_or_create(user=user)
+        profile.phone = phone
+        profile.cod_funcionario = cod_funcionario
+        profile.cod_unid_gestora = cod_unid_gestora
+        profile.entregador = entregador
+        profile.supervisor = supervisor
+        profile.transportador = transportador
+        profile.transportador_aux = transportador_aux
+        profile.vendedor = vendedor
+        profile.cobrador = cobrador
+        profile.save()
         return user
 
 class RegisterView(APIView):

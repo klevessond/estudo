@@ -119,7 +119,7 @@ useEffect(() => {
 
       if (response.ok) {
         alert('Usuário cadastrado com sucesso!');
-        navigate('/login');
+        navigate('/cadastro_user');
       } else {
         const errorData = await response.json();
         setErrors(errorData);
