@@ -187,3 +187,10 @@ button.submit-button:hover {
   border-radius: 5px;
 }
 
+.lista-usuarios {
+  max-height: 700px;
+  overflow-y: auto;
+  padding-right: 10px;
+  scroll-behavior: smooth;
+}
+

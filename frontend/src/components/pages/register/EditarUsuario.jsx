@@ -120,69 +120,82 @@ function EditarUsuario() {
     <div className="editar-user-container">
       <form className="editar-user-form" onSubmit={handleSubmit}>
         <div className="form-group">
-          <input
-            type="text"
-            placeholder="Usuário"
-            value={usuario.username}
-            onChange={e => setUsuario({ ...usuario, username: e.target.value })}
-          />
-        </div>
-        <div className="form-group">
-          <input
-            type="email"
-            placeholder="Email"
-            value={usuario.email}
-            onChange={e => setUsuario({ ...usuario, email: e.target.value })}
-          />
-        </div>
-        <div className="form-group">
-          <input
-            type="text"
-            placeholder="Nome"
-            value={usuario.first_name}
-            onChange={e => setUsuario({ ...usuario, first_name: e.target.value })}
-          />
-        </div>
-        <div className="form-group">
-          <input
-            type="text"
-            placeholder="Sobrenome"
-            value={usuario.last_name}
-            onChange={e => setUsuario({ ...usuario, last_name: e.target.value })}
-          />
-        </div>
-        <div className="form-group">
-          <input
-            type="tel"
-            placeholder="Telefone"
-            value={usuario.telefone}
-            onChange={e => {
-              let value = e.target.value.replace(/\D/g, '');
-              if (value.length > 11) value = value.substring(0, 11);
-              if (value.length > 0) {
-                value = `(${value.substring(0, 2)}) ${value.substring(2)}`;
-                if (value.length > 9) value = `${value.substring(0, 10)}-${value.substring(10)}`;
-              }
-              setUsuario({ ...usuario, telefone: value });
-            }}
-          />
-        </div>
-        <div className="form-group">
-          <input
-            type="password"
-            placeholder="Senha"
-            value={usuario.password}
-            onChange={e => setUsuario({ ...usuario, password: e.target.value })}
-          />
-        </div>
-        <div className="form-group">
-          <input
-            type="password"
-            placeholder="Confirmar Senha"
-            value={usuario.confirmPassword}
-            onChange={e => setUsuario({ ...usuario, confirmPassword: e.target.value })}
-          />
-        </div>
+  <label>Usuário:</label>
+  <input
+    type="text"
+    placeholder="Usuário"
+    value={usuario.username}
+    onChange={e => setUsuario({ ...usuario, username: e.target.value })}
+  />
+</div>
+
+<div className="form-group">
+  <label>Email:</label>
+  <input
+    type="email"
+    placeholder="Email"
+    value={usuario.email}
+    onChange={e => setUsuario({ ...usuario, email: e.target.value })}
+  />
+</div>
+
+<div className="form-group">
+  <label>Nome:</label>
+  <input
+    type="text"
+    placeholder="Nome"
+    value={usuario.first_name}
+    onChange={e => setUsuario({ ...usuario, first_name: e.target.value })}
+  />
+</div>
+
+<div className="form-group">
+  <label>Sobrenome:</label>
+  <input
+    type="text"
+    placeholder="Sobrenome"
+    value={usuario.last_name}
+    onChange={e => setUsuario({ ...usuario, last_name: e.target.value })}
+  />
+</div>
+
+<div className="form-group">
+  <label>Telefone:</label>
+  <input
+    type="tel"
+    placeholder="Telefone"
+    value={usuario.telefone}
+    onChange={e => {
+      let value = e.target.value.replace(/\D/g, '');
+      if (value.length > 11) value = value.substring(0, 11);
+      if (value.length > 0) {
+        value = `(${value.substring(0, 2)}) ${value.substring(2)}`;
+        if (value.length > 9) value = `${value.substring(0, 10)}-${value.substring(10)}`;
+      }
+      setUsuario({ ...usuario, telefone: value });
+    }}
+  />
+</div>
+
+<div className="form-group">
+  <label>Senha:</label>
+  <input
+    type="password"
+    placeholder="Senha"
+    value={usuario.password}
+    onChange={e => setUsuario({ ...usuario, password: e.target.value })}
+  />
+</div>
+
+<div className="form-group">
+  <label>Confirmar Senha:</label>
+  <input
+    type="password"
+    placeholder="Confirmar Senha"
+    value={usuario.confirmPassword}
+    onChange={e => setUsuario({ ...usuario, confirmPassword: e.target.value })}
+  />
+</div>
 
         <div className="form-group funcionario-search">
           <label>Funcionário: <span className="required">*</span></label>

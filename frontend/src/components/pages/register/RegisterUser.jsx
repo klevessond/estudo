@@ -119,6 +119,14 @@ useEffect(() => {
 
       if (response.ok) {
         alert('Usuário cadastrado com sucesso!');
+        setFormData({
+          username: '', email: '', first_name: '', last_name: '', phone: '',
+          password: '', password2: '', cod_funcionario: '', cod_unid_gestora: '',
+          entregador: false, supervisor: false, transportador: false, transportador_aux: false,
+          vendedor: false, cobrador: false, funcionario_nome: ''
+        });
+        setSearchTerm('');
+        setUsuarioSelecionado(null);
         navigate('/cadastro_user');
       } else {
         const errorData = await response.json();
@@ -136,19 +144,53 @@ useEffect(() => {
       <div className="register-user-form">
         <h2 className="register-title">Cadastro de Usuário</h2>
         <form onSubmit={handleSubmit}>
-          {['username', 'email', 'first_name', 'last_name'].map((field, idx) => (
-            <div className="form-group" key={idx}>
-              <label>{field.replace('_', ' ')}:</label>
+            <div className="form-group">
+              <label>Usuário:</label>
               <input
                 type="text"
-                name={field}
-                value={formData[field]}
+                name="username"
+                value={formData.username}
                 onChange={handleChange}
                 required
               />
-              {errors[field] && <span className="error">{errors[field]}</span>}
+              {errors.username && <span className="error">{errors.username}</span>}
             </div>
-          ))}
+
+            <div className="form-group">
+              <label>Email:</label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+              />
+              {errors.email && <span className="error">{errors.email}</span>}
+            </div>
+
+            <div className="form-group">
+              <label>Nome:</label>
+              <input
+                type="text"
+                name="first_name"
+                value={formData.first_name}
+                onChange={handleChange}
+                required
+              />
+              {errors.first_name && <span className="error">{errors.first_name}</span>}
+            </div>
+
+            <div className="form-group">
+              <label>Sobrenome:</label>
+              <input
+                type="text"
+                name="last_name"
+                value={formData.last_name}
+                onChange={handleChange}
+                required
+              />
+              {errors.last_name && <span className="error">{errors.last_name}</span>}
+            </div>
 
           <div className="form-group">
             <label>Telefone:</label>
