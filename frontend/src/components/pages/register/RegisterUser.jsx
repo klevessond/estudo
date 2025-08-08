@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './RegisterUser.css';
-
-
+import EditarUsuario from './EditarUsuario'; // (1) importar form de edição
 
 const RegisterUser = () => {
   const [formData, setFormData] = useState({
@@ -22,6 +21,10 @@ const RegisterUser = () => {
   const navigate = useNavigate();
   const apiBase = `http://${window.location.hostname}:8000`;
 
+  // (2) Estados novos — controle da visão da coluna da direita
+  const [mode, setMode] = useState('list'); // 'list' | 'edit'
+  const [editId, setEditId] = useState(null);
+
   const handleUsuarioClick = (usuario) => {
     setUsuarioSelecionado(usuario);
     setFormData({
@@ -37,27 +40,33 @@ const RegisterUser = () => {
     setSearchTerm('');
   };
 
-  // Busca funcionários com base no campo de busca
-useEffect(() => {
-  if (searchTerm.length > 2) {
-    fetch(`http://localhost:8000/funcionarios/?search=${searchTerm}`)
+  // Busca funcionários conforme digita
+  useEffect(() => {
+    if (searchTerm.length > 2) {
+      fetch(`http://localhost:8000/funcionarios/?search=${encodeURIComponent(searchTerm)}`)
+        .then(response => response.json())
+        .then(data => {
+          setFuncionarios(data.funcionarios_sql);
+        })
+        .catch(error => console.error('Erro ao buscar funcionários:', error));
+    }
+  }, [searchTerm]);
+
+  // Extra: listagem extraída para poder recarregar após salvar edição
+  const fetchUsuariosDjango = useCallback(() => {
+    fetch('http://localhost:8000/funcionarios/')
       .then(response => response.json())
       .then(data => {
-        setFuncionarios(data.funcionarios_sql);
+        setUsuariosDjango(data.usuarios_django);
       })
-      .catch(error => console.error('Erro ao buscar funcionários:', error));
-  }
-}, [searchTerm]);
+      .catch(error => console.error('Erro ao carregar usuários Django:', error));
+  }, []);
 
-// Carrega todos os usuários do Django ao iniciar o componente
-useEffect(() => {
-  fetch('http://localhost:8000/funcionarios/')
-    .then(response => response.json())
-    .then(data => {
-      setUsuariosDjango(data.usuarios_django);
-    })
-    .catch(error => console.error('Erro ao carregar usuários Django:', error));
-}, []);
+  // Carrega a listagem ao montar
+  useEffect(() => {
+    fetchUsuariosDjango();
+  }, [fetchUsuariosDjango]);
+
   const handleSelectFuncionario = (funcionario) => {
     setFormData({
       ...formData,
@@ -111,9 +120,7 @@ useEffect(() => {
       const dataToSend = { ...formData, phone: formData.phone.replace(/\D/g, '') };
       const response = await fetch(`${apiBase}/register/`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataToSend)
       });
 
@@ -139,58 +146,77 @@ useEffect(() => {
     }
   };
 
+  // (3) Handlers de edição
+  const handleEditClick = (id) => {
+    if (!id) return;
+    setEditId(id);
+    setMode('edit');
+  };
+
+  const handleSaved = () => {
+    setMode('list');
+    setEditId(null);
+    fetchUsuariosDjango(); // recarrega a lista após salvar
+  };
+
+  const handleCancel = () => {
+    setMode('list');
+    setEditId(null);
+  };
+
   return (
     <div className="register-user-container">
+      {/* ESQUERDA: Formulário de cadastro (inalterado) */}
       <div className="register-user-form">
         <h2 className="register-title">Cadastro de Usuário</h2>
         <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>Usuário:</label>
-              <input
-                type="text"
-                name="username"
-                value={formData.username}
-                onChange={handleChange}
-                required
-              />
-              {errors.username && <span className="error">{errors.username}</span>}
-            </div>
+          <div className="form-group">
+            <label>Usuário:</label>
+            <input
+              type="text"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              required
+            />
+            {errors.username && <span className="error">{errors.username}</span>}
+          </div>
 
-            <div className="form-group">
-              <label>Email:</label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
-              {errors.email && <span className="error">{errors.email}</span>}
-            </div>
+          <div className="form-group">
+            <label>Email:</label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              required
+            />
+            {errors.email && <span className="error">{errors.email}</span>}
+          </div>
 
-            <div className="form-group">
-              <label>Nome:</label>
-              <input
-                type="text"
-                name="first_name"
-                value={formData.first_name}
-                onChange={handleChange}
-                required
-              />
-              {errors.first_name && <span className="error">{errors.first_name}</span>}
-            </div>
+          <div className="form-group">
+            <label>Nome:</label>
+            <input
+              type="text"
+              name="first_name"
+              value={formData.first_name}
+              onChange={handleChange}
+              required
+            />
+            {errors.first_name && <span className="error">{errors.first_name}</span>}
+          </div>
 
-            <div className="form-group">
-              <label>Sobrenome:</label>
-              <input
-                type="text"
-                name="last_name"
-                value={formData.last_name}
-                onChange={handleChange}
-                required
-              />
-              {errors.last_name && <span className="error">{errors.last_name}</span>}
-            </div>
+          <div className="form-group">
+            <label>Sobrenome:</label>
+            <input
+              type="text"
+              name="last_name"
+              value={formData.last_name}
+              onChange={handleChange}
+              required
+            />
+            {errors.last_name && <span className="error">{errors.last_name}</span>}
+          </div>
 
           <div className="form-group">
             <label>Telefone:</label>
@@ -233,6 +259,7 @@ useEffect(() => {
               required
             />
             {errors.cod_funcionario && <span className="error">{errors.cod_funcionario}</span>}
+
             {formData.funcionario_nome && (
               <div className="selected-funcionario">
                 <span>{formData.funcionario_nome}</span>
@@ -246,6 +273,7 @@ useEffect(() => {
                 >×</button>
               </div>
             )}
+
             {showFuncionarios && funcionarios.length > 0 && (
               <div className="funcionarios-dropdown">
                 <ul>
@@ -270,19 +298,38 @@ useEffect(() => {
         </form>
       </div>
 
+      {/* DIREITA: listagem <-> edição inline (5) Renderização condicional */}
       <div className="register-user-list">
-        <h3>Usuários Cadastrados</h3>
-        <ul className="lista-usuarios">
-          {usuariosDjango.map(user => (
-            <li key={user.id} onClick={() => handleUsuarioClick(user)}>
-              <strong>{user.username}</strong><br />
-              <small>{user.email}</small>
-              <button onClick={() => navigate(`/editar-usuario/${user.id}`)}>
-                Editar
-              </button>
-            </li>
-          ))}
-        </ul>
+        {mode === 'list' && (
+          <>
+            <h3>Usuários Cadastrados</h3>
+            <ul className="lista-usuarios">
+              {usuariosDjango.map(user => (
+                <li key={user.id} onClick={() => handleUsuarioClick(user)}>
+                  <strong>{user.username}</strong><br />
+                  <small>{user.email}</small>
+                  {/* (4) Botão Editar: agora troca a visão, não navega */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditClick(user.id);
+                    }}
+                  >
+                    Editar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        {mode === 'edit' && editId && (
+          <EditarUsuario
+            id={editId}
+            onSaved={handleSaved}
+            onCancel={handleCancel}
+          />
+        )}
       </div>
     </div>
   );
