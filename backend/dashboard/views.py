@@ -6,18 +6,16 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import ObjetivoMensal,ObjetivoMensalVendedor
-from .serializers import ObjetivoMensalSerializer, CustomUserSerializer
+from .serializers import ObjetivoMensalSerializer, CustomUserSerializer,MeSerializer
 from datetime import datetime,date
 from decimal import Decimal
 from collections import defaultdict
 from dashboard.services.indicadores.cache_utils import get_cached_data
-from rest_framework.decorators import api_view
 from django.utils.dateparse import parse_date
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
-
+from rest_framework.decorators import api_view, permission_classes
 User = get_user_model()
-
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
@@ -573,3 +571,9 @@ def funcionario_detail(request, cod_funcionario):
             return JsonResponse(funcionario, safe=False)
         else:
             return JsonResponse({'error': 'Funcionário não encontrado'}, status=404)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def me(request):
+    return Response(MeSerializer(request.user).data)

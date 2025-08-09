@@ -39,3 +39,25 @@ class CustomUserSerializer(serializers.ModelSerializer):
         profile.save()
 
         return instance
+    
+class MeSerializer(serializers.ModelSerializer):
+    profile = ProfileSerializer()
+    roles = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "email", "first_name", "last_name", "is_superuser", "profile", "roles"]
+
+    def get_roles(self, obj):
+        p = getattr(obj, "profile", None)
+        if not p:
+            return []
+        roles = []
+        if p.entregador: roles.append("entregador")
+        if p.supervisor: roles.append("supervisor")
+        if p.transportador: roles.append("transportador")
+        if p.transportador_aux: roles.append("transportador_aux")
+        if p.vendedor: roles.append("vendedor")
+        if p.cobrador: roles.append("cobrador")
+        if obj.is_superuser: roles.append("admin")
+        return roles

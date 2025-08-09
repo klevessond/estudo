@@ -12,3 +12,19 @@
     margin: 0;
     line-height: 1.1;
 }
+.header-user-muted { color: #666; font-size: 0.9rem; }
+.header-login-link { text-decoration: none; color: #2a6ae9; }
+
+.header-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #ddd;
+  font-size: 12px;
+  text-transform: lowercase;
+  background: #f7f7f7;
+}
+
+/* exemplos de cores por papel (opcional) */
+.header-badge-admin { border-color: #222; background: #222; color: #fff; }
+.header-badge-supervisor { border-color: #1d7; background: #1d7; color: #fff; }
+.header-badge-vendedor { border-color: #27f; background: #27f; color: #fff; }
