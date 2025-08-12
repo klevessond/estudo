@@ -189,3 +189,17 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': False,
 }
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "loggers": {
+        # log para todos os módulos do seu app
+        "dashboard": {"handlers": ["console"], "level": "INFO"},
+        # ou, genericamente:
+        "": {"handlers": ["console"], "level": "INFO"},
+    },
+}

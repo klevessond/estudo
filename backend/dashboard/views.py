@@ -23,6 +23,10 @@ from rest_framework import status
 from rest_framework.permissions import IsAdminUser
 from .models import Profile
 from dashboard.services.usuarios.funcionario_service import listar_funcionarios,get_funcionario_por_codigo
+import logging
+from dashboard.roles import get_role_context  
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -87,6 +91,7 @@ def get_dados_excel(request):
         return JsonResponse({'erro': str(e)}, status=500)
 
 class IndicadoresView(APIView):
+    
     #permission_classes = [IsAuthenticated]
     def get(self, request):
         data_inicio = request.GET.get('de')
@@ -95,6 +100,21 @@ class IndicadoresView(APIView):
 
         if not data_inicio or not data_fim:
             return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
+
+         # ===== LOG DO PERFIL QUE ESTÁ FAZENDO A CHAMADA =====
+        ctx = get_role_context(request.user)
+        logger.info(
+            "[IndicadoresView] user=%s id=%s roles=%s cod_funcionario=%s cod_unid_gestora=%s de=%s ate=%s ip=%s",
+            getattr(request.user, "username", None),
+            getattr(request.user, "id", None),
+            ",".join(ctx.roles) if ctx.roles else "-",
+            ctx.cod_funcionario,
+            ctx.cod_unid_gestora,
+            data_inicio,
+            data_fim,
+            request.META.get("REMOTE_ADDR"),
+        )
+        # ====================================================
 
         #  OBJETIVOS
         # Buscar objetivo peso e positivação do SQL Server
