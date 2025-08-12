@@ -32,11 +32,30 @@ class CustomUserSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
 
-        # Atualiza dados do perfil
-        profile = instance.profile
-        for attr, value in profile_data.items():
-            setattr(profile, attr, value)
-        profile.save()
+         # Atualiza dados do Profile com validação de unicidade do cod_funcionario
+        if profile_data is not None:
+            profile, _ = Profile.objects.get_or_create(user=instance)
+
+            # valida cod_funcionario único (exceto para o próprio usuário)
+            if 'cod_funcionario' in profile_data:
+                cod = profile_data['cod_funcionario']
+                if cod is not None:
+                    exists = Profile.objects.filter(cod_funcionario=cod).exclude(user=instance).first()
+                    if exists:
+                        raise serializers.ValidationError({
+                            'profile': {'cod_funcionario': 'Este funcionário já está vinculado a outro usuário.'}
+                        })
+                profile.cod_funcionario = cod  # pode ser None (liberar vínculo)
+
+            # demais campos do profile
+            for field in [
+                'phone', 'cod_unid_gestora', 'entregador', 'supervisor',
+                'transportador', 'transportador_aux', 'vendedor', 'cobrador'
+            ]:
+                if field in profile_data:
+                    setattr(profile, field, profile_data[field])
+
+            profile.save()
 
         return instance
     

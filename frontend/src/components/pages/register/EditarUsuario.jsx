@@ -10,27 +10,39 @@ function EditarUsuario({ id, onSaved, onCancel }) {
     telefone: '',
     password: '',
     confirmPassword: '',
-    funcionario: '',
-    funcionario_nome: ''
+    funcionario: '',         // CodFuncionario (string)
+    funcionario_nome: '',    // apenas exibição
+
+    // dados que vamos ENVIAR no profile (sem exibir inputs)
+    cod_unid_gestora: null,
+    entregador: false,
+    supervisor: false,
+    transportador: false,
+    transportador_aux: false,
+    vendedor: false,
+    cobrador: false,
   });
 
   const [searchTerm, setSearchTerm] = useState('');
   const [showFuncionarios, setShowFuncionarios] = useState(false);
   const [funcionarios, setFuncionarios] = useState([]);
 
-  // Buscar funcionário ao digitar
+  const [errors, setErrors] = useState({ global: null, fields: {} });
+
+  // Busca funcionários ao digitar
   useEffect(() => {
     if (searchTerm.length > 2) {
       fetch(`http://localhost:8000/funcionarios/?search=${encodeURIComponent(searchTerm)}`)
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => setFuncionarios(data.funcionarios_sql || []))
-        .catch(error => console.error('Erro ao buscar funcionários:', error));
+        .catch(err => console.error('Erro ao buscar funcionários:', err));
     }
   }, [searchTerm]);
 
-  // Buscar dados do usuário (usa o id vindo por props)
+  // Carrega dados do usuário + lista inicial de funcionários
   useEffect(() => {
     if (!id) return;
+
     fetch(`http://localhost:8000/usuario/${id}/`)
       .then(res => {
         if (!res.ok) throw new Error(`Erro ao buscar usuário: ${res.status}`);
@@ -44,35 +56,49 @@ function EditarUsuario({ id, onSaved, onCancel }) {
           email: data.email || '',
           first_name: data.first_name || '',
           last_name: data.last_name || '',
-          telefone: data.profile?.phone || '',
-          funcionario: cod_funcionario
+          telefone: data.profile?.phone ? formatPhone(data.profile.phone) : '',
+          funcionario: cod_funcionario,
+
+          // flags atuais do PROFILE (mantemos enquanto não trocar de funcionário)
+          cod_unid_gestora: data.profile?.cod_unid_gestora ?? null,
+          entregador: !!data.profile?.entregador,
+          supervisor: !!data.profile?.supervisor,
+          transportador: !!data.profile?.transportador,
+          transportador_aux: !!data.profile?.transportador_aux,
+          vendedor: !!data.profile?.vendedor,
+          cobrador: !!data.profile?.cobrador,
         }));
 
-        // Garante que o funcionário atual esteja na lista
-        fetch('http://localhost:8000/funcionarios/')
+        // Lista base de funcionários e tenta obter o nome do atual
+        fetch("http://localhost:8000/funcionarios/")
           .then(r => r.json())
-          .then(dataFunc => {
-            let lista = dataFunc.funcionarios_sql || [];
-            if (cod_funcionario && !lista.some(f => f.CodFuncionario?.toString() === cod_funcionario)) {
+          .then(listData => {
+            let lista = listData.funcionarios_sql || [];
+            const jaTem = lista.some(f => f.CodFuncionario?.toString() === cod_funcionario);
+
+            if (cod_funcionario && !jaTem) {
+              // Busca individual se não veio na lista
               fetch(`http://localhost:8000/funcionarios/${cod_funcionario}/`)
                 .then(r => r.json())
                 .then(func => {
                   if (func && func.CodFuncionario) lista.push(func);
                   setFuncionarios(lista);
-                  setUsuario(prev => ({ ...prev, funcionario_nome: func?.Funcionario || '' }));
+                  const nome = func?.Funcionario || '';
+                  setUsuario(prev => ({ ...prev, funcionario_nome: nome }));
                 })
                 .catch(() => setFuncionarios(lista));
             } else {
               setFuncionarios(lista);
               const func = lista.find(f => f.CodFuncionario?.toString() === cod_funcionario);
-              if (func) setUsuario(prev => ({ ...prev, funcionario_nome: func.Funcionario }));
+              if (func) {
+                setUsuario(prev => ({ ...prev, funcionario_nome: func.Funcionario }));
+              }
             }
           });
       })
-      .catch(err => console.error('Erro ao buscar usuário ou funcionários:', err));
+      .catch(err => console.error('Erro ao buscar usuário/funcionários:', err));
   }, [id]);
 
-  // Submit do formulário
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -86,11 +112,20 @@ function EditarUsuario({ id, onSaved, onCancel }) {
       email: usuario.email,
       first_name: usuario.first_name,
       last_name: usuario.last_name,
-      telefone: usuario.telefone,
-      funcionario: usuario.funcionario,
+      profile: {
+        phone: (usuario.telefone || '').replace(/\D/g, ''),
+        cod_funcionario: usuario.funcionario ? parseInt(usuario.funcionario, 10) : null,
+        cod_unid_gestora: usuario.cod_unid_gestora != null ? parseInt(usuario.cod_unid_gestora, 10) : null,
+        entregador: !!usuario.entregador,
+        supervisor: !!usuario.supervisor,
+        transportador: !!usuario.transportador,
+        transportador_aux: !!usuario.transportador_aux,
+        vendedor: !!usuario.vendedor,
+        cobrador: !!usuario.cobrador,
+      },
     };
 
-    if (usuario.password && usuario.password.trim() !== "") {
+    if (usuario.password && usuario.password.trim() !== '') {
       payload.password = usuario.password;
     }
 
@@ -99,19 +134,77 @@ function EditarUsuario({ id, onSaved, onCancel }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
-      .then(res => {
+      .then(async res => {
         if (res.ok) {
           alert("Usuário atualizado com sucesso!");
-          onSaved?.(); // volta para a listagem no pai
-        } else {
-          alert("Erro ao atualizar usuário.");
+          onSaved?.();
+          return;
         }
+        // Tenta ler JSON de erro
+        let data = {};
+        try { data = await res.json(); } catch { /* mantém vazio */ }
+
+        // Extrai mensagem amigável (ex.: profile.cod_funcionario já usado)
+        const msg =
+          data?.profile?.cod_funcionario?.[0] ||
+          data?.detail ||
+          'Erro ao atualizar usuário.';
+
+        // Preenche estado de erros para mostrar na página
+        setErrors({
+          global: msg,
+          fields: {
+            cod_funcionario: data?.profile?.cod_funcionario?.[0],
+          },
+        });
       })
+
       .catch(err => console.error('Erro ao atualizar usuário:', err));
+  };
+
+  // Quando escolher um funcionário, pegamos os flags dele e **aplicamos ao profile**
+  const escolherFuncionario = (func) => {
+    setUsuario(prev => ({
+      ...prev,
+      funcionario: func.CodFuncionario?.toString() || '',
+      funcionario_nome: func.Funcionario || '',
+      cod_unid_gestora: func.UnidGestora ?? null,
+
+      // Deriva perfis a partir do funcionário
+      entregador: !!func.Entregador,
+      supervisor: !!func.Supervisor,
+      transportador: !!func.Transportador,
+      transportador_aux: !!func.TransportadorAux,
+      vendedor: !!func.Vendedor,
+      cobrador: !!func.Cobrador,
+    }));
+    setSearchTerm(func.Funcionario || '');
+    setShowFuncionarios(false);
+    setErrors({ global: null, fields: {} });
+  };
+
+  const onChangeTelefone = (e) => {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 11) value = value.substring(0, 11);
+    setUsuario(prev => ({ ...prev, telefone: formatPhone(value) }));
   };
 
   return (
     <div className="editar-user-container">
+      {errors.global && (
+  <div className="alert-error" role="alert">
+    <span>{errors.global}</span>
+    <button
+      type="button"
+      className="alert-close"
+      onClick={() => setErrors({ global: null, fields: {} })}
+      aria-label="Fechar alerta"
+    >
+      ×
+    </button>
+  </div>
+)}
+
       <form className="editar-user-form" onSubmit={handleSubmit}>
         <div className="form-group">
           <label>Usuário:</label>
@@ -157,22 +250,15 @@ function EditarUsuario({ id, onSaved, onCancel }) {
           <label>Telefone:</label>
           <input
             type="tel"
-            placeholder="Telefone"
+            placeholder="(00) 00000-0000"
             value={usuario.telefone}
-            onChange={e => {
-              let value = e.target.value.replace(/\D/g, '');
-              if (value.length > 11) value = value.substring(0, 11);
-              if (value.length > 0) {
-                value = `(${value.substring(0, 2)}) ${value.substring(2)}`;
-                if (value.length > 9) value = `${value.substring(0, 10)}-${value.substring(10)}`;
-              }
-              setUsuario({ ...usuario, telefone: value });
-            }}
+            onChange={onChangeTelefone}
+            maxLength={15}
           />
         </div>
 
         <div className="form-group">
-          <label>Senha:</label>
+          <label>Senha (opcional):</label>
           <input
             type="password"
             placeholder="Senha"
@@ -191,8 +277,9 @@ function EditarUsuario({ id, onSaved, onCancel }) {
           />
         </div>
 
+        {/* Busca/seleção do funcionário (sem checkboxes de perfil) */}
         <div className="form-group funcionario-search">
-          <label>Funcionário: <span className="required">*</span></label>
+          <label>Funcionário:</label>
           <input
             type="text"
             value={searchTerm}
@@ -213,7 +300,11 @@ function EditarUsuario({ id, onSaved, onCancel }) {
                   setUsuario(prev => ({
                     ...prev,
                     funcionario: '',
-                    funcionario_nome: ''
+                    funcionario_nome: '',
+                    // se limpar, também podemos “zerar” os perfis, se fizer sentido:
+                    // entregador: false, supervisor: false, transportador: false,
+                    // transportador_aux: false, vendedor: false, cobrador: false,
+                    // cod_unid_gestora: null,
                   }));
                   setSearchTerm('');
                 }}
@@ -225,23 +316,27 @@ function EditarUsuario({ id, onSaved, onCancel }) {
             <div className="funcionarios-dropdown">
               <ul>
                 {funcionarios.map(func => (
-                  <li key={func.CodFuncionario} onClick={() => {
-                    setUsuario(prev => ({
-                      ...prev,
-                      funcionario: func.CodFuncionario.toString(),
-                      funcionario_nome: func.Funcionario
-                    }));
-                    setSearchTerm(func.Funcionario);
-                    setShowFuncionarios(false);
-                  }}>
+                  <li key={func.CodFuncionario} onClick={() => escolherFuncionario(func)}>
                     <div className="funcionario-name">{func.Funcionario}</div>
+                    <div className="funcionario-roles">
+                      {func.Vendedor && <span>Vendedor</span>}
+                      {func.Supervisor && <span>Supervisor</span>}
+                      {func.Transportador && <span>Transportador</span>}
+                      {func.Entregador && <span>Entregador</span>}
+                      {func.TransportadorAux && <span>Aux. Transp.</span>}
+                      {func.Cobrador && <span>Cobrador</span>}
+                    </div>
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
+          {/* Campo oculto para validação no submit */}
           <input type="hidden" name="funcionario" value={usuario.funcionario} required />
+          {errors.fields?.cod_funcionario && (
+            <span className="field-error">{errors.fields.cod_funcionario}</span>
+          )}
         </div>
 
         <div className="actions">
@@ -251,6 +346,17 @@ function EditarUsuario({ id, onSaved, onCancel }) {
       </form>
     </div>
   );
+}
+
+// Helpers
+function formatPhone(digits) {
+  const v = (digits || '').replace(/\D/g, '');
+  if (!v) return '';
+  const isNine = v.length > 10;
+  const ddd = v.slice(0, 2);
+  const p1 = isNine ? v.slice(2, 7) : v.slice(2, 6);
+  const p2 = isNine ? v.slice(7, 11) : v.slice(6, 10);
+  return `(${ddd}) ${p1}${p2 ? '-' + p2 : ''}`;
 }
 
 export default EditarUsuario;

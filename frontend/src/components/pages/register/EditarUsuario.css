@@ -69,3 +69,29 @@ button.submit-button:hover {
   margin-bottom: 4px;
   color: #333;
 }
+
+.alert-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fdecea;
+  color: #611a15;
+  border: 1px solid #f5c6cb;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.alert-close {
+  background: transparent;
+  border: 0;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;
+}
+.field-error {
+  display: block;
+  color: #b00020;
+  font-size: 12px;
+  margin-top: 6px;
+}
