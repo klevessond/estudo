@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
 from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv
+from dashboard.services.indicadores.rotas_simples import rotas_usuario
 # Create your views here.
 
 def get_dados_sql(request):
@@ -89,6 +90,21 @@ def get_dados_excel(request):
         return JsonResponse({'dados': dados})
     except Exception as e:
         return JsonResponse({'erro': str(e)}, status=500)
+
+class MinhasRotasSupervisorView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        ctx = get_role_context(request.user)
+        rotas = rotas_usuario(ctx)  # -> None (sem filtro) ou [1,2,3]
+        return Response({
+            "papel": "supervisor" if ctx.is_supervisor else ("admin" if ctx.is_admin else "outro"),
+            "cod_funcionario": ctx.cod_funcionario,
+            "rotas": rotas if rotas is not None else "sem_filtro"
+        })
+
+
+
 
 class IndicadoresView(APIView):
     
