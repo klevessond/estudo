@@ -1,11 +1,27 @@
 from django.db import connections
 from datetime import datetime, timedelta, date
 
-def buscar_vendido(data_inicio, data_fim):
+def buscar_vendido(data_inicio, data_fim,rotas=None):
+
+    """
+    Se 'rotas' for uma lista de inteiros (ex.: [335, 3, 4, ...]),
+    aplica o filtro: AND Rota.CodRota IN (<lista>) no WHERE principal.
+    """
+
     data_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
     data_fim = datetime.strptime(data_fim, "%Y-%m-%d").date() + timedelta(days=1)
     data_inicio = validar_data(data_inicio)
     data_fim = validar_data(data_fim) + timedelta(days=1)
+
+     # monta o trecho "AND Rota.CodRota IN ( ... )" só se houver rotas
+    rota_filter_sql = ""
+    if rotas:
+        # normaliza para inteiros únicos e em ordem estável
+        rotas_norm = [int(r) for r in rotas if r is not None]
+        rotas_norm = list(dict.fromkeys(rotas_norm))
+        if rotas_norm:
+            rota_filter_sql = f" AND Rota.CodRota IN ({','.join(map(str, rotas_norm))}) "
+
 
     with connections['dados_industria'].cursor() as cursor:
         cursor.execute(f"""
@@ -227,6 +243,7 @@ def buscar_vendido(data_inicio, data_fim):
                 and PedidoVenda.UnidGestora in (select UnidGestora from UnidadeGestora )
                 and PedidoVenda.DataVenda >= @P1
                 and PedidoVenda.DataVenda < @P2
+                    {rota_filter_sql}  -- <<< filtro de rotas (se houver)
                 Group By Rota.CodRota, Rota.Rota, PedidoVenda.UnidGestora, NaturezaOperacao.Venda, NaturezaOperacao.Avaria, NaturezaOperacao.Bonificacao, Cliente.CodCliente
                 ) Consulta
                 Group By CodCampo, Campo
@@ -664,13 +681,14 @@ def buscar_pre_venda(data_inicio, data_fim):
         "detalhado": dados
     }
 
-def buscar_vendas_por_vendedor(data_inicio, data_fim):
-   
+def buscar_vendas_por_vendedor(data_inicio, data_fim,rotas=None):
+      
     data_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
     data_fim = datetime.strptime(data_fim, "%Y-%m-%d").date() + timedelta(days=1)
     data_inicio = validar_data(data_inicio)
     data_fim = validar_data(data_fim)
 
+   
     with connections['dados_industria'].cursor() as cursor:
         cursor.execute(f"""
         DECLARE @P1 datetime2 = '{data_inicio}'; 
@@ -741,7 +759,7 @@ def buscar_vendas_por_vendedor(data_inicio, data_fim):
               and PedidoVenda.UnidGestora in (1, 2, 3, 4, 5, 6, 8, 9, 10)
               and PedidoVenda.DataVenda >= @P1
               and PedidoVenda.DataVenda < @P2
-            group by Funcionario.CodFuncionario, Funcionario.Funcionario, PedidoVenda.UnidGestora, NaturezaOperacao.Venda, Cliente.CodCliente
+              group by Funcionario.CodFuncionario, Funcionario.Funcionario, PedidoVenda.UnidGestora, NaturezaOperacao.Venda, Cliente.CodCliente
         ) Consulta
         GROUP BY CodCampo, Campo
         ORDER BY Campo
