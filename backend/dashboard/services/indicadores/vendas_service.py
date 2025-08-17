@@ -161,6 +161,7 @@ def buscar_vendido(data_inicio, data_fim,rotas=None):
                         and PV.UnidGestora in (select UnidGestora from UnidadeGestora )
                         and PV.DataVenda >= @P1
                         and PV.DataVenda < @P2
+                        and PV.CodVendedor not in(1,190)
                         and R.CodRota = Rota.CodRota
                         and PV.UnidGestora = PedidoVenda.UnidGestora
                         and Nat.Venda = NaturezaOperacao.Venda
@@ -208,6 +209,7 @@ def buscar_vendido(data_inicio, data_fim,rotas=None):
                     and PV.UnidGestora in (select UnidGestora from UnidadeGestora )
                     and PV.DataVenda >= @P1
                     and PV.DataVenda < @P2
+                    and PV.CodVendedor not in(1,190)
                     and R.CodRota = Rota.CodRota
                     and PV.UnidGestora = PedidoVenda.UnidGestora
                     and Nat.Venda = NaturezaOperacao.Venda
@@ -244,6 +246,7 @@ def buscar_vendido(data_inicio, data_fim,rotas=None):
                 and PedidoVenda.DataVenda >= @P1
                 and PedidoVenda.DataVenda < @P2
                     {rota_filter_sql}  -- <<< filtro de rotas (se houver)
+                and PedidoVenda.CodVendedor not in(1,190)
                 Group By Rota.CodRota, Rota.Rota, PedidoVenda.UnidGestora, NaturezaOperacao.Venda, NaturezaOperacao.Avaria, NaturezaOperacao.Bonificacao, Cliente.CodCliente
                 ) Consulta
                 Group By CodCampo, Campo

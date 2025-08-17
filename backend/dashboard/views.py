@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
 from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv
-from dashboard.services.indicadores.rotas_simples import rotas_usuario
+from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario
 # Create your views here.
 
 def get_dados_sql(request):
@@ -132,11 +132,17 @@ class IndicadoresView(APIView):
         )
         # ====================================================
 
+         # 1) Busca as rotas do supervisor (ou None se admin/outro papel)
+        rotas_info = buscar_rotas_usuario(ctx)           # -> {'rotas': None|[...], 'detalhado': [...]}
+        rotas_codigos = rotas_info.get("rotas") if rotas_info else None  # ex.: [335, 3, 4, 7, 8, 10, 12, 13, 304, 307]
+
         #  OBJETIVOS
         # Buscar objetivo peso e positivação do SQL Server
         objetivo = buscar_objetivo_peso_positivacao(data_inicio, data_fim)
         objetivo["objetivo_peso"] = round(objetivo.get("objetivo_peso", 0), 2)
         objetivo["objetivo_positivacao"] = round(objetivo.get("objetivo_positivacao", 0), 2)
+
+
 
         # Buscar objetivo financeiro e mix do banco local
         objetivo_mensal_data = get_objetivo_mensal_serializado(request.user, data_inicio)
@@ -147,7 +153,7 @@ class IndicadoresView(APIView):
         objetivo["objetivo_mix"] = round(float(objetivo_mix or 0), 2)
 
         #  VENDAS REALIZADAS
-        vendido = buscar_vendido(data_inicio, data_fim)
+        vendido = buscar_vendido(data_inicio, data_fim, rotas=rotas_codigos)
         venda_realizada = vendido.get("venda_realizada", 0)
         venda_realizada = float(vendido.get("venda_realizada", 0))
         peso_realizado = vendido.get("peso_realizado", 0)
@@ -155,6 +161,7 @@ class IndicadoresView(APIView):
 
 
         print(f"[DEBUG] Venda realizada {venda_realizada}")
+        print(f"[DEBUG] rotas {rotas_codigos}")
         
          #  VENDAS DO MESMO PERÍODO NO ANO ANTERIOR
         ano_anterior_inicio = ajustar_data_para_ano_anterior(data_inicio)
