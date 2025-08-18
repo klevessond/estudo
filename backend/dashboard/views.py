@@ -135,6 +135,14 @@ class IndicadoresView(APIView):
          # 1) Busca as rotas do supervisor (ou None se admin/outro papel)
         rotas_info = buscar_rotas_usuario(ctx)           # -> {'rotas': None|[...], 'detalhado': [...]}
         rotas_codigos = rotas_info.get("rotas") if rotas_info else None  # ex.: [335, 3, 4, 7, 8, 10, 12, 13, 304, 307]
+        # lista de vendedores:
+        vendedores = rotas_info.get("vendedores") if rotas_info else None
+        # se o usuário for vendedor e não vier lista, use o próprio cod_funcionario
+        if ctx.is_vendedor and (not vendedores):
+            vendedores = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else None
+
+
+        
 
         #  OBJETIVOS
         # Buscar objetivo peso e positivação do SQL Server
@@ -172,8 +180,9 @@ class IndicadoresView(APIView):
         venda_ano_anterior = vendido_ano_anterior.get("venda_realizada", 1) or 1  # evita divisão por zero
         
         #  POSITIVAÇÃO
-        positivacao = buscar_positivacao_por_rota(data_inicio, data_fim,rotas=rotas_codigos,cod_funcionario=ctx.cod_funcionario)
+        positivacao = buscar_positivacao_por_rota(data_inicio, data_fim,rotas=rotas_codigos,cod_vendedores=vendedores)
         print(f"[DEBUG] rotas (positivação) {rotas_codigos}")
+        print(f"[DEBUG] vendedores (positivação) {vendedores}")
         positivacao_realizado_geral = positivacao.get("positivacao_realizado_geral", 0)
         objetivo_positivacao = objetivo.get('objetivo_positivacao', 0)
         percentual_positivacao = safe_divide(positivacao_realizado_geral, objetivo_positivacao) * 100
