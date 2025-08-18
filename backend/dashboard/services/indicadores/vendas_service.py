@@ -269,107 +269,138 @@ def buscar_vendido(data_inicio, data_fim,rotas=None):
             "detalhamento": dados
         }
 
-def buscar_positivacao_por_rota(data_inicio, data_fim):
+def buscar_positivacao_por_rota(data_inicio, data_fim, rotas=None, cod_funcionario=None):  # parte nova
+    """
+    Se 'rotas' for lista de inteiros (ex.: [335, 3, 4, ...]), aplica filtro por rota.
+    Se 'cod_funcionario' vier (int), filtra o CTE de Vendedores para esse vendedor específico (útil p/ validação).  # parte nova
+    """
+    # ---- filtros por rota ----
+    rota_filter_sql = ""
+    rota_filter_sql_cli = ""
+    rota_filter_sql_empresa = ""   # parte nova
+
+    if rotas:
+        rotas_norm = [int(r) for r in rotas if r is not None]
+        rotas_norm = list(dict.fromkeys(rotas_norm))
+        if rotas_norm:
+            in_list = ",".join(map(str, rotas_norm))
+            rota_filter_sql = f" AND PF.CodRota IN ({in_list}) "
+            rota_filter_sql_cli = f" AND C.CodRota IN ({in_list}) "
+            rota_filter_sql_empresa = f" WHERE CodRota IN ({in_list}) "  # parte nova
+
+    # ---- filtro opcional por vendedor (cod_funcionario) ----       # parte nova
+    vend_filter_sql = ""                                              # parte nova
+    vend_decl = ""                                                    # parte nova
+    if cod_funcionario is not None:                                   # parte nova
+        cod_funcionario = int(cod_funcionario)                        # parte nova
+        vend_decl = f"DECLARE @CodFuncionario INT = {cod_funcionario};"  # parte nova
+        # Limita o CTE Vendedores para este vendedor específico        # parte nova
+        vend_filter_sql = " AND F.CodFuncionario = @CodFuncionario "  # parte nova
+
     with connections['dados_industria'].cursor() as cursor:
         cursor.execute(f"""
-                    DECLARE @DataInicio DATE = '{data_inicio}';
-                    DECLARE @DataFim DATE = '{data_fim}';
+            DECLARE @DataInicio DATE = '{data_inicio}';
+            DECLARE @DataFim DATE = '{data_fim}';
+            {vend_decl}  -- parte nova
 
-                    WITH Vendedores AS (
-                        SELECT 
-                            F.CodFuncionario,
-                            F.Nome,
-                            AV.CodAreaVenda,
-                            AV.AreaVenda
-                        FROM Funcionario F
-                        INNER JOIN AreaVenda AV ON F.CodFuncionario = AV.CodVendedor
-                        WHERE F.Vendedor = 1
-                    ),
-                    PedidosFiltrados AS (
-                        SELECT 
-                            PV.CodVendedor,
-                            PV.CodCliente,
-                            C.CodRota
-                        FROM PedidoVenda PV
-                        INNER JOIN Cliente C ON C.CodCliente = PV.CodCliente
-                        INNER JOIN PedidoVendaItens PVI ON PVI.CodPedidoVenda = PV.CodPedidoVenda
-                        INNER JOIN Material M ON M.CodMaterial = PVI.CodMaterial
-                        INNER JOIN NaturezaOperacao NO ON NO.CodNaturezaOperacao = PV.CodNaturezaOperacao
-                        WHERE PV.DataVenda BETWEEN @DataInicio AND @DataFim
-                        AND PV.Status = 0
-                        AND NO.Venda = 1
-                        AND M.EmbRetornavel = 0
-                    ),
-                    ClientesPorRota AS (
-                        SELECT DISTINCT 
-                            PF.CodCliente,
-                            V.CodFuncionario,
-                            V.Nome,
-                            V.CodAreaVenda,
-                            V.AreaVenda,
-                            PF.CodRota,
-                            R.Rota
-                        FROM PedidosFiltrados PF
-                        INNER JOIN Vendedores V ON PF.CodVendedor = V.CodFuncionario
-                        INNER JOIN Rota R ON R.CodRota = PF.CodRota
-                    ),
-                    ClientesCadastrados AS (
-                        SELECT 
-                            C.CodRota,
-                            R.Rota,
-                            AV.CodAreaVenda,
-                            AV.AreaVenda,
-                            COUNT(DISTINCT C.CodCliente) AS ClientesCadastradosRota
-                        FROM Cliente C
-                        INNER JOIN Rota R ON C.CodRota = R.CodRota
-                        INNER JOIN AreaVenda AV ON R.CodAreaVenda = AV.CodAreaVenda
-                        where C.Ativo=1 and C.AtivoAuto=1
-                        GROUP BY C.CodRota, R.Rota, AV.CodAreaVenda, AV.AreaVenda
-                    ),
-                    ClientesPositivadosRota AS (
-                        SELECT 
-                            CodFuncionario,
-                            Nome,
-                            CodAreaVenda,
-                            AreaVenda,
-                            CodRota,
-                            Rota,
-                            COUNT(DISTINCT CodCliente) AS ClientesPositivadosRota
-                        FROM ClientesPorRota
-                        GROUP BY CodFuncionario, Nome, CodAreaVenda, AreaVenda, CodRota, Rota
-                    ),
-                    ClientesPositivadosEmpresa AS (
-                        SELECT COUNT(DISTINCT CodCliente) AS ClientesPositivadosEmpresa
-                        FROM ClientesPorRota
-                    )
+            WITH Vendedores AS (
+                SELECT 
+                    F.CodFuncionario,
+                    F.Nome,
+                    AV.CodAreaVenda,
+                    AV.AreaVenda
+                FROM Funcionario F
+                INNER JOIN AreaVenda AV ON F.CodFuncionario = AV.CodVendedor
+                WHERE F.Vendedor = 1
+                {vend_filter_sql}  -- parte nova (filtra por vendedor quando informado)
+            ),
+            PedidosFiltrados AS (
+                SELECT 
+                    PV.CodVendedor,
+                    PV.CodCliente,
+                    C.CodRota
+                FROM PedidoVenda PV
+                INNER JOIN Cliente C ON C.CodCliente = PV.CodCliente
+                INNER JOIN PedidoVendaItens PVI ON PVI.CodPedidoVenda = PV.CodPedidoVenda
+                INNER JOIN Material M ON M.CodMaterial = PVI.CodMaterial
+                INNER JOIN NaturezaOperacao NO ON NO.CodNaturezaOperacao = PV.CodNaturezaOperacao
+                WHERE PV.DataVenda BETWEEN @DataInicio AND @DataFim
+                  AND PV.Status = 0
+                  AND NO.Venda = 1
+                  AND M.EmbRetornavel = 0
+            ),
+            ClientesPorRota AS (
+                SELECT DISTINCT 
+                    PF.CodCliente,
+                    V.CodFuncionario,
+                    V.Nome,
+                    V.CodAreaVenda,
+                    V.AreaVenda,
+                    PF.CodRota,
+                    R.Rota
+                FROM PedidosFiltrados PF
+                INNER JOIN Vendedores V ON PF.CodVendedor = V.CodFuncionario
+                INNER JOIN Rota R ON R.CodRota = PF.CodRota
+                WHERE 1=1 {rota_filter_sql}      -- filtro por rotas (se houver)  
+            ),
+            ClientesCadastrados AS (
+                SELECT 
+                    C.CodRota,
+                    R.Rota,
+                    AV.CodAreaVenda,
+                    AV.AreaVenda,
+                    COUNT(DISTINCT C.CodCliente) AS ClientesCadastradosRota
+                FROM Cliente C
+                INNER JOIN Rota R ON C.CodRota = R.CodRota
+                INNER JOIN AreaVenda AV ON R.CodAreaVenda = AV.CodAreaVenda
+                WHERE C.Ativo=1 AND C.AtivoAuto=1
+                {rota_filter_sql_cli}            -- filtro por rotas (se houver)  
+                GROUP BY C.CodRota, R.Rota, AV.CodAreaVenda, AV.AreaVenda
+            ),
+            ClientesPositivadosRota AS (
+                SELECT 
+                    CodFuncionario,
+                    Nome,
+                    CodAreaVenda,
+                    AreaVenda,
+                    CodRota,
+                    Rota,
+                    COUNT(DISTINCT CodCliente) AS ClientesPositivadosRota
+                FROM ClientesPorRota
+                GROUP BY CodFuncionario, Nome, CodAreaVenda, AreaVenda, CodRota, Rota
+            ),
+            ClientesPositivadosEmpresa AS (
+                SELECT COUNT(DISTINCT CodCliente) AS ClientesPositivadosEmpresa
+                FROM ClientesPorRota
+                {rota_filter_sql_empresa}   -- parte nova (aplica o mesmo filtro de rotas no total)
+            )
 
-                    SELECT 
-                        P.CodFuncionario,
-                        P.Nome,
-                        P.CodAreaVenda,
-                        P.AreaVenda,
-                        P.CodRota,
-                        P.Rota,
-                        C.ClientesCadastradosRota,
-                        P.ClientesPositivadosRota,
-                        CAST(P.ClientesPositivadosRota * 100.0 / NULLIF(C.ClientesCadastradosRota, 0) AS DECIMAL(5,2)) AS PositivacaoPercentual,
-                        E.ClientesPositivadosEmpresa
-                    FROM ClientesPositivadosRota P
-                    LEFT JOIN ClientesCadastrados C ON P.CodRota = C.CodRota
-                    CROSS JOIN ClientesPositivadosEmpresa E
-                    ORDER BY P.Nome, P.Rota;
-                    """)
+            SELECT 
+                P.CodFuncionario,
+                P.Nome,
+                P.CodAreaVenda,
+                P.AreaVenda,
+                P.CodRota,
+                P.Rota,
+                C.ClientesCadastradosRota,
+                P.ClientesPositivadosRota,
+                CAST(P.ClientesPositivadosRota * 100.0 / NULLIF(C.ClientesCadastradosRota, 0) AS DECIMAL(5,2)) AS PositivacaoPercentual,
+                E.ClientesPositivadosEmpresa
+            FROM ClientesPositivadosRota P
+            LEFT JOIN ClientesCadastrados C ON P.CodRota = C.CodRota
+            CROSS JOIN ClientesPositivadosEmpresa E
+            ORDER BY P.Nome, P.Rota;
+        """)
         columns = [col[0] for col in cursor.description]
         rows = cursor.fetchall()
         dados = [dict(zip(columns, row)) for row in rows]
         positivados_total = dados[0].get("ClientesPositivadosEmpresa", 0) if dados else 0
 
-
         return {
-        "positivacao_realizado_geral": positivados_total,
-        "detalhado": dados
-    }
-
+            "positivacao_realizado_geral": positivados_total,
+            "detalhado": dados,
+            "cod_funcionario_aplicado": cod_funcionario  # parte nova (eco útil p/ debug)
+        }
 def validar_data(data):
     """
     Garante que a data esteja no formato datetime.date.

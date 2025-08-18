@@ -167,12 +167,13 @@ class IndicadoresView(APIView):
         ano_anterior_inicio = ajustar_data_para_ano_anterior(data_inicio)
         ano_anterior_fim = ajustar_data_para_ano_anterior(data_fim)
         print(f"[DEBUG] Consultando vendas do ano anterior entre {ano_anterior_inicio} e {ano_anterior_fim}")
-        vendido_ano_anterior = buscar_vendido(ano_anterior_inicio, ano_anterior_fim)
+        vendido_ano_anterior = buscar_vendido(ano_anterior_inicio, ano_anterior_fim,rotas=rotas_codigos)
         venda_ano_anterior = float(vendido_ano_anterior.get("venda_realizada", 1) or 1)
         venda_ano_anterior = vendido_ano_anterior.get("venda_realizada", 1) or 1  # evita divisão por zero
         
         #  POSITIVAÇÃO
-        positivacao = buscar_positivacao_por_rota(data_inicio, data_fim)
+        positivacao = buscar_positivacao_por_rota(data_inicio, data_fim,rotas=rotas_codigos,cod_funcionario=ctx.cod_funcionario)
+        print(f"[DEBUG] rotas (positivação) {rotas_codigos}")
         positivacao_realizado_geral = positivacao.get("positivacao_realizado_geral", 0)
         objetivo_positivacao = objetivo.get('objetivo_positivacao', 0)
         percentual_positivacao = safe_divide(positivacao_realizado_geral, objetivo_positivacao) * 100
