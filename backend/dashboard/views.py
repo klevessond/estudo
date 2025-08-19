@@ -146,7 +146,7 @@ class IndicadoresView(APIView):
 
         #  OBJETIVOS
         # Buscar objetivo peso e positivação do SQL Server
-        objetivo = buscar_objetivo_peso_positivacao(data_inicio, data_fim)
+        objetivo = buscar_objetivo_peso_positivacao(data_inicio, data_fim,cod_vendedores=vendedores)
         objetivo["objetivo_peso"] = round(objetivo.get("objetivo_peso", 0), 2)
         objetivo["objetivo_positivacao"] = round(objetivo.get("objetivo_positivacao", 0), 2)
 

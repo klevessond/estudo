@@ -1,6 +1,17 @@
 from django.db import connections
 
-def buscar_objetivo_peso_positivacao(data_inicio, data_fim):
+def buscar_objetivo_peso_positivacao(data_inicio, data_fim,cod_vendedores=None):
+
+    vendedor_filter_sql = ""
+    if cod_vendedores:
+        cod_vendedores = [int(x) for x in cod_vendedores if x is not None]
+        cod_vendedores = list(dict.fromkeys(cod_vendedores))
+        if cod_vendedores:
+            vendedor_filter_sql = f" AND Codfuncionario IN ({','.join(map(str, cod_vendedores))}) "
+
+
+
+
     with connections['dados_industria'].cursor() as cursor:
         cursor.execute(f"""
             DECLARE @DataInicio DATE = '{data_inicio}';
@@ -20,6 +31,7 @@ def buscar_objetivo_peso_positivacao(data_inicio, data_fim):
                     FROM Funcionario F
                     INNER JOIN AreaVenda AV ON F.CodFuncionario = AV.CodVendedor
                     WHERE F.Vendedor = 1
+                    
                 ),
                 ObjetivosCompletos AS (
                     SELECT 
@@ -44,7 +56,10 @@ def buscar_objetivo_peso_positivacao(data_inicio, data_fim):
                         CodFuncionario,
                         CodRota,
                         SUM(PositivacaoRota) AS PositivacaoRota
-                    FROM ObjetivosCompletos
+                    FROM ObjetivosCompletos 
+                    where 1=1 
+                     {vendedor_filter_sql}
+                   
                     GROUP BY CodFuncionario, CodRota
                 ),
                 ObjetivoTotalEmpresa AS (
@@ -57,6 +72,8 @@ def buscar_objetivo_peso_positivacao(data_inicio, data_fim):
                     INNER JOIN Funcionario F ON F.CodFuncionario = AV.CodVendedor
                     WHERE F.Vendedor = 1
                     AND O.DataDe >= @DataInicio AND O.DataAte <= @DataFim
+                     {vendedor_filter_sql}
+                    
                 )
 
                 SELECT 
