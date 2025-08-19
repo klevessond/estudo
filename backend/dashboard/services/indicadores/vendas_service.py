@@ -628,11 +628,18 @@ def buscar_venda_mix(data_inicio, data_fim,cod_vendedores=None):
         "detalhado": dados
     }
 
-def buscar_pre_venda(data_inicio, data_fim):
+def buscar_pre_venda(data_inicio, data_fim,cod_vendedores=None):
     data_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
     data_fim = datetime.strptime(data_fim, "%Y-%m-%d").date() + timedelta(days=1)
     data_inicio = validar_data(data_inicio)
     data_fim = validar_data(data_fim)
+
+    vendedor_filter_sql = ""
+    if cod_vendedores:
+        cod_vendedores = [int(x) for x in cod_vendedores if x is not None]
+        cod_vendedores = list(dict.fromkeys(cod_vendedores))
+        if cod_vendedores:
+            vendedor_filter_sql = f" AND PD.CodVendedor IN ({','.join(map(str, cod_vendedores))}) "
 
     with connections['dados_industria'].cursor() as cursor:
         cursor.execute(f"""
@@ -661,6 +668,7 @@ def buscar_pre_venda(data_inicio, data_fim):
             AND NOPE.Venda = 1
             AND PD.DataDoc >= @P1
             AND PD.DataDoc < @P2
+            {vendedor_filter_sql}
 
 
             """)

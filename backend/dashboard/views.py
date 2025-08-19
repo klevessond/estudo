@@ -193,8 +193,9 @@ class IndicadoresView(APIView):
         mix_realizado = dados_mix["mix_realizado"]
         
         # Pré-venda
-        chave = f"prevenda_{data_inicio}_{data_fim}"
-        prevenda = get_cached_data(chave, lambda: buscar_pre_venda(data_inicio, data_fim))
+        #chave = f"prevenda_{data_inicio}_{data_fim}"
+        #prevenda = get_cached_data(chave, lambda: buscar_pre_venda(data_inicio, data_fim,cod_vendedores=vendedores))
+        prevenda = buscar_pre_venda(data_inicio, data_fim,cod_vendedores=vendedores)
         valor_prevenda = prevenda.get("pre_venda_valor", 0)
         valor_alocado = venda_realizada + valor_prevenda
        
