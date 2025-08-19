@@ -189,7 +189,7 @@ class IndicadoresView(APIView):
         variacao_positivacao = positivacao_realizado_geral  - objetivo_positivacao
 
         #   MIX
-        dados_mix = buscar_venda_mix(data_inicio, data_fim)
+        dados_mix = buscar_venda_mix(data_inicio, data_fim,cod_vendedores=vendedores)
         mix_realizado = dados_mix["mix_realizado"]
         
         # Pré-venda
