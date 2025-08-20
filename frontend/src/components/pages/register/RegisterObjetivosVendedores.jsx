@@ -8,12 +8,12 @@ const RegisterObjetivosVendedores = () => {
   const token = localStorage.getItem('token');
 
   useEffect(() => {
-    fetch('/vendas-por-vendedor/', {
+    fetch('/todos-vendedores/', {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
       .then(data => {
-        setVendedores(data);
+        setVendedores(data.detalhamento);
         const initialObjetivos = {};
         data.forEach(v => {
           initialObjetivos[v.vendedor_id] = '';
@@ -30,9 +30,9 @@ const RegisterObjetivosVendedores = () => {
     const payload = {
       mes_referencia: mesReferencia,
       objetivos: vendedores.map(v => ({
-        vendedor_id: v.vendedor_id,
-        nome_vendedor: v.nome_vendedor,
-        objetivo_financeiro: parseFloat(objetivos[v.vendedor_id]) || 0
+        vendedor_id: v.CodFuncionario,
+        nome_vendedor: v.Nome,
+        objetivo_financeiro: parseFloat(objetivos[v.CodFuncionario]) || 0
       }))
     };
 
@@ -67,13 +67,13 @@ const RegisterObjetivosVendedores = () => {
         </thead>
         <tbody>
           {vendedores.map(v => (
-            <tr key={v.vendedor_id}>
-              <td>{v.nome_vendedor}</td>
+            <tr key={v.CodFuncionario}>
+              <td>{v.Nome}</td>
               <td>
                 <input
                   type="number"
-                  value={objetivos[v.vendedor_id] || ''}
-                  onChange={e => handleChange(v.vendedor_id, e.target.value)}
+                  value={objetivos[v.CodFuncionario] || ''}
+                  onChange={e => handleChange(v.CodFuncionario, e.target.value)}
                 />
               </td>
             </tr>

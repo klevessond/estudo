@@ -20,12 +20,12 @@ const RegisterObjetivosVendedores = () => {
   setMesReferencia(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`);
 
   // Primeiro busca os vendedores
-  fetch(`http://localhost:8000/vendas-por-vendedor/?de=${dataInicio}&ate=${dataFim}`, {
+  fetch(`http://localhost:8000/todos-vendedores/`, {
     headers: { Authorization: `Bearer ${token}` }
   })
     .then(res => res.json())
     .then(async data => {
-      const lista = data.resultado?.vendas_por_vendedor || [];
+      const lista = data.detalhamento || [];
       setVendedores(lista);
 
       const objetivosFinanceirosTemp = {};
@@ -39,11 +39,17 @@ const RegisterObjetivosVendedores = () => {
       const dados = await resposta.json();
       const existentes = dados.objetivos || [];
 
+      console.log("Dados da API de objetivos:", dados);
+console.log("Objetivos existentes:", existentes);
+console.log("Lista de vendedores:", lista);
+
+
       // Preenche os campos com base nos objetivos existentes
       lista.forEach(v => {
-        const objExistente = existentes.find(e => e.vendedor_id === v.codcampo);
-        objetivosFinanceirosTemp[v.codcampo] = objExistente ? objExistente.objetivo_financeiro : '';
-        objetivosMixTemp[v.codcampo] = objExistente ? objExistente.objetivo_mix : '';
+        const objExistente = existentes.find(e => Number(e.vendedor_id) === v.CodFuncionario);
+         console.log(`Vendedor ${v.Nome} (ID: ${v.CodFuncionario}) - Encontrado:`, objExistente);
+        objetivosFinanceirosTemp[v.CodFuncionario] = objExistente ? objExistente.objetivo_financeiro : '';
+        objetivosMixTemp[v.CodFuncionario] = objExistente ? objExistente.objetivo_mix : '';
       });
 
       setObjetivosFinanceiros(objetivosFinanceirosTemp);
@@ -68,10 +74,10 @@ const RegisterObjetivosVendedores = () => {
     const payload = {
       mes_referencia: dataFormatada,
       objetivos: vendedores.map(v => ({
-        vendedor_id: v.codcampo,
-        nome_vendedor: v.Campo.trim(),
-        objetivo_financeiro: parseFloat(objetivosFinanceiros[v.codcampo]) || 0,
-        objetivo_mix: parseFloat(objetivosMix[v.codcampo]) || 0
+        vendedor_id: v.CodFuncionario,
+        nome_vendedor: v.Nome,
+        objetivo_financeiro: parseFloat(objetivosFinanceiros[v.CodFuncionario]) || 0,
+        objetivo_mix: parseFloat(objetivosMix[v.CodFuncionario]) || 0
       }))
     };
 
@@ -111,20 +117,20 @@ return (
   </thead>
   <tbody>
     {vendedores.map(v => (
-      <tr key={v.codcampo}>
-        <td>{v.Campo.trim()}</td>
+      <tr key={v.CodFuncionario}>
+        <td>{v.Nome}</td>
         <td>
           <input
             type="number"
-            value={objetivosFinanceiros[v.codcampo] || ''}
-            onChange={e => handleFinanceiroChange(v.codcampo, e.target.value)}
+            value={objetivosFinanceiros[v.CodFuncionario] || ''}
+            onChange={e => handleFinanceiroChange(v.CodFuncionario, e.target.value)}
           />
         </td>
         <td>
           <input
             type="number"
-            value={objetivosMix[v.codcampo] || ''}
-            onChange={e => handleMixChange(v.codcampo, e.target.value)}
+            value={objetivosMix[v.CodFuncionario] || ''}
+            onChange={e => handleMixChange(v.CodFuncionario, e.target.value)}
           />
         </td>
       </tr>

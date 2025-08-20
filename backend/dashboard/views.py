@@ -25,6 +25,7 @@ from .models import Profile
 from dashboard.services.usuarios.funcionario_service import listar_funcionarios,get_funcionario_por_codigo
 import logging
 from dashboard.roles import get_role_context  
+from dashboard.services.indicadores.info_service import Todos_Vendedores
 
 logger = logging.getLogger(__name__)
 
@@ -631,3 +632,13 @@ def funcionario_detail(request, cod_funcionario):
 @permission_classes([IsAuthenticated])
 def me(request):
     return Response(MeSerializer(request.user).data)
+
+class TodosVendedoresView(APIView):
+    #permission_classes = [IsAuthenticated]  # opcional, se você quiser autenticação
+
+    def get(self, request):
+        # Chama o serviço que busca todos os vendedores
+        vendedores = Todos_Vendedores()
+        
+        # Retorna o JSON já com a chave 'resultado' (ou qualquer chave que seu frontend espera)
+        return Response(vendedores)
