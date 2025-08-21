@@ -2,6 +2,7 @@ from django.shortcuts import render
 from django.db import connections
 from django.http import JsonResponse
 import pandas as pd
+from django.db.models import Sum
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -154,7 +155,7 @@ class IndicadoresView(APIView):
 
 
         # Buscar objetivo financeiro e mix do banco local
-        objetivo_mensal_data = get_objetivo_mensal_serializado(request.user, data_inicio)
+        objetivo_mensal_data = get_objetivo_mensal_serializado(request.user, data_inicio, cod_vendedores=vendedores)
         objetivo_financeiro = float(objetivo_mensal_data.get("objetivo_financeiro", 0) or 0)
         objetivo_mix = float(objetivo_mensal_data.get("objetivo_mix", 0) or 0)
         objetivos_vendedores = get_objetivos_vendedores_por_mes(data_inicio)
@@ -342,7 +343,7 @@ class ObjetivoMensalResumoView(APIView):
             return Response({"detail": "Objetivo mensal não encontrado."}, status=404)
 
 
-def get_objetivo_mensal_serializado(user, data_inicio):
+def get_objetivo_mensal_serializado(user, data_inicio, cod_vendedores=None):
     try:
         # Em ambiente de teste, você quer forçar como admin
         if user.is_anonymous:
@@ -351,6 +352,22 @@ def get_objetivo_mensal_serializado(user, data_inicio):
         data_inicio_formatada = datetime.strptime(data_inicio, "%Y-%m-%d").date()
         mes_referencia = data_inicio_formatada.replace(day=1)
 
+        # NOVO: se veio lista de vendedores, somar objetivos dos vendedores no mês
+        if cod_vendedores:
+            ids = [str(v) for v in cod_vendedores]  # vendedor_id é CharField
+            agg = ObjetivoMensalVendedor.objects.filter(
+                mes_referencia=mes_referencia,
+                vendedor_id__in=ids
+            ).aggregate(
+                objetivo_financeiro=Sum('objetivo_financeiro'),
+                objetivo_mix=Sum('objetivo_mix')
+            )
+            return {
+                "objetivo_financeiro": float(agg['objetivo_financeiro'] or 0),
+                "objetivo_mix": float(agg['objetivo_mix'] or 0),
+            }
+
+        # fallback: objetivo mensal do usuário (como já era)
         objetivo = ObjetivoMensal.objects.get(usuario=user, mes_referencia=mes_referencia)
         serializer = ObjetivoMensalSerializer(objetivo)
         return serializer.data
