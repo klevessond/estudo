@@ -70,6 +70,7 @@ const RegisterObjetivosVendedores = () => {
         objetivo_mix: parseFloat(objetivosMix[v.CodFuncionario]) || 0
       }))
     };
+     console.log("[OBJETIVOS-VENDEDORES][payload]", payload);
 
     try {
       const res = await fetch('http://localhost:8000/objetivos-vendedores/', {

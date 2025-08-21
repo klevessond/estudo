@@ -287,6 +287,8 @@ class ObjetivoMensalView(APIView):
         data['usuario'] = request.user.id  # mantenha o ID aqui
         serializer = ObjetivoMensalSerializer(data=data, context={'request': request})  # adicione o contexto
         if serializer.is_valid():
+            print(f"[DEBUG][OBJETIVO_MENSAL][IN] usuario={request.user.id}, mes={data.get('mes_referencia')}, "
+              f"financeiro={data.get('objetivo_financeiro')}, mix={data.get('objetivo_mix')}")
             objetivo, created = ObjetivoMensal.objects.update_or_create(
                 usuario=request.user,
                 mes_referencia=data['mes_referencia'],
@@ -295,6 +297,9 @@ class ObjetivoMensalView(APIView):
                     "objetivo_mix": data.get('objetivo_mix')
                 }
             )
+            print(f"[DEBUG][OBJETIVO_MENSAL][OUT] created={created}, "
+              f"financeiro={objetivo.objetivo_financeiro}, mix={objetivo.objetivo_mix}")
+            
             return Response(ObjetivoMensalSerializer(objetivo).data)
         return Response(serializer.errors, status=400)
     
@@ -448,6 +453,7 @@ class ObjetivoMensalVendedorView(APIView):
         mes_referencia = data.get("mes_referencia")
         objetivos = data.get("objetivos", [])
         total_empresa = 0
+        total_mix = 0
 
         for obj in objetivos:
             vendedor_id = obj["vendedor_id"]
@@ -455,6 +461,8 @@ class ObjetivoMensalVendedorView(APIView):
             valor = obj["objetivo_financeiro"]
             valormix = obj["objetivo_mix"]
             total_empresa += float(valor)
+            total_mix += valormix 
+            print(f"[DEBUG][OBJ-VEND ITEM] vendedor_id={vendedor_id}, nome={nome}, financeiro={valor}, mix={valormix}")
 
             ObjetivoMensalVendedor.objects.update_or_create(
                 mes_referencia=mes_referencia,
@@ -465,14 +473,14 @@ class ObjetivoMensalVendedorView(APIView):
                     "objetivo_mix": valormix
                 }
             )
-
+            print(f"[DEBUG][OBJETIVO_MENSAL] usuario={request.user.id}, mes={mes_referencia}, financeiro_total={total_empresa}, mix_final={valormix}")
         # Atualiza ou cria o objetivo total da empresa no modelo ObjetivoMensal
         ObjetivoMensal.objects.update_or_create(
             usuario=request.user,
             mes_referencia=mes_referencia,
             defaults={
                 "objetivo_financeiro": total_empresa,
-                "objetivo_mix": valormix
+                "objetivo_mix": total_mix
             }
         )
 
