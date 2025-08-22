@@ -151,7 +151,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
 
         setVendaRealizada(valorVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setVendaPercentual(`${percentualVenda.toFixed(2)}%`);
-        setVendaVariacao(Math.abs(variacaoVenda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        setVendaVariacao(`${variacaoVenda < 0 ? '-' : ''}${Math.abs(variacaoVenda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
         setEvolucaoAnoAnterior(`${(evolucao).toFixed(2)}%`);
 
         const objetivoFin = response.data.objetivo?.financeiro || 0;
@@ -177,7 +177,19 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
         setAlocacaoRealizada(valorAlocado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setAlocacaoPrevenda(valorPrevenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setAlocacaoPercentual(`${percentualAlocado.toFixed(2)}%`);
-        setAlocacaoVariacao(Math.abs(variacaoPrevenda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        //setAlocacaoVariacao(Math.abs(variacaoPrevenda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        setAlocacaoVariacao(`${variacaoPrevenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace('R$', '')}` );  // Remove 'R$' da string
+      // Exibição da variação com símbolo de R$ e sinal negativo corretamente posicionado
+          if (variacaoPrevenda < 0) {
+            setAlocacaoVariacao(
+              `R$ -${Math.abs(variacaoPrevenda).toFixed(2).replace('.', ',')}`  // Adiciona duas casas decimais e substitui o ponto por vírgula
+            );
+          } else {
+            setAlocacaoVariacao(
+              `R$ ${variacaoPrevenda.toFixed(2).replace('.', ',')}`  // Adiciona duas casas decimais e substitui o ponto por vírgula
+            );
+          }
+
 
         setVendaRealizadaBase(valorVenda);
         setPesoRealizado(realizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
@@ -217,7 +229,18 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       const variacaoCorrigida = novoValor - objetivoFin;
 
       setVendaPercentual(`${percentualCorrigido.toFixed(2)}%`);
-      setVendaVariacao(Math.abs(variacaoCorrigida).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+      // Exibição da variação com símbolo de R$ e sinal negativo corretamente posicionado
+      setVendaVariacao(`${variacaoCorrigida.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace('R$', '')}` );  // Remove 'R$' da string
+      // Exibição da variação com símbolo de R$ e sinal negativo corretamente posicionado
+          if (variacaoCorrigida < 0) {
+            setVendaVariacao(
+              `R$ -${Math.abs(variacaoCorrigida).toFixed(2).replace('.', ',')}`  // Adiciona duas casas decimais e substitui o ponto por vírgula
+            );
+          } else {
+            setVendaVariacao(
+              `R$ ${variacaoCorrigida.toFixed(2).replace('.', ',')}`  // Adiciona duas casas decimais e substitui o ponto por vírgula
+            );
+          }
 
       const novoPeso = usarPDV ? pesoRealizadoBase + pesoPDV : pesoRealizadoBase;
       setPesoRealizado(novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
