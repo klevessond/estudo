@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from "./contexts/auth.jsx";
 import Dashboard from './components/pages/Dashborad/Dashboard.jsx';
 import Layout from './components/layout/layout.jsx';
 import PivotVendas from './components/pages/PivotVendas.jsx';
@@ -13,6 +14,7 @@ import EditarUsuario from './components/pages/register/EditarUsuario.jsx';
 
 const App = () => {
   return (
+   <AuthProvider>
     <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -67,7 +69,7 @@ const App = () => {
         }
       />
       </Routes>
-    </Router>
+    </Router></AuthProvider>
   );
 };
 
