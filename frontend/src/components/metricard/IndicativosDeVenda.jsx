@@ -361,6 +361,16 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
                 height={160}
               />
             </div>
+            {/* 🆕 Gráfico de Mix */}
+                <div>
+                  <h4>Mix</h4>
+                  <ReactSpeedometer
+                    maxValue={100}mixPercentual
+                    value={parseFloat((mixPercentual || '0').replace('%', ''))}
+                    segments={5}
+                    height={160}
+                  />
+                </div>
           </div>
         </div>
       ) : (
