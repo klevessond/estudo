@@ -1,6 +1,7 @@
 # dashboard/services/indicadores/ruptura_service.py
 from django.db import connections
 from datetime import datetime, timedelta, date
+from collections import defaultdict
 
 def _validar_data(data):
     if isinstance(data, date):
@@ -12,18 +13,20 @@ def buscar_ruptura(data_inicio: str, data_fim: str, cod_vendedor: int | None = N
     Executa a consulta de 'ruptura' (itens não atendidos) para o período informado.
     - data_inicio / data_fim: 'YYYY-MM-DD'
     - cod_vendedor: opcional. Quando presente, aplica AND PD.CodVendedor = <cod_vendedor>
-    Retorna: lista[dict] com as colunas do SELECT.
+    Retorna: dict com:
+        - detalhes: lista[dict] das linhas do SELECT
+        - resumo: lista[dict] agregada por CodVendedor com soma de ValorEmbalagem1
     """
 
     di = _validar_data(data_inicio)
-    df = _validar_data(data_fim) + timedelta(days=1)  # padrão do projeto: [de, ate)
+    df = _validar_data(data_fim) + timedelta(days=1)
     vend_filter_sql = ""
     if cod_vendedor is not None and str(cod_vendedor).strip() != "":
         try:
             vend = int(cod_vendedor)
             vend_filter_sql = f" AND PD.CodVendedor = {vend} "
         except ValueError:
-            pass  # ignora filtro inválido
+            pass
 
     with connections["dados_industria"].cursor() as cursor:
         cursor.execute(f"""
@@ -88,5 +91,15 @@ def buscar_ruptura(data_inicio: str, data_fim: str, cod_vendedor: int | None = N
         """)
         columns = [col[0] for col in cursor.description]
         rows = cursor.fetchall()
-        dados = [dict(zip(columns, row)) for row in rows]
-        return dados
+        detalhes = [dict(zip(columns, row)) for row in rows]
+
+        # --- novo cálculo agregado por vendedor ---
+        resumo_dict = defaultdict(float)
+        for row in detalhes:
+            cod_vend = row.get("CodVendedor")
+            valor_emb = float(row.get("ValorEmbalagem1") or 0)
+            resumo_dict[cod_vend] += valor_emb
+
+        resumo = [{"CodVendedor": k, "TotalValorEmbalagem1": v} for k, v in resumo_dict.items()]
+
+        return {"detalhes": detalhes, "resumo": resumo}
