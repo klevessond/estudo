@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 from .views import IndicadoresView, ObjetivoMensalView,ObjetivoMensalResumoView,IndicadoresPDV,VendasPorVendedorView,ObjetivoMensalVendedorView
-from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionario_detail, me,TodosVendedoresView
+from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionario_detail, me,TodosVendedoresView,RupturaView
 
 urlpatterns = [
     path('dados-sql/', views.get_dados_sql, name='get_dados_sql'),
@@ -18,5 +18,6 @@ urlpatterns = [
     path('funcionarios/<int:cod_funcionario>/', funcionario_detail, name='funcionario-detail'),
     path("me/", me, name="me"),
     path('todos-vendedores/', TodosVendedoresView.as_view(), name='todos-vendedores'),
+    path('ruptura/', RupturaView.as_view(), name='ruptura'),
 
 ]

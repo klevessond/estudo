@@ -27,6 +27,7 @@ from dashboard.services.usuarios.funcionario_service import listar_funcionarios,
 import logging
 from dashboard.roles import get_role_context  
 from dashboard.services.indicadores.info_service import Todos_Vendedores
+from dashboard.services.indicadores.ruptura_service import buscar_ruptura
 
 logger = logging.getLogger(__name__)
 
@@ -671,3 +672,19 @@ class TodosVendedoresView(APIView):
         
         # Retorna o JSON já com a chave 'resultado' (ou qualquer chave que seu frontend espera)
         return Response(vendedores)
+
+class RupturaView(APIView):
+    # permission_classes = [IsAuthenticated]  # habilite se quiser proteger
+    def get(self, request):
+        de = request.GET.get("de")
+        ate = request.GET.get("ate")
+        cod_vendedor = request.GET.get("cod_vendedor")  # opcional
+
+        if not de or not ate:
+            return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
+
+        try:
+            dados = buscar_ruptura(de, ate, cod_vendedor=cod_vendedor)
+            return Response({"ruptura": dados})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
