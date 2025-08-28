@@ -26,7 +26,7 @@ const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, v
       {percentage && <p className="card-percentage">{percentage}</p>}
       {subtitle2 && <p className="card-subtitle">{subtitle2}</p>}
     </div>
-    {variation && <p className="card-variation"> {variation} Variação</p>}
+    {variation && <p className="card-variation"> {variation} Desvio</p>}
   </div>
 );
 
@@ -45,6 +45,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
   const [vendaPercentual, setVendaPercentual] = useState(null);
   const [vendaVariacao, setVendaVariacao] = useState(null);
   const [evolucaoAnoAnterior, setEvolucaoAnoAnterior] = useState(null);
+  const [evolucaoValor, setEvolucaoValor] = useState(null);
   const [mixRealizado, setMixRealizado] = useState(null);
   const [mixPercentual, setMixPercentual] = useState(null);
   const [mixVariacao, setMixVariacao] = useState(null);
@@ -148,12 +149,17 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
         const percentualVenda = realizadoFinanceiro.percentual_cobertura || 0;
         const variacaoVenda = realizadoFinanceiro.variacao || 0;
         const evolucao = response.data.evolucao.percentual || 0;
+        const evolucaoValor = response.data.evolucao.valor_ano_anterior || 0;
 
         setVendaRealizada(valorVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setVendaPercentual(`${percentualVenda.toFixed(2)}%`);
         setVendaVariacao(`${variacaoVenda < 0 ? '-' : ''}${Math.abs(variacaoVenda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
         setEvolucaoAnoAnterior(`${(evolucao).toFixed(2)}%`);
-
+        setEvolucaoValor(
+          evolucaoValor != null 
+            ? evolucaoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) 
+            : 'R$ 0,00'
+        );
         const objetivoFin = response.data.objetivo?.financeiro || 0;
         const objetivoMixValor = response.data.objetivo?.objetivo_mix || 0;
 
@@ -376,8 +382,8 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       ) : (
         <div className="indicativos-container">
           <div className="indicativo-stack">
-            <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'} className="card-objetivo" />
-            <Card title="Evo % vs Ano Ant." value={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'}  className="card-evolucao" />
+            <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'}  className="card-objetivo" />
+            <Card title="Evo % vs Ano Ant. (R$)" value={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'} subtitle={`Ano Anterior: ${evolucaoValor ?? '--'}`} className="card-evolucao" />
           </div>
 
           <Card
@@ -443,7 +449,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
           />
 
           <Card
-            title="Positivado"
+            title="Positivação"
             value={positivadoObjetivo ?? '...'}
             subtitle="OBJETIVO"
             value2={positivadoRealizado ?? '...'}
