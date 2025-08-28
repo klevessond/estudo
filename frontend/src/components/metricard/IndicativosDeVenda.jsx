@@ -5,8 +5,8 @@ import axios from 'axios';
 import api from '../../api';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 
-const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, variation, icon }) => (
-  <div className="indicativo-card">
+const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, variation, icon,className  }) => (
+  <div className={`indicativo-card ${className || ''}`}>
     <div className="card-header">
       <h2>{title}</h2>
       {icon && <img src={icon} alt="Ícone" className="card-icon" />}
@@ -376,8 +376,8 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       ) : (
         <div className="indicativos-container">
           <div className="indicativo-stack">
-            <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'} />
-            <Card title="Evo % vs Ano Ant." value={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'} />
+            <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'} className="card-objetivo" />
+            <Card title="Evo % vs Ano Ant." value={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'}  className="card-evolucao" />
           </div>
 
           <Card
@@ -397,6 +397,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
             percentage={vendaPercentual ?? '...'}
             subtitle2=" Cobertura Atual"
             variation={vendaVariacao ?? '...'}
+             className="card-venda"
           />
 
           <Card
@@ -408,6 +409,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
             percentage={alocacaoPercentual ?? '...'}
             subtitle2=" Cobertura Prevista"
             variation={alocacaoVariacao ?? '...'}
+             className="card-alocacao"
           />
           <Card
             title="Captado"
@@ -416,6 +418,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
             percentage="0%"
             subtitle2=" Cobertura"
             variation="0"
+            className="card-captar"
           />
           <Card
             title="Peso"
@@ -436,6 +439,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
             percentage={pesoPercentual}
             subtitle2=" Cobertura"
             variation={pesoVariacao}
+            className="card-peso"
           />
 
           <Card
@@ -447,6 +451,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
             percentage={positivadoPercentual}
             subtitle2=" Cobertura"
             variation={positivadoVariacao}
+             className="card-positivado"
           />
           <Card
             title="MIX"
@@ -457,6 +462,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
             percentage={mixPercentual ?? '--'}
             subtitle2=" Cobertura"
             variation={mixVariacao ?? '...'}
+            className="card-mix"
           />
         </div>
       )}

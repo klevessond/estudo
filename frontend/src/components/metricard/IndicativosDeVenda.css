@@ -183,3 +183,35 @@
   background-color: #28a745;
   color: white;
 }
+
+.card-objetivo {
+  background-color: #43A047; /* Azul */
+}
+
+.card-evolucao {
+  background-color: #43A047; /* Verde */
+}
+
+.card-venda {
+  background-color: #1e3ef4; /* Laranja */
+}
+
+.card-alocacao {
+  background-color: #1e3ef4; /* Roxo */
+}
+
+.card-captar {
+  background-color: #00fb2193; /* Amarelo/laranja */
+}
+
+.card-peso {
+  background-color: #3949AB; /* Azul escuro */
+}
+
+.card-positivado {
+  background-color: #3949AB; /* Verde água */
+}
+
+.card-mix {
+  background-color: #3949AB; /* Marrom */
+}
