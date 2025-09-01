@@ -97,9 +97,9 @@ def buscar_ruptura(data_inicio: str, data_fim: str, cod_vendedor: int | None = N
         resumo_dict = defaultdict(float)
         for row in detalhes:
             cod_vend = row.get("CodVendedor")
-            valor_emb = float(row.get("ValorEmbalagem1") or 0)
-            resumo_dict[cod_vend] += valor_emb
+            valor = float(row.get("Valor") or 0)
+            resumo_dict[cod_vend] += valor
 
-        resumo = [{"CodVendedor": k, "TotalValorEmbalagem1": v} for k, v in resumo_dict.items()]
+        resumo = [{"CodVendedor": k, "TotalValor": v} for k, v in resumo_dict.items()]
 
         return {"detalhes": detalhes, "resumo": resumo}

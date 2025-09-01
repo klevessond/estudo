@@ -221,12 +221,37 @@ class IndicadoresView(APIView):
         percentual_prevenda_alocado = safe_divide(valor_alocado,objetivo_financeiro)*100
         variacao_prevenda = valor_alocado - objetivo_financeiro
 
+        # === RUPTURA (Captado) ===
+        # 'vendedores' pode ser None, int/str, ou lista (ex.: [23])
+        cod_vendedor_single = None
+        if vendedores is None:
+            cod_vendedor_single = None
+        elif isinstance(vendedores, (list, tuple, set)):
+            # se tiver exatamente 1 vendedor no contexto, filtra por ele;
+            # se tiver mais de 1, deixa sem filtro (None) para pegar consolidado
+            if len(vendedores) == 1:
+                cod_vendedor_single = vendedores[0]
+            else:
+                cod_vendedor_single = None
+        else:
+            # já veio como escalar
+            cod_vendedor_single = vendedores
+
+        ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=cod_vendedor_single)
+        #print(f"[DEBUG] ruptura {ruptura_dados}")
+        ruptura_total = 0.0
+        for r in (ruptura_dados.get("resumo") or []):
+            ruptura_total += float(r.get("TotalValor") or 0)
+        ruptura_total = round(ruptura_total, 2)
+        percentual_captado = safe_divide(ruptura_total, venda_realizada) * 100
+        percentual_captado= round(percentual_captado, 2)
         
        
        
        
         print(f"[DEBUG] venda do ano anterior {venda_ano_anterior}")
         print(f"[DEBUG] percentual {evolucao_percentual}")
+        print(f"[DEBUG] ruptura_total={ruptura_total} | vendido={venda_realizada} | %captado/vendido={percentual_captado}")
 
         
         
@@ -264,7 +289,12 @@ class IndicadoresView(APIView):
                 "percentual":percentual_mix,
                 "variacao":variacao_mix
            },
-            "positivacao_detalhada": positivacao
+            "positivacao_detalhada": positivacao,
+            
+            "ruptura": {
+                "total_valor": ruptura_total,
+                 "percentual_captado": percentual_captado
+            }
 
 
         })

@@ -66,6 +66,8 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
   const [valorAnoAnteriorBase, setValorAnoAnteriorBase] = useState(null);
   const [vendaPDVAnoAnterior, setVendaPDVAnoAnterior] = useState(null);
   const [evolucao_venda_vendapdv, setEvolucao_venda_vendapdv] = useState(null);
+  const [captadoValor, setCaptadoValor] = useState(null);
+  const [percCaptado , setCpercCaptado ] = useState(null);
   const [modo, setModo] = useState('indicadores');
 
   useEffect(() => {
@@ -124,6 +126,16 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
               onObjetivosRecebidos(objetivosUnificados);
             }
 
+        
+
+        const captado = Number(response.data?.ruptura?.total_valor || 0);
+        setCaptadoValor(
+          captado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        );
+       const percCaptado = Number(response.data?.ruptura?.percentual_captado || 0);
+        setCpercCaptado(`${percCaptado.toFixed(2)}%`);
+        
+              
         const percentual = response.data.realizado_peso?.percentual || 0;
         const variacao = response.data.realizado_peso?.variacao || 0;
         const valor = response.data.objetivo?.objetivo_peso || 0;
@@ -419,9 +431,9 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
           />
           <Card
             title="Captado"
-            value="0"
+            value={captadoValor ?? '...'}
             subtitle="Valor Captado"
-            percentage="0%"
+             percentage={percCaptado ?? '0%'}
             subtitle2=" Cobertura"
             variation="0"
             className="card-captar"
