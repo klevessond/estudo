@@ -456,29 +456,51 @@ class VendasPorVendedorView(APIView):
         if not data_inicio or not data_fim:
             return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
 
-    
+        # === NOVO: capturar papel/rotas e lista de vendedores exatamente como na IndicadoresView ===
+        ctx = get_role_context(request.user)
+        rotas_info = buscar_rotas_usuario(ctx)
+        vendedores = rotas_info.get("vendedores") if rotas_info else None  # mesmo ponto da IndicadoresView
+        if ctx.is_vendedor and (not vendedores):
+            vendedores = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else None  # fallback idêntico
+
+        # helper robusto para int
+        def to_int(v):
+            try:
+                return int(str(v).strip())
+            except (TypeError, ValueError):
+                return None
+
+        vendedores_set = set(to_int(v) for v in (vendedores or []) if to_int(v) is not None)
+
+        # Busca original
         resultado = buscar_vendas_por_vendedor(data_inicio, data_fim)
+
+        # Se tivermos lista de vendedores, filtra "vendas_por_vendedor" por codcampo ∈ vendedores_set
+        lista = resultado.get("vendas_por_vendedor", [])
+        if vendedores_set:
+            lista = [item for item in lista if to_int(item.get("codcampo")) in vendedores_set]
+            resultado["vendas_por_vendedor"] = lista
+
+        # Pré-venda: padroniza as chaves para int e aplica nos mesmos codigos
         chave = f"prevenda_{data_inicio}_{data_fim}"
         prevenda = get_cached_data(chave, lambda: buscar_pre_venda(data_inicio, data_fim))
 
-        # Agrupar valor de pré-venda por vendedor
         prevenda_por_vendedor = defaultdict(float)
         for item in prevenda.get("detalhado", []):
-            cod_vendedor = str(item.get("CodVendedor"))
-            valor = float(item.get("Valor", 0))
-            prevenda_por_vendedor[cod_vendedor] += valor
+            cod_vend = to_int(item.get("CodVendedor"))
+            if cod_vend is None:
+                continue
+            valor = float(item.get("Valor", 0) or 0)
+            prevenda_por_vendedor[cod_vend] += valor
 
-        # Inserir valor alocado em cada vendedor do resultado
+        # Inserir valor alocado em cada vendedor (agora tudo em int)
         for vendedor in resultado.get("vendas_por_vendedor", []):
-            codcampo = str(vendedor.get("codcampo")).strip()
-            valor_prevenda = prevenda_por_vendedor.get(codcampo, 0)
-            vendedor["pre-venda"]=round(valor_prevenda, 2)
-            vendedor["alocado"] = round(vendedor.get("ValorLiquido", 0) + valor_prevenda, 2)
+            codcampo_int = to_int(vendedor.get("codcampo"))
+            valor_prevenda = prevenda_por_vendedor.get(codcampo_int, 0.0)
+            vendedor["pre-venda"] = round(valor_prevenda, 2)
+            vendedor["alocado"] = round(float(vendedor.get("ValorLiquido", 0) or 0) + valor_prevenda, 2)
 
-        return Response({
-            "resultado": resultado,
-            
-        })
+        return Response({"resultado": resultado})
 
 class ObjetivoMensalVendedorView(APIView):
     permission_classes = [IsAuthenticated]

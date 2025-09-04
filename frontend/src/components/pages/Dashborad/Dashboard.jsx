@@ -30,7 +30,7 @@ const Dashboard = () => {
   const [vendasColaboradores, setVendasColaboradores] = useState([]);
 
   // Gate: apenas admin/supervisor podem ver a tabela e o modo "individual"
-  const podeVerTabela = can(["admin","supervisor"]);
+  const podeVerTabela = can(["admin","supervisor","vendedor"]);
   const isRestricted = !podeVerTabela; // vendedor e afins
 
   useEffect(() => {
