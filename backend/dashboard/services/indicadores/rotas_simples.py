@@ -75,3 +75,35 @@ def buscar_rotas_usuario(ctx, db_alias: str = "dados_industria") -> Dict[str, An
 
     # Para outros papéis (sem filtro)
     return {"rotas": None, "detalhado": []}
+
+
+def buscar_vendedores_mesma_supervisao(cod_vendedor: int, db_alias: str = "dados_industria") -> List[int]:
+    """
+    Retorna os CodVendedor que pertencem à mesma Área de Supervisão do 'cod_vendedor' informado (apenas ativos).
+    """
+    if cod_vendedor is None:
+        return []
+
+    cod_vend = int(cod_vendedor)
+
+    with connections[db_alias].cursor() as cursor:
+        cursor.execute(
+            """
+            WITH Base AS (
+                SELECT TOP 1 CodAreaSupervisao
+                FROM dbo.AreaVenda
+                WHERE CodVendedor = %s
+            )
+            SELECT DISTINCT V.CodVendedor
+            FROM dbo.AreaVenda V
+            CROSS JOIN Base B
+            WHERE V.CodAreaSupervisao = B.CodAreaSupervisao
+              AND V.Ativa = 1;
+            """,
+            [cod_vend],
+        )
+        rows = cursor.fetchall()
+
+    # Normaliza para int e remove nulos
+    vendedores = sorted({int(r[0]) for r in rows if r and r[0] is not None})
+    return vendedores

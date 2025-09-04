@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
 from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv
-from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario
+from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 # Create your views here.
 
 def get_dados_sql(request):
@@ -460,8 +460,9 @@ class VendasPorVendedorView(APIView):
         ctx = get_role_context(request.user)
         rotas_info = buscar_rotas_usuario(ctx)
         vendedores = rotas_info.get("vendedores") if rotas_info else None  # mesmo ponto da IndicadoresView
-        if ctx.is_vendedor and (not vendedores):
-            vendedores = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else None  # fallback idêntico
+        if ctx.is_vendedor:
+             vendedores = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario)
+             print(f"[DEBUG] outros vendedores da mesma supervisao {vendedores}")
 
         # helper robusto para int
         def to_int(v):
