@@ -108,6 +108,15 @@ class MinhasRotasSupervisorView(APIView):
 
 
 
+def _to_int_list(seq):
+    out = []
+    for v in (seq or []):
+        try:
+            out.append(int(str(v).strip()))
+        except (TypeError, ValueError):
+            pass
+    return out
+
 
 class IndicadoresView(APIView):
     
@@ -223,29 +232,22 @@ class IndicadoresView(APIView):
 
         # === RUPTURA (Captado) ===
         # 'vendedores' pode ser None, int/str, ou lista (ex.: [23])
-        cod_vendedor_single = None
-        if vendedores is None:
-            cod_vendedor_single = None
-        elif isinstance(vendedores, (list, tuple, set)):
-            # se tiver exatamente 1 vendedor no contexto, filtra por ele;
-            # se tiver mais de 1, deixa sem filtro (None) para pegar consolidado
-            if len(vendedores) == 1:
-                cod_vendedor_single = vendedores[0]
-            else:
-                cod_vendedor_single = None
+        vendedores_list = _to_int_list(vendedores)
+        if not vendedores_list:
+            # nenhum vendedor definido -> consolidado (sem filtro)
+            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=None)
+        elif len(vendedores_list) == 1:
+            # exatamente 1 -> filtro "="
+            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=vendedores_list[0], cod_vendedores=None)
         else:
-            # já veio como escalar
-            cod_vendedor_single = vendedores
+            # 2+ -> filtro "IN (...)"
+            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=vendedores_list)
 
-        ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=cod_vendedor_single)
-        #print(f"[DEBUG] ruptura {ruptura_dados}")
         ruptura_total = 0.0
         for r in (ruptura_dados.get("resumo") or []):
             ruptura_total += float(r.get("TotalValor") or 0)
         ruptura_total = round(ruptura_total, 2)
-        percentual_captado = safe_divide(ruptura_total, venda_realizada) * 100
-        percentual_captado= round(percentual_captado, 2)
-        
+        percentual_captado = round(safe_divide(ruptura_total, venda_realizada) * 100, 2)
        
        
        

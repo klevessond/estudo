@@ -2,13 +2,23 @@
 from django.db import connections
 from datetime import datetime, timedelta, date
 from collections import defaultdict
+from typing import Iterable, Optional
 
 def _validar_data(data):
     if isinstance(data, date):
         return data
     return datetime.strptime(data, "%Y-%m-%d").date()
 
-def buscar_ruptura(data_inicio: str, data_fim: str, cod_vendedor: int | None = None):
+def _to_int_list(seq: Optional[Iterable]) -> list[int]:
+    vals = []
+    for v in (seq or []):
+        try:
+            vals.append(int(str(v).strip()))
+        except (TypeError, ValueError):
+            pass
+    return vals
+
+def buscar_ruptura(data_inicio: str, data_fim: str, cod_vendedor: int | None = None,cod_vendedores: Optional[Iterable[int]] = None,):
     """
     Executa a consulta de 'ruptura' (itens não atendidos) para o período informado.
     - data_inicio / data_fim: 'YYYY-MM-DD'
@@ -21,7 +31,11 @@ def buscar_ruptura(data_inicio: str, data_fim: str, cod_vendedor: int | None = N
     di = _validar_data(data_inicio)
     df = _validar_data(data_fim) + timedelta(days=1)
     vend_filter_sql = ""
-    if cod_vendedor is not None and str(cod_vendedor).strip() != "":
+    vend_list = _to_int_list(cod_vendedores)
+    if vend_list and len(vend_list) >= 2:
+        # IN (1,2,3) — como já são ints normalizados, podemos injetar literalmente
+        vend_filter_sql = f" AND PD.CodVendedor IN ({','.join(map(str, vend_list))}) "
+    elif cod_vendedor is not None and str(cod_vendedor).strip() != "":
         try:
             vend = int(cod_vendedor)
             vend_filter_sql = f" AND PD.CodVendedor = {vend} "
