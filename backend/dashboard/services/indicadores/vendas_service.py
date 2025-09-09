@@ -759,7 +759,7 @@ def buscar_vendas_por_vendedor(data_inicio, data_fim,rotas=None):
             where Material.EmbRetornavel = 0
               and PedidoVenda.Status = 0
               and (NaturezaOperacao.Venda = 1)
-              and PedidoVenda.UnidGestora in (1, 2, 3, 4, 5, 6, 8, 9, 10)
+              and PedidoVenda.UnidGestora in (select UnidGestora from unidadegestora)
               and PedidoVenda.DataVenda >= @P1
               and PedidoVenda.DataVenda < @P2
               group by Funcionario.CodFuncionario, Funcionario.Funcionario, PedidoVenda.UnidGestora, NaturezaOperacao.Venda, Cliente.CodCliente
@@ -777,3 +777,162 @@ def buscar_vendas_por_vendedor(data_inicio, data_fim,rotas=None):
         return {
         "vendas_por_vendedor": dados
     }
+
+# vendas_service.py
+from typing import Iterable, Optional, List, Dict, Any
+from datetime import datetime, date
+from django.db import connections
+
+
+def _validar_data(data: str | date) -> date:
+    if isinstance(data, date):
+        return data
+    return datetime.strptime(data, "%Y-%m-%d").date()
+
+
+def _to_int_list(seq: Optional[Iterable]) -> list[int]:
+    vals: list[int] = []
+    for v in (seq or []):
+        try:
+            vals.append(int(str(v).strip()))
+        except (TypeError, ValueError):
+            pass
+    # remove duplicados:
+    return sorted(set(vals))
+
+
+def buscar_resumo_segmento_area_venda(
+    data_inicio: str | date,
+    data_fim: str | date,
+    cod_funcionarios: Optional[Iterable[int]] = None,
+    db_alias: str = "dados_industria",
+) -> List[Dict[str, Any]]:
+    """
+    Retorna o resumo por Segmento/Área de Venda/Vendedor no período [data_inicio, data_fim),
+    somando pedidos/visitas/clientes conforme o SQL fornecido.
+
+    Parâmetros
+      - data_inicio, data_fim: 'YYYY-MM-DD' ou datetime.date
+      - cod_funcionarios: lista opcional de vendedores para filtrar (1 ou vários).
+                          Se None ou vazio, não filtra por vendedor.
+      - db_alias: alias da conexão (default: 'dados_industria')
+
+    Retorno
+      - Lista[dict] com as colunas do SELECT (CodSegmento, Segmento, CodAreaVenda, Tabela, CodFuncionario, Funcionario, QtdCliente, QtdPedido, QtdClientePedido, QtdClienteVisita, QtdClienteVisitaPositivada)
+    """
+    di = _validar_data(data_inicio)   # inclusivo
+    df = _validar_data(data_fim)      # exclusivo (usaremos < @P2)
+
+    # filtro por vendedores (um ou vários)
+    vend_list = _to_int_list(cod_funcionarios)
+    if len(vend_list) == 0:
+        vend_filter_sql = ""  # sem filtro -> todos
+    elif len(vend_list) == 1:
+        vend_filter_sql = f" AND Funcionario.CodFuncionario = {vend_list[0]} "
+    else:
+        vend_filter_sql = f" AND Funcionario.CodFuncionario IN ({','.join(map(str, vend_list))}) "
+
+    with connections[db_alias].cursor() as cursor:
+        cursor.execute(f"""
+            DECLARE @P1 datetime2 = '{di}';
+            DECLARE @P2 datetime2 = '{df}';
+
+            SELECT
+              Segmento.CodSegmento,
+              Segmento.Segmento,
+              AreaVenda.CodAreaVenda,
+              AreaVenda.AreaVenda AS Tabela,
+              Funcionario.CodFuncionario,
+              Funcionario.Funcionario,
+
+              ( SELECT COUNT(Cliente.CodCliente)
+                FROM Rota, Cliente
+                LEFT JOIN ClienteDiaSemana ON ClienteDiaSemana.CodCliente = Cliente.CodCliente
+                WHERE (Cliente.CodRota = Rota.CodRota OR ClienteDiaSemana.CodRota = Rota.CodRota)
+                  AND Rota.CodAreaVenda = AreaVenda.CodAreaVenda
+                  AND Cliente.Ativo = 1
+                  AND Cliente.ECliente = 1
+                  AND Cliente.CodSegmento = Segmento.CodSegmento
+              ) AS QtdCliente,
+
+              ( SELECT COUNT(DISTINCT PedidoVenda.CodPedidoVenda)
+                FROM PedidoVenda
+                LEFT JOIN ClienteRotaVendedor CRV
+                       ON (PedidoVenda.CodVendedor = CRV.CodVendedor AND PedidoVenda.CodCliente = CRV.CodCliente)
+                LEFT JOIN PedidoVendaItens ON PedidoVenda.CodPedidoVenda = PedidoVendaItens.CodPedidoVenda
+                LEFT JOIN Material ON PedidoVendaItens.CodMaterial = Material.CodMaterial
+                LEFT JOIN Cliente C ON PedidoVenda.CodCliente = C.CodCliente
+                LEFT JOIN Fabricante ON Material.CodFabricante = Fabricante.CodFabricante
+                LEFT JOIN Rota ON ISNULL(CRV.CodRota, C.CodRota) = Rota.CodRota
+                LEFT JOIN NaturezaOperacao ON PedidoVenda.CodNaturezaOperacao = NaturezaOperacao.CodNaturezaOperacao
+                LEFT JOIN Grupo ON Material.CodGrupo = Grupo.CodGrupo
+                WHERE
+                  C.Ativo = 1
+                  AND Material.EmbRetornavel = 0
+                  AND NaturezaOperacao.Venda = 1
+                  AND PedidoVenda.Status = 0
+                  AND PedidoVenda.UnidGestora IN (select UnidGestora from unidadegestora)
+                  AND (PedidoVenda.DataVenda >= @P1) AND (PedidoVenda.DataVenda < @P2)
+                  AND Rota.CodAreaVenda = AreaVenda.CodAreaVenda
+                  AND PedidoVenda.CodVendedor = Funcionario.CodFuncionario
+                  AND C.CodSegmento = Segmento.CodSegmento
+              ) AS QtdPedido,
+
+              ( SELECT COUNT(DISTINCT Cliente.CodCliente)
+                FROM Rota, PedidoVenda, PedidoVendaItens, Material, Grupo, Fabricante, NaturezaOperacao, Cliente
+                LEFT JOIN ClienteDiaSemana ON ClienteDiaSemana.CodCliente = Cliente.CodCliente
+                WHERE
+                  Rota.CodAreaVenda = AreaVenda.CodAreaVenda
+                  AND Cliente.CodCliente = PedidoVenda.CodCliente
+                  AND Cliente.Ativo = 1
+                  AND PedidoVenda.CodPedidoVenda = PedidoVendaItens.CodPedidoVenda
+                  AND PedidoVendaItens.CodMaterial = Material.CodMaterial
+                  AND Material.CodFabricante = Fabricante.CodFabricante
+                  AND ((Cliente.CodRota = Rota.CodRota) OR (ClienteDiaSemana.CodRota = Rota.CodRota))
+                  AND Material.EmbRetornavel = 0
+                  AND Material.CodGrupo = Grupo.CodGrupo
+                  AND Cliente.CodSegmento = Segmento.CodSegmento
+                  AND PedidoVenda.UnidGestora IN (select UnidGestora from unidadegestora)
+                  AND PedidoVenda.CodNaturezaOperacao = NaturezaOperacao.CodNaturezaOperacao
+                  AND NaturezaOperacao.Venda = 1
+                  AND (PedidoVenda.DataVenda >= @P1) AND (PedidoVenda.DataVenda < @P2)
+              ) AS QtdClientePedido,
+
+              ( SELECT COUNT(DISTINCT Cliente.CodCliente)
+                FROM Rota, PocketVisita, Cliente
+                LEFT JOIN ClienteDiaSemana ON ClienteDiaSemana.CodCliente = Cliente.CodCliente
+                WHERE
+                  Rota.CodAreaVenda = AreaVenda.CodAreaVenda
+                  AND Cliente.CodCliente = PocketVisita.CodCliente
+                  AND Cliente.Ativo = 1
+                  AND ((Cliente.CodRota = Rota.CodRota) OR (ClienteDiaSemana.CodRota = Rota.CodRota))
+                  AND Cliente.ECliente = 1
+                  AND (PocketVisita.Data >= @P1) AND (PocketVisita.Data < @P2)
+                  AND Cliente.CodSegmento = Segmento.CodSegmento
+              ) AS QtdClienteVisita,
+
+              ( SELECT COUNT(DISTINCT Cliente.CodCliente)
+                FROM Rota, PocketVisita, Cliente
+                LEFT JOIN ClienteDiaSemana ON ClienteDiaSemana.CodCliente = Cliente.CodCliente
+                WHERE
+                  Rota.CodAreaVenda = AreaVenda.CodAreaVenda
+                  AND Cliente.CodCliente = PocketVisita.CodCliente
+                  AND Cliente.Ativo = 1
+                  AND Cliente.ECliente = 1
+                  AND Cliente.CodSegmento = Segmento.CodSegmento
+                  AND ((Cliente.CodRota = Rota.CodRota) OR (ClienteDiaSemana.CodRota = Rota.CodRota))
+                  AND (PocketVisita.Data >= @P1) AND (PocketVisita.Data < @P2)
+                  AND PocketVisita.QtdPedidos > 0
+              ) AS QtdClienteVisitaPositivada
+
+            FROM Funcionario, AreaVenda, Segmento
+            WHERE
+              Funcionario.CodFuncionario = AreaVenda.CodVendedor
+              AND Funcionario.UnidGestora IN (SELECT UnidGestora FROM UserUsuarioUnidade WHERE ID = 'ESIGMA')
+              {vend_filter_sql}
+            ORDER BY
+              AreaVenda.AreaVenda, Funcionario.Funcionario, Segmento.Segmento;
+        """)
+        columns = [col[0] for col in cursor.description]
+        rows = cursor.fetchall()
+        return [dict(zip(columns, row)) for row in rows]

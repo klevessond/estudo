@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
-from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor
+from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor,buscar_resumo_segmento_area_venda
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 # Create your views here.
@@ -774,5 +774,60 @@ class RupturaView(APIView):
         try:
             dados = buscar_ruptura(de, ate, cod_vendedor=cod_vendedor)
             return Response({"ruptura": dados})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+    
+
+class ResumoSegmentoAreaVendaView(APIView):
+    # permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        de = request.GET.get("de")
+        ate = request.GET.get("ate")
+        cods = request.GET.get("cod_funcionarios")  # opcional: "23,45,209"
+
+        if not de or not ate:
+            return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
+
+        def _to_int_list_from_csv(s: str | None):
+            out = []
+            if not s:
+                return out
+            for part in s.split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                try:
+                    out.append(int(part))
+                except ValueError:
+                    pass
+            # únicos e ordenados
+            return sorted(set(out))
+
+        # 1) Se o cliente passou a lista via querystring, usamos ela
+        cod_func_list = _to_int_list_from_csv(cods)
+
+        # 2) Senão, decidimos conforme o papel do usuário
+        if not cod_func_list:
+            ctx = get_role_context(request.user)
+
+            if getattr(ctx, "is_supervisor", False):
+                # igual ao IndicadoresView: pega vendedores das rotas do supervisor
+                rotas_info = buscar_rotas_usuario(ctx)  # {'rotas': [...], 'vendedores': [...], ...}
+                vendedores = rotas_info.get("vendedores") if rotas_info else None
+                cod_func_list = vendedores or []  # se None, sem filtro
+            elif getattr(ctx, "is_vendedor", False):
+                # vendedores da mesma área de supervisão do vendedor logado
+                cod_func_list = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario) or [ctx.cod_funcionario]
+            else:
+                # admin / outro papel -> sem filtro (lista vazia = todos)
+                cod_func_list = []
+
+        try:
+            rows = buscar_resumo_segmento_area_venda(
+                de, ate,
+                cod_funcionarios=(cod_func_list or None)  # None => sem filtro
+            )
+            return Response({"resultado": rows})
         except Exception as e:
             return Response({"error": str(e)}, status=500)
