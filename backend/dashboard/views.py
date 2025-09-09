@@ -172,24 +172,57 @@ class IndicadoresView(APIView):
         objetivo["financeiro"] = round(float(objetivo_financeiro or 0), 2)
         objetivo["objetivo_mix"] = round(float(objetivo_mix or 0), 2)
 
-        #  VENDAS REALIZADAS
-        vendido = buscar_vendido(data_inicio, data_fim, rotas=rotas_codigos)
-        venda_realizada = vendido.get("venda_realizada", 0)
-        venda_realizada = float(vendido.get("venda_realizada", 0))
-        peso_realizado = vendido.get("peso_realizado", 0)
-        
+        # --- helpers p/ tipos ---
+        def _to_int(v):
+            try:
+                return int(str(v).strip())
+            except (TypeError, ValueError):
+                return None
 
+        def _to_float(v):
+            try:
+                return float(v or 0)
+            except (TypeError, ValueError):
+                return 0.0
 
-        print(f"[DEBUG] Venda realizada {venda_realizada}")
-        print(f"[DEBUG] rotas {rotas_codigos}")
-        
-         #  VENDAS DO MESMO PERÍODO NO ANO ANTERIOR
+        # --- lista de vendedores conforme papel ---
+        vendedores_list = rotas_info.get("vendedores") if rotas_info else None
+        # se for vendedor, use todos os vendedores da mesma área de supervisão
+        if ctx.is_vendedor:
+            from dashboard.services.indicadores.rotas_simples import buscar_vendedores_mesma_supervisao
+            vendedores_list = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario)
+
+        vendedores_set = {v for v in map(_to_int, (vendedores_list or [])) if v is not None}
+
+        # =========================
+        # VENDAS REALIZADAS (NOVO)
+        # =========================
+        vendido = buscar_vendas_por_vendedor(data_inicio, data_fim)
+        lista = vendido.get("vendas_por_vendedor", []) or []
+
+        # filtra por vendedores quando houver lista (admin sem filtro mantém todos)
+        if vendedores_set:
+            lista = [it for it in lista if _to_int(it.get("codcampo")) in vendedores_set]
+
+        # somatórios
+        venda_realizada = sum(_to_float(it.get("ValorLiquido")) for it in lista)
+        peso_realizado  = sum(_to_float(it.get("PesoTotal"))    for it in lista)
+
+        print(f"[DEBUG] venda_realizada (soma ValorLiquido): {venda_realizada}")
+        print(f"[DEBUG] peso_realizado (soma PesoTotal): {peso_realizado}")
+
+        # ===========================================
+        # VENDAS DO MESMO PERÍODO NO ANO ANTERIOR (NOVO)
+        # ===========================================
         ano_anterior_inicio = ajustar_data_para_ano_anterior(data_inicio)
-        ano_anterior_fim = ajustar_data_para_ano_anterior(data_fim)
-        print(f"[DEBUG] Consultando vendas do ano anterior entre {ano_anterior_inicio} e {ano_anterior_fim}")
-        vendido_ano_anterior = buscar_vendido(ano_anterior_inicio, ano_anterior_fim,rotas=rotas_codigos)
-        venda_ano_anterior = float(vendido_ano_anterior.get("venda_realizada", 1) or 1)
-        venda_ano_anterior = vendido_ano_anterior.get("venda_realizada", 1) or 1  # evita divisão por zero
+        ano_anterior_fim    = ajustar_data_para_ano_anterior(data_fim)
+
+        res_aa  = buscar_vendas_por_vendedor(ano_anterior_inicio, ano_anterior_fim)
+        lista_aa = res_aa.get("vendas_por_vendedor", []) or []
+        if vendedores_set:
+            lista_aa = [it for it in lista_aa if _to_int(it.get("codcampo")) in vendedores_set]
+
+        venda_ano_anterior = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa) or 1.0  # evita div/0
         
         #  POSITIVAÇÃO
         positivacao = buscar_positivacao_por_rota(data_inicio, data_fim,rotas=rotas_codigos,cod_vendedores=vendedores)
