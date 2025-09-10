@@ -119,6 +119,7 @@ const Dashboard = () => {
               <CardsColaborador
                 colaborador={colaboradorSelecionado}
                 objetivosVendedores={objetivosVendedores}
+                periodoSelecionado={periodoSelecionado}
               />
               {colaboradorSelecionado.colaborador}
             </>

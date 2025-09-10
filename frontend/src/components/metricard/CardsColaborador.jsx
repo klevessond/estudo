@@ -1,8 +1,9 @@
 import React from 'react';
 import './CardsColaborador.css';
+import ResumoSegmentoPies from '../Piechart/ResumoSegmentoPies';
 import ReactSpeedometer from 'react-d3-speedometer';
 
-const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
+const CardsColaborador = ({ colaborador, objetivosVendedores,periodoSelecionado }) => {
   const [modo, setModo] = React.useState('graficos');
   if (!colaborador) return null;
 
@@ -104,6 +105,14 @@ const CardsColaborador = ({ colaborador, objetivosVendedores }) => {
                     height={160}
                   />
                 </div>
+                {/* 🆕 Pizzas por Segmento (Clientes e Positivações) */}
+         <div style={{ marginTop: '1.5rem' }}>
+           <h3>Composição por Segmento</h3>
+           <ResumoSegmentoPies
+             periodoSelecionado={periodoSelecionado}
+             codFuncionario={Number(colaborador.codFuncionario)}
+           />
+         </div>
           </div>
         </div>
       ) : (
