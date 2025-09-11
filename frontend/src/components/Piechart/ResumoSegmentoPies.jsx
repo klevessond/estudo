@@ -1,207 +1,230 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+// src/components/Piechart/ResumoSegmentoPies.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import Plot from "react-plotly.js";
 import api from "../../api";
-import "../Piechart/PieChart.css"
+import "../Piechart/PieChart.css"; // usa o seu CSS
 
-// Normaliza qualquer número (aceita "1.234,56", "1234,56", "1234.56", inteiro, etc.)
-function toNumber(v) {
-  if (v == null) return 0;
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  if (typeof v === "string") {
-    const s = v.replace(/\./g, "").replace(",", "."); // BR -> EN
-    const n = Number(s.trim());
-    return Number.isFinite(n) ? n : 0;
-  }
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
+// Paleta base (personalize à vontade)
+const PALETTE = [
+  "#2563EB", "#16A34A", "#DC2626", "#F59E0B", "#8B5CF6",
+  "#0891B2", "#EF4444", "#10B981", "#F97316", "#0EA5E9",
+  "#84CC16", "#A855F7", "#E11D48", "#14B8A6", "#F43F5E",
+  "#22C55E", "#3B82F6", "#D946EF", "#9CA3AF", "#7C3AED",
+];
 
 export default function ResumoSegmentoPies({ periodoSelecionado, codFuncionario }) {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState(null);
-  const [linhas, setLinhas] = useState([]);
-
-  // Largura reativa dos contêineres
-  const wrapRef = useRef(null);
-  const [wrapWidth, setWrapWidth] = useState(0);
-
-  useLayoutEffect(() => {
-    if (!wrapRef.current) return;
-    const el = wrapRef.current;
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) {
-        const w = Math.max(320, Math.floor(e.contentRect.width / 2) - 12); // metade para cada pizza
-        setWrapWidth(w);
-      }
-    });
-    ro.observe(el);
-    // dispara um "resize" para o Plotly recalcular
-    const kick = () => window.dispatchEvent(new Event("resize"));
-    kick();
-    return () => ro.disconnect();
-  }, []);
+  const [clientesData, setClientesData] = useState([]); // [{ Segmento, QtdCliente, PercCliente }]
+  const [positData, setPositData] = useState([]);       // [{ Segmento, QtdClientePedido, PercPositivacao }]
+  const [rateData, setRateData] = useState([]);         // [{ Segmento, QtdCliente, QtdClientePedido, PercTaxaPositivacao }]
 
   useEffect(() => {
-    const run = async () => {
+    (async () => {
       try {
         setErro(null);
         if (!periodoSelecionado?.de || !periodoSelecionado?.ate || !codFuncionario) {
-          setLinhas([]);
+          setClientesData([]);
+          setPositData([]);
+          setRateData([]);
           return;
         }
         setLoading(true);
         const { de, ate } = periodoSelecionado;
 
-        // ✅ seu padrão: await api.get com params
         const response = await api.get("/resumo-segmento-area-venda/", {
           params: { de, ate, cod_funcionarios: codFuncionario },
         });
 
-        const data = response?.data?.resultado ?? [];
-        console.log("[ResumoSegmentoPies] linhas (amostra):", data.slice(0, 5));
-        setLinhas(Array.isArray(data) ? data : []);
+        const g = response?.data?.graficos || {};
+        setClientesData(Array.isArray(g.segmentos_clientes) ? g.segmentos_clientes : []);
+        setPositData(Array.isArray(g.segmentos_positivacoes) ? g.segmentos_positivacoes : []);
+        setRateData(Array.isArray(g.segmentos_taxa_positivacao) ? g.segmentos_taxa_positivacao : []);
       } catch (e) {
         setErro(e?.message || "Erro ao carregar resumo.");
-        setLinhas([]);
+        setClientesData([]);
+        setPositData([]);
+        setRateData([]);
       } finally {
         setLoading(false);
       }
-    };
-    run();
+    })();
   }, [periodoSelecionado, codFuncionario]);
 
-  // === Agrupamento com fallbacks robustos ===
-  const { labels, valoresClientes, valoresPositivacoes, debug } = useMemo(() => {
-    const acc = new Map();
-    for (const r of linhas) {
-      const seg =
-        r.Segmento ?? r.segmento ?? r.segment ?? r.SEGMENTO ?? "—";
+  // Pie 1 — Segmentos x Clientes
+  const { labelsCli, valuesCli, percsCli, totalCli } = useMemo(() => {
+    const labels = clientesData.map(x => x.Segmento ?? "—");
+    const values = clientesData.map(x => Number(x.QtdCliente) || 0);
+    const percs  = clientesData.map(x => Number(x.PercCliente) || 0);
+    const total  = values.reduce((a, b) => a + b, 0);
+    return { labelsCli: labels, valuesCli: values, percsCli: percs, totalCli: total };
+  }, [clientesData]);
 
-      // variações possíveis dos campos (PascalCase, camelCase, snake_case)
-      const base =
-        toNumber(r.QtdCliente ?? r.qtdCliente ?? r.qtd_cliente ?? r.QTDCLIENTE);
-      const pedidoCli =
-        toNumber(r.QtdClientePedido ?? r.qtdClientePedido ?? r.qtd_cliente_pedido);
-      const visitaCli =
-        toNumber(r.QtdClienteVisita ?? r.qtdClienteVisita ?? r.qtd_cliente_visita);
-      const posiCli =
-        toNumber(
-          r.QtdClienteVisitaPositivada ??
-            r.qtdClienteVisitaPositivada ??
-            r.qtd_cliente_visita_positivada
-        );
-      const qtdPedido =
-        toNumber(r.QtdPedido ?? r.qtdPedido ?? r.qtd_pedido);
+  // Pie 2 — Segmentos x Positivações
+  const { labelsPos, valuesPos, percsPos, totalPos } = useMemo(() => {
+    const labels = positData.map(x => x.Segmento ?? "—");
+    const values = positData.map(x => Number(x.QtdClientePedido) || 0);
+    const percs  = positData.map(x => Number(x.PercPositivacao) || 0);
+    const total  = values.reduce((a, b) => a + b, 0);
+    return { labelsPos: labels, valuesPos: values, percsPos: percs, totalPos: total };
+  }, [positData]);
 
-      if (!acc.has(seg)) acc.set(seg, { base: 0, pedidoCli: 0, visitaCli: 0, posiCli: 0, qtdPedido: 0 });
-      const x = acc.get(seg);
-      x.base += base;
-      x.pedidoCli += pedidoCli;
-      x.visitaCli += visitaCli;
-      x.posiCli += posiCli;
-      x.qtdPedido += qtdPedido;
-    }
+  // Pie 3 — % Positivação por Segmento (dados já do backend)
+  const {
+    labelsRate,
+    valuesRateBase,   // base de clientes (tamanho da fatia)
+    posCounts,        // positivaram
+    percsRate,        // % taxa (backend)
+    totalRateBase
+  } = useMemo(() => {
+    const labels = rateData.map(x => x.Segmento ?? "—");
+    const base   = rateData.map(x => Number(x.QtdCliente) || 0);
+    const pos    = rateData.map(x => Number(x.QtdClientePedido) || 0);
+    const percs  = rateData.map(x => Number(x.PercTaxaPositivacao) || 0);
+    const total  = base.reduce((a, b) => a + b, 0);
+    return { labelsRate: labels, valuesRateBase: base, posCounts: pos, percsRate: percs, totalRateBase: total };
+  }, [rateData]);
 
-    let sumPedidoCli = 0, sumVisitaCli = 0, sumBase = 0, sumPosi = 0, sumQtdPedido = 0;
-    for (const v of acc.values()) {
-      sumPedidoCli += v.pedidoCli;
-      sumVisitaCli += v.visitaCli;
-      sumBase += v.base;
-      sumPosi += v.posiCli;
-      sumQtdPedido += v.qtdPedido;
-    }
+  // Hover já formatado (evita customdata[...])
+  const hoverTextRate = useMemo(() => {
+    const fmt = (n, d = 2) => Number(n).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+    return labelsRate.map((seg, i) =>
+      `${seg}<br>Clientes: ${valuesRateBase[i]}<br>Positivaram: ${posCounts[i]} (${fmt(percsRate[i])}%)`
+    );
+  }, [labelsRate, valuesRateBase, posCounts, percsRate]);
 
-    // Clientes: pedidoCli > visitaCli > base
-    const keyClientes = sumPedidoCli > 0 ? "pedidoCli" : (sumVisitaCli > 0 ? "visitaCli" : "base");
-    // Positivação: posiCli > qtdPedido
-    const keyPosi = sumPosi > 0 ? "posiCli" : "qtdPedido";
+  // Cores consistentes por segmento (mesmas nos 3 gráficos)
+  const allSegments = useMemo(() => {
+    return Array.from(new Set([...labelsCli, ...labelsPos, ...labelsRate])).filter(Boolean).sort();
+  }, [labelsCli, labelsPos, labelsRate]);
 
-    const labels = [];
-    const valsClientes = [];
-    const valsPosi = [];
-    for (const [seg, v] of acc.entries()) {
-      labels.push(seg);
-      valsClientes.push(v[keyClientes]);
-      valsPosi.push(v[keyPosi]);
-    }
+  const colorMap = useMemo(() => {
+    const map = new Map();
+    allSegments.forEach((seg, i) => map.set(seg, PALETTE[i % PALETTE.length]));
+    return map;
+  }, [allSegments]);
 
-    const debug = { sumPedidoCli, sumVisitaCli, sumBase, sumPosi, sumQtdPedido, keyClientes, keyPosi };
-    console.log("[ResumoSegmentoPies] somas:", debug);
-
-    return { labels, valoresClientes: valsClientes, valoresPositivacoes: valsPosi, debug };
-  }, [linhas]);
+  const colorsCli  = useMemo(() => labelsCli.map(seg => colorMap.get(seg) || PALETTE[0]), [labelsCli, colorMap]);
+  const colorsPos  = useMemo(() => labelsPos.map(seg => colorMap.get(seg) || PALETTE[0]), [labelsPos, colorMap]);
+  const colorsRate = useMemo(() => labelsRate.map(seg => colorMap.get(seg) || PALETTE[0]), [labelsRate, colorMap]);
 
   if (loading) return <div>Carregando gráficos…</div>;
   if (erro) return <div style={{ color: "crimson" }}>{erro}</div>;
 
-  const totalClientes = valoresClientes.reduce((a, b) => a + b, 0);
-  const totalPosi = valoresPositivacoes.reduce((a, b) => a + b, 0);
+  return (
+    // Wrapper flex: mantém seu CSS nos cards e coloca lado a lado quando houver espaço (>= 560*2 + gap)
+    <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "stretch" }}>
+      {/* Pie 1: Segmentos × Clientes (legenda à direita) */}
+      <div className="pie-chart-plotly-container">
+        <h2>Segmentos × Clientes</h2>
+        {totalCli > 0 ? (
+          <Plot
+            data={[
+              {
+                type: "pie",
+                labels: labelsCli,
+                values: valuesCli,
+                customdata: percsCli, // percentual vindo da API
+                textinfo: "label+value+percent",
+                insidetextorientation: "auto",
+                textposition: "inside",
+                hovertemplate:
+                  "%{label}<br>Clientes: %{value}<br>Participação: %{customdata:.2f}%<extra></extra>",
+                domain: { x: [0, 0.78], y: [0, 1] },
+                sort: false,
+                marker: { colors: colorsCli },
+              },
+            ]}
+            layout={{
+              margin: { t: 24, b: 24, l: 24, r: 180 },
+              height: 380,
+              showlegend: true,
+              legend: { orientation: "v", x: 1.02, xanchor: "left", y: 0.5 },
+            }}
+            config={{ responsive: true, displaylogo: false, modeBarButtonsToRemove: ["toImage"] }}
+            useResizeHandler
+            style={{ width: "100%", height: "380px" }}
+          />
+        ) : (
+          <div>Sem valores &gt; 0 para Clientes.</div>
+        )}
+      </div>
 
-return (
-  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-    {/* Pizza 1 */}
-    <div className="pie-chart-plotly-container">
-      <h4 style={{ marginBottom: 8, textAlign: "left" }}>Segmentos × Clientes</h4>
-      {totalClientes > 0 ? (
-        <Plot
-          data={[{
-            type: "pie",
-            labels,
-            values: valoresClientes,
-            textinfo: "label+value+percent",
-            insidetextorientation: "auto",
-            textposition: "inside",
-            hoverinfo: "label+value+percent",
-            domain: { x: [0, 0.78], y: [0, 1] },
-            sort: false,
-          }]}
-          layout={{
-            margin: { t: 24, b: 24, l: 24, r: 200 },
-            height: 360,
-            width: 720,
-            showlegend: true,
-            legend: { x: 1.02, xanchor: "left", y: 0.5, orientation: "v" },
-          }}
-          config={{ responsive: true, displaylogo: false, modeBarButtonsToRemove: ["toImage"] }}
-          style={{ width: "100%" }}
-          key={`clientes-${labels.length}-${totalClientes}`}
-        />
-      ) : (
-        <div>Sem valores &gt; 0 para Clientes.</div>
-      )}
-    </div>
+      {/* Pie 2: Segmentos × Positivações (legenda à direita) */}
+      <div className="pie-chart-plotly-container">
+        <h2>Segmentos × Positivações</h2>
+        {totalPos > 0 ? (
+          <Plot
+            data={[
+              {
+                type: "pie",
+                labels: labelsPos,
+                values: valuesPos,
+                customdata: percsPos, // percentual vindo da API
+                textinfo: "label+value+percent",
+                insidetextorientation: "auto",
+                textposition: "inside",
+                hovertemplate:
+                  "%{label}<br>Positivações: %{value}<br>Participação: %{customdata:.2f}%<extra></extra>",
+                domain: { x: [0, 0.78], y: [0, 1] },
+                sort: false,
+                marker: { colors: colorsPos },
+              },
+            ]}
+            layout={{
+              margin: { t: 24, b: 24, l: 24, r: 180 },
+              height: 380,
+              showlegend: true,
+              legend: { orientation: "v", x: 1.02, xanchor: "left", y: 0.5 },
+            }}
+            config={{ responsive: true, displaylogo: false, modeBarButtonsToRemove: ["toImage"] }}
+            useResizeHandler
+            style={{ width: "100%", height: "380px" }}
+          />
+        ) : (
+          <div>Sem valores &gt; 0 para Positivações.</div>
+        )}
+      </div>
 
-    {/* Pizza 2 */}
-    <div className="pie-chart-plotly-container">
-      <h4 style={{ marginBottom: 8, textAlign: "left" }}>Segmentos × Positivações</h4>
-      {totalPosi > 0 ? (
-        <Plot
-          data={[{
-            type: "pie",
-            labels,
-            values: valoresPositivacoes,
-            textinfo: "label+value+percent",
-            insidetextorientation: "auto",
-            textposition: "inside",
-            hoverinfo: "label+value+percent",
-            domain: { x: [0, 0.78], y: [0, 1] },
-            sort: false,
-          }]}
-          layout={{
-            margin: { t: 24, b: 24, l: 24, r: 200 },
-            height: 360,
-            width: 720,
-            showlegend: true,
-            legend: { x: 1.02, xanchor: "left", y: 0.5, orientation: "v" },
-          }}
-          config={{ responsive: true, displaylogo: false, modeBarButtonsToRemove: ["toImage"] }}
-          style={{ width: "100%" }}
-          key={`posi-${labels.length}-${totalPosi}`}
-        />
-      ) : (
-        <div>Sem valores &gt; 0 para Positivações.</div>
-      )}
+      {/* Pie 3: % Positivação por Segmento (pizza, legenda à direita) */}
+      <div className="pie-chart-plotly-container">
+        <h2>% Positivação por Segmento</h2>
+        {totalRateBase > 0 ? (
+          <Plot
+            data={[
+              {
+                type: "pie",
+                labels: labelsRate,
+                values: valuesRateBase, // base de clientes do segmento (tamanho da fatia)
+                text: percsRate.map(p => `${Number(p).toFixed(1)}%`), // mostra a % na fatia
+                textinfo: "label+text",
+                textposition: "inside",
+                insidetextorientation: "auto",
+                hovertext: labelsRate.map((seg, i) => {
+                  const fmt = (n, d = 2) =>
+                    Number(n).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+                  return `${seg}<br>Clientes: ${valuesRateBase[i]}<br>Positivaram: ${posCounts[i]} (${fmt(percsRate[i])}%)`;
+                }),
+                hovertemplate: "%{hovertext}<extra></extra>", // evita customdata[...]
+                domain: { x: [0, 0.78], y: [0, 1] },
+                sort: false,
+                marker: { colors: colorsRate },
+              },
+            ]}
+            layout={{
+              margin: { t: 24, b: 24, l: 24, r: 180 },
+              height: 380,
+              showlegend: true,
+              legend: { orientation: "v", x: 1.02, xanchor: "left", y: 0.5 },
+            }}
+            config={{ responsive: true, displaylogo: false, modeBarButtonsToRemove: ["toImage"] }}
+            useResizeHandler
+            style={{ width: "100%", height: "380px" }}
+          />
+        ) : (
+          <div>Sem valores &gt; 0 para Taxa de Positivação.</div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
 }

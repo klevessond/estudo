@@ -823,11 +823,74 @@ class ResumoSegmentoAreaVendaView(APIView):
                 # admin / outro papel -> sem filtro (lista vazia = todos)
                 cod_func_list = []
 
-        try:
-            rows = buscar_resumo_segmento_area_venda(
-                de, ate,
-                cod_funcionarios=(cod_func_list or None)  # None => sem filtro
-            )
-            return Response({"resultado": rows})
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
+         # === busca crua ===
+        rows = buscar_resumo_segmento_area_venda(
+            de, ate, cod_funcionarios=(cod_func_list or None)
+        )
+
+        # === agrega por segmento e prepara os vetores para os gráficos ===
+        def to_int(v):
+            try:
+                return int(v or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        agrup = defaultdict(lambda: {"QtdCliente": 0, "QtdClientePedido": 0})
+
+        for r in rows or []:
+            seg = r.get("Segmento") or r.get("segmento") or "—"
+            agrup[seg]["QtdCliente"] += to_int(r.get("QtdCliente"))
+            agrup[seg]["QtdClientePedido"] += to_int(r.get("QtdClientePedido"))
+
+        total_cli = sum(v["QtdCliente"] for v in agrup.values())
+        total_pos = sum(v["QtdClientePedido"] for v in agrup.values())
+
+        def pct(n, d):
+            return round((n / d * 100) if d else 0, 2)
+
+        segmentos_clientes = [
+            {
+                "Segmento": seg,
+                "QtdCliente": vals["QtdCliente"],
+                "PercCliente": pct(vals["QtdCliente"], total_cli),
+            }
+            for seg, vals in agrup.items()
+            if vals["QtdCliente"] > 0
+        ]
+        segmentos_positivacoes = [
+            {
+                "Segmento": seg,
+                "QtdClientePedido": vals["QtdClientePedido"],
+                "PercPositivacao": pct(vals["QtdClientePedido"], total_pos),
+            }
+            for seg, vals in agrup.items()
+            if vals["QtdClientePedido"] > 0
+        ]
+        segmentos_taxa_positivacao = []
+        for seg, vals in agrup.items():  # agrup tem QtdCliente e QtdClientePedido por segmento
+            base = vals["QtdCliente"]
+            posi = vals["QtdClientePedido"]
+            if base > 0:
+                taxa = round((posi / base) * 100, 2)
+                segmentos_taxa_positivacao.append({
+                    "Segmento": seg,
+                    "QtdCliente": base,
+                    "QtdClientePedido": posi,
+                    "PercTaxaPositivacao": taxa,
+                })
+
+        # ordena decrescente para facilitar o plot
+        segmentos_clientes.sort(key=lambda x: x["QtdCliente"], reverse=True)
+        segmentos_positivacoes.sort(key=lambda x: x["QtdClientePedido"], reverse=True)
+        segmentos_taxa_positivacao.sort(key=lambda x: x["PercTaxaPositivacao"], reverse=True)
+
+        return Response({
+            "graficos": {
+                "segmentos_clientes": segmentos_clientes,
+                "segmentos_positivacoes": segmentos_positivacoes,
+                "segmentos_taxa_positivacao": segmentos_taxa_positivacao,
+                "totais": {"clientes": total_cli, "positivacoes": total_pos},
+            },
+            # mantém o payload antigo para compatibilidade, se você ainda precisar
+            "resultado": rows,
+        })
