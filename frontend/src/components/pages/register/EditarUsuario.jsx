@@ -1,5 +1,7 @@
+// EditarUsuario.jsx
 import React, { useEffect, useState } from 'react';
 import './EditarUsuario.css';
+import api from '../../../api'; // <- usa a instância central do axios
 
 function EditarUsuario({ id, onSaved, onCancel }) {
   const [usuario, setUsuario] = useState({
@@ -12,7 +14,6 @@ function EditarUsuario({ id, onSaved, onCancel }) {
     confirmPassword: '',
     funcionario: '',         // CodFuncionario (string)
     funcionario_nome: '',    // apenas exibição
-
     // dados que vamos ENVIAR no profile (sem exibir inputs)
     cod_unid_gestora: null,
     entregador: false,
@@ -26,29 +27,33 @@ function EditarUsuario({ id, onSaved, onCancel }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showFuncionarios, setShowFuncionarios] = useState(false);
   const [funcionarios, setFuncionarios] = useState([]);
-
   const [errors, setErrors] = useState({ global: null, fields: {} });
 
-  // Busca funcionários ao digitar
+  // Busca funcionários ao digitar (AGORA via api e sem localhost)
   useEffect(() => {
-    if (searchTerm.length > 2) {
-      fetch(`http://localhost:8000/funcionarios/?search=${encodeURIComponent(searchTerm)}`)
-        .then(r => r.json())
-        .then(data => setFuncionarios(data.funcionarios_sql || []))
-        .catch(err => console.error('Erro ao buscar funcionários:', err));
-    }
+    let cancel = false;
+    const run = async () => {
+      if (searchTerm.length <= 2) return;
+      try {
+        const { data } = await api.get('/funcionarios/', {
+          params: { search: searchTerm }
+        });
+        if (!cancel) setFuncionarios(data.funcionarios_sql || []);
+      } catch (err) {
+        console.error('Erro ao buscar funcionários:', err);
+      }
+    };
+    const t = setTimeout(run, 300); // debounce simples
+    return () => { cancel = true; clearTimeout(t); };
   }, [searchTerm]);
 
-  // Carrega dados do usuário + lista inicial de funcionários
+  // Carrega dados do usuário + lista inicial de funcionários (AGORA via api)
   useEffect(() => {
     if (!id) return;
-
-    fetch(`http://localhost:8000/usuario/${id}/`)
-      .then(res => {
-        if (!res.ok) throw new Error(`Erro ao buscar usuário: ${res.status}`);
-        return res.json();
-      })
-      .then(data => {
+    (async () => {
+      try {
+        // carrega usuário
+        const { data } = await api.get(`/usuario/${id}/`);
         const cod_funcionario = data.profile?.cod_funcionario?.toString() || '';
         setUsuario(prev => ({
           ...prev,
@@ -58,7 +63,6 @@ function EditarUsuario({ id, onSaved, onCancel }) {
           last_name: data.last_name || '',
           telefone: data.profile?.phone ? formatPhone(data.profile.phone) : '',
           funcionario: cod_funcionario,
-
           // flags atuais do PROFILE (mantemos enquanto não trocar de funcionário)
           cod_unid_gestora: data.profile?.cod_unid_gestora ?? null,
           entregador: !!data.profile?.entregador,
@@ -69,37 +73,36 @@ function EditarUsuario({ id, onSaved, onCancel }) {
           cobrador: !!data.profile?.cobrador,
         }));
 
-        // Lista base de funcionários e tenta obter o nome do atual
-        fetch("http://localhost:8000/funcionarios/")
-          .then(r => r.json())
-          .then(listData => {
-            let lista = listData.funcionarios_sql || [];
-            const jaTem = lista.some(f => f.CodFuncionario?.toString() === cod_funcionario);
+        // lista base de funcionários
+        const listaResp = await api.get('/funcionarios/');
+        let lista = listaResp.data?.funcionarios_sql || [];
+        const jaTem = lista.some(f => f.CodFuncionario?.toString() === cod_funcionario);
 
-            if (cod_funcionario && !jaTem) {
-              // Busca individual se não veio na lista
-              fetch(`http://localhost:8000/funcionarios/${cod_funcionario}/`)
-                .then(r => r.json())
-                .then(func => {
-                  if (func && func.CodFuncionario) lista.push(func);
-                  setFuncionarios(lista);
-                  const nome = func?.Funcionario || '';
-                  setUsuario(prev => ({ ...prev, funcionario_nome: nome }));
-                })
-                .catch(() => setFuncionarios(lista));
-            } else {
-              setFuncionarios(lista);
-              const func = lista.find(f => f.CodFuncionario?.toString() === cod_funcionario);
-              if (func) {
-                setUsuario(prev => ({ ...prev, funcionario_nome: func.Funcionario }));
-              }
-            }
-          });
-      })
-      .catch(err => console.error('Erro ao buscar usuário/funcionários:', err));
+        if (cod_funcionario && !jaTem) {
+          // busca individual se não veio na lista
+          try {
+            const { data: func } = await api.get(`/funcionarios/${cod_funcionario}/`);
+            if (func && func.CodFuncionario) lista.push(func);
+            setFuncionarios(lista);
+            const nome = func?.Funcionario || '';
+            setUsuario(prev => ({ ...prev, funcionario_nome: nome }));
+          } catch {
+            setFuncionarios(lista);
+          }
+        } else {
+          setFuncionarios(lista);
+          const func = lista.find(f => f.CodFuncionario?.toString() === cod_funcionario);
+          if (func) {
+            setUsuario(prev => ({ ...prev, funcionario_nome: func.Funcionario }));
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao buscar usuário/funcionários:', err);
+      }
+    })();
   }, [id]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (usuario.password !== usuario.confirmPassword) {
@@ -129,48 +132,38 @@ function EditarUsuario({ id, onSaved, onCancel }) {
       payload.password = usuario.password;
     }
 
-    fetch(`http://localhost:8000/usuario/${id}/`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-      .then(async res => {
-        if (res.ok) {
-          alert("Usuário atualizado com sucesso!");
-          onSaved?.();
-          return;
-        }
-        // Tenta ler JSON de erro
-        let data = {};
-        try { data = await res.json(); } catch { /* mantém vazio */ }
+    try {
+      const res = await api.put(`/usuario/${id}/`, payload);
+      if (res.status >= 200 && res.status < 300) {
+        alert("Usuário atualizado com sucesso!");
+        onSaved?.();
+        return;
+      }
+    } catch (err) {
+      // tenta extrair JSON de erro (DRF)
+      const data = err?.response?.data || {};
+      const msg =
+        data?.profile?.cod_funcionario?.[0] ||
+        data?.detail ||
+        'Erro ao atualizar usuário.';
 
-        // Extrai mensagem amigável (ex.: profile.cod_funcionario já usado)
-        const msg =
-          data?.profile?.cod_funcionario?.[0] ||
-          data?.detail ||
-          'Erro ao atualizar usuário.';
-
-        // Preenche estado de erros para mostrar na página
-        setErrors({
-          global: msg,
-          fields: {
-            cod_funcionario: data?.profile?.cod_funcionario?.[0],
-          },
-        });
-      })
-
-      .catch(err => console.error('Erro ao atualizar usuário:', err));
+      setErrors({
+        global: msg,
+        fields: {
+          cod_funcionario: data?.profile?.cod_funcionario?.[0],
+        },
+      });
+      return;
+    }
   };
 
-  // Quando escolher um funcionário, pegamos os flags dele e **aplicamos ao profile**
+  // Quando escolher um funcionário, aplicamos flags ao profile
   const escolherFuncionario = (func) => {
     setUsuario(prev => ({
       ...prev,
       funcionario: func.CodFuncionario?.toString() || '',
       funcionario_nome: func.Funcionario || '',
       cod_unid_gestora: func.UnidGestora ?? null,
-
-      // Deriva perfis a partir do funcionário
       entregador: !!func.Entregador,
       supervisor: !!func.Supervisor,
       transportador: !!func.Transportador,
@@ -192,18 +185,18 @@ function EditarUsuario({ id, onSaved, onCancel }) {
   return (
     <div className="editar-user-container">
       {errors.global && (
-  <div className="alert-error" role="alert">
-    <span>{errors.global}</span>
-    <button
-      type="button"
-      className="alert-close"
-      onClick={() => setErrors({ global: null, fields: {} })}
-      aria-label="Fechar alerta"
-    >
-      ×
-    </button>
-  </div>
-)}
+        <div className="alert-error" role="alert">
+          <span>{errors.global}</span>
+          <button
+            type="button"
+            className="alert-close"
+            onClick={() => setErrors({ global: null, fields: {} })}
+            aria-label="Fechar alerta"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <form className="editar-user-form" onSubmit={handleSubmit}>
         <div className="form-group">
@@ -277,7 +270,7 @@ function EditarUsuario({ id, onSaved, onCancel }) {
           />
         </div>
 
-        {/* Busca/seleção do funcionário (sem checkboxes de perfil) */}
+        {/* Busca/seleção do funcionário */}
         <div className="form-group funcionario-search">
           <label>Funcionário:</label>
           <input
@@ -301,10 +294,6 @@ function EditarUsuario({ id, onSaved, onCancel }) {
                     ...prev,
                     funcionario: '',
                     funcionario_nome: '',
-                    // se limpar, também podemos “zerar” os perfis, se fizer sentido:
-                    // entregador: false, supervisor: false, transportador: false,
-                    // transportador_aux: false, vendedor: false, cobrador: false,
-                    // cod_unid_gestora: null,
                   }));
                   setSearchTerm('');
                 }}

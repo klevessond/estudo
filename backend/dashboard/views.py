@@ -28,6 +28,7 @@ import logging
 from dashboard.roles import get_role_context  
 from dashboard.services.indicadores.info_service import Todos_Vendedores
 from dashboard.services.indicadores.ruptura_service import buscar_ruptura
+from dashboard.db_conn import query_all
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,12 @@ from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 # Create your views here.
+
+
+
+def clientes_top10(request):
+    rows = query_all("SELECT TOP 10 name FROM sys.tables")  # ajuste sua consulta
+    return JsonResponse({"data": rows})
 
 def get_dados_sql(request):
     with connections['dados_industria'].cursor() as cursor:
@@ -467,7 +474,7 @@ class IndicadoresPDV(APIView):
 
         try:
             dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
-            print(f"[DEBUG] Vendas PDV {dados_pdv["valor_pdv"]} e peso {dados_pdv["peso_pdv"]}")
+            print(f"[DEBUG] Vendas PDV {dados_pdv['valor_pdv']} e peso {dados_pdv['peso_pdv']}")
             venda_realizada_PDV= float(dados_pdv["valor_pdv"])
             peso_realizado_PDV = float(dados_pdv["peso_pdv"])
             ano_anterior_inicio_PDV = ajustar_data_para_ano_anterior(data_inicio)

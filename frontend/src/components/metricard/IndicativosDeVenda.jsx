@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import './IndicativosDeVenda.css';
 import ReactSpeedometer from 'react-d3-speedometer';
-import axios from 'axios';
 import api from '../../api';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 
-const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, variation, icon,className  }) => (
+const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, variation, icon, className }) => (
   <div className={`indicativo-card ${className || ''}`}>
     <div className="card-header">
       <h2>{title}</h2>
@@ -67,7 +66,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
   const [vendaPDVAnoAnterior, setVendaPDVAnoAnterior] = useState(null);
   const [evolucao_venda_vendapdv, setEvolucao_venda_vendapdv] = useState(null);
   const [captadoValor, setCaptadoValor] = useState(null);
-  const [percCaptado , setCpercCaptado ] = useState(null);
+  const [percCaptado, setCpercCaptado] = useState(null);
   const [modo, setModo] = useState('indicadores');
 
   useEffect(() => {
@@ -77,116 +76,103 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       setLoading(true);
 
       try {
-        const token = localStorage.getItem('token');
-        const response = await api.get(`http://localhost:8000/Indicadores/?de=${de}&ate=${ate}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const { data } = await api.get('/Indicadores/', { params: { de, ate } });
 
-        console.log('IndicativosDeVenda Dados completos da API:', response.data); // Log para depuração
-        console.log('IndicativosDeVenda Existe objetivo.detalhamento?', !!response.data.objetivo?.detalhamento);
+        console.log('IndicativosDeVenda Dados completos da API:', data);
+        console.log('IndicativosDeVenda Existe objetivo.detalhamento?', !!data.objetivo?.detalhamento);
 
-      const objetivos = [];
+        const objetivos = [];
 
-            // Dados do objetivo.detalhamento
-            if (Array.isArray(response.data.objetivo?.detalhamento)) {
-              const detalhamento = response.data.objetivo.detalhamento.map(item => ({
-                codFuncionario: Number(item.CodFuncionario),
-                nomeFuncionario: item.Funcionario,
-                objetivo: item.ObjetivoTotalVendedor || 0,
-                obrotatotal: item.PositivacaoTotalVendedor || 0,
-              }));
-              objetivos.push(...detalhamento);
-            }
+        if (Array.isArray(data.objetivo?.detalhamento)) {
+          const detalhamento = data.objetivo.detalhamento.map(item => ({
+            codFuncionario: Number(item.CodFuncionario),
+            nomeFuncionario: item.Funcionario,
+            objetivo: item.ObjetivoTotalVendedor || 0,
+            obrotatotal: item.PositivacaoTotalVendedor || 0,
+          }));
+          objetivos.push(...detalhamento);
+        }
 
-            // Dados de objetivos_vendedores
-            if (Array.isArray(response.data.objetivos_vendedores)) {
-              const vendedores = response.data.objetivos_vendedores.map(item => ({
-                codFuncionario: Number(item.vendedor_id),  // unifica com CodFuncionario
-                objetivo_financeiro: item.objetivo_financeiro || 0,
-                objetivo_mix: item.objetivo_mix || 0,
-                nomeFuncionario: item.nome_vendedor,
-              }));
-              objetivos.push(...vendedores);
-            }
+        if (Array.isArray(data.objetivos_vendedores)) {
+          const vendedores = data.objetivos_vendedores.map(item => ({
+            codFuncionario: Number(item.vendedor_id),
+            objetivo_financeiro: item.objetivo_financeiro || 0,
+            objetivo_mix: item.objetivo_mix || 0,
+            nomeFuncionario: item.nome_vendedor,
+          }));
+          objetivos.push(...vendedores);
+        }
 
-            // Unificação baseada no codFuncionario
-            const objetivosUnificados = objetivos.reduce((acc, curr) => {
-              const existente = acc.find(o => o.codFuncionario === curr.codFuncionario);
-              if (!existente) {
-                acc.push(curr);
-              } else {
-                Object.assign(existente, { ...existente, ...curr }); // une os dados
-              }
-              return acc;
-            }, []);
+        const objetivosUnificados = objetivos.reduce((acc, curr) => {
+          const existente = acc.find(o => o.codFuncionario === curr.codFuncionario);
+          if (!existente) acc.push(curr);
+          else Object.assign(existente, { ...existente, ...curr });
+          return acc;
+        }, []);
 
-            console.log('Objetivos unificados:', objetivosUnificados);
+        if (onObjetivosRecebidos) onObjetivosRecebidos(objetivosUnificados);
 
-            if (onObjetivosRecebidos) {
-              onObjetivosRecebidos(objetivosUnificados);
-            }
+        const captado = Number(data?.ruptura?.total_valor || 0);
+        setCaptadoValor(captado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        const _percCaptado = Number(data?.ruptura?.percentual_captado || 0);
+        setCpercCaptado(`${_percCaptado.toFixed(2)}%`);
 
-        
-
-        const captado = Number(response.data?.ruptura?.total_valor || 0);
-        setCaptadoValor(
-          captado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-        );
-       const percCaptado = Number(response.data?.ruptura?.percentual_captado || 0);
-        setCpercCaptado(`${percCaptado.toFixed(2)}%`);
-        
-              
-        const percentual = response.data.realizado_peso?.percentual || 0;
-        const variacao = response.data.realizado_peso?.variacao || 0;
-        const valor = response.data.objetivo?.objetivo_peso || 0;
-        const realizado = response.data.vendas?.peso_realizado || 0;
+        const percentual = data.realizado_peso?.percentual || 0;
+        const variacao = data.realizado_peso?.variacao || 0;
+        const valor = data.objetivo?.objetivo_peso || 0;
+        const realizado = data.vendas?.peso_realizado || 0;
 
         setPesoRealizado(realizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
         setPeso(valor.toLocaleString('pt-BR'));
         setPesoPercentual(`${percentual.toFixed(2)}%`);
         setPesoVariacao(variacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
 
-        const positivado = response.data.positivacao?.realizado || 0;
-        const percentualPos = response.data.positivacao?.percentual || 0;
-        const variacaoPos = response.data.positivacao?.variacao || 0;
-        const objetivoPos = response.data.objetivo?.objetivo_positivacao || 0;
+        const positivado = data.positivacao?.realizado || 0;
+        const percentualPos = data.positivacao?.percentual || 0;
+        const variacaoPos = data.positivacao?.variacao || 0;
+        const objetivoPos = data.objetivo?.objetivo_positivacao || 0;
 
         setPositivadoObjetivo(objetivoPos.toLocaleString('pt-BR'));
         setPositivadoRealizado(positivado.toLocaleString('pt-BR'));
         setPositivadoPercentual(`${percentualPos.toFixed(2)}%`);
         setPositivadoVariacao(variacaoPos.toLocaleString('pt-BR'));
 
-        const realizadoFinanceiro = response.data.realizado_financeiro || {};
+        const realizadoFinanceiro = data.realizado_financeiro || {};
         const valorVenda = realizadoFinanceiro.valor || 0;
         const percentualVenda = realizadoFinanceiro.percentual_cobertura || 0;
         const variacaoVenda = realizadoFinanceiro.variacao || 0;
-        const evolucao = response.data.evolucao.percentual || 0;
-        const evolucaoValor = response.data.evolucao.valor_ano_anterior || 0;
+        const evolucao = data.evolucao.percentual || 0;
+        const evolucaoValor = data.evolucao.valor_ano_anterior || 0;
 
         setVendaRealizada(valorVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setVendaPercentual(`${percentualVenda.toFixed(2)}%`);
-        setVendaVariacao(`${variacaoVenda < 0 ? '-' : ''}${Math.abs(variacaoVenda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
-        setEvolucaoAnoAnterior(`${(evolucao).toFixed(2)}%`);
+        setVendaVariacao(
+          `${variacaoVenda < 0 ? '-' : ''}${Math.abs(variacaoVenda).toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+          })}`
+        );
+        setEvolucaoAnoAnterior(`${evolucao.toFixed(2)}%`);
         setEvolucaoValor(
-          evolucaoValor != null 
-            ? evolucaoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) 
+          evolucaoValor != null
+            ? evolucaoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
             : 'R$ 0,00'
         );
-        const objetivoFin = response.data.objetivo?.financeiro || 0;
-        const objetivoMixValor = response.data.objetivo?.objetivo_mix || 0;
+        const objetivoFin = data.objetivo?.financeiro || 0;
+        const objetivoMixValor = data.objetivo?.objetivo_mix || 0;
 
         setObjetivoFinanceiro(objetivoFin.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setObjetivoMix(objetivoMixValor.toString());
 
-        const realizadoMix = response.data.realizado_mix?.realizado || 0;
-        const percentualMix = response.data.realizado_mix?.percentual || 0;
-        const variacaoMix = response.data.realizado_mix?.variacao || 0;
+        const realizadoMix = data.realizado_mix?.realizado || 0;
+        const percentualMix = data.realizado_mix?.percentual || 0;
+        const variacaoMix = data.realizado_mix?.variacao || 0;
 
         setMixRealizado(realizadoMix.toString());
         setMixPercentual(`${percentualMix.toFixed(2)}%`);
         setMixVariacao(variacaoMix.toString());
 
-        const alocacao = response.data['pre-venda'] || {};
+        const alocacao = data['pre-venda'] || {};
         const valorAlocado = alocacao.valor_alocado || 0;
         const valorPrevenda = alocacao.valor_prevenda || 0;
         const percentualAlocado = alocacao.percentual_prevenda_alocado || 0;
@@ -195,25 +181,17 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
         setAlocacaoRealizada(valorAlocado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setAlocacaoPrevenda(valorPrevenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setAlocacaoPercentual(`${percentualAlocado.toFixed(2)}%`);
-        //setAlocacaoVariacao(Math.abs(variacaoPrevenda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-        setAlocacaoVariacao(`${variacaoPrevenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace('R$', '')}` );  // Remove 'R$' da string
-      // Exibição da variação com símbolo de R$ e sinal negativo corretamente posicionado
-          if (variacaoPrevenda < 0) {
-            setAlocacaoVariacao(
-              `R$ -${Math.abs(variacaoPrevenda).toFixed(2).replace('.', ',')}`  // Adiciona duas casas decimais e substitui o ponto por vírgula
-            );
-          } else {
-            setAlocacaoVariacao(
-              `R$ ${variacaoPrevenda.toFixed(2).replace('.', ',')}`  // Adiciona duas casas decimais e substitui o ponto por vírgula
-            );
-          }
-
+        if (variacaoPrevenda < 0) {
+          setAlocacaoVariacao(`R$ -${Math.abs(variacaoPrevenda).toFixed(2).replace('.', ',')}`);
+        } else {
+          setAlocacaoVariacao(`R$ ${variacaoPrevenda.toFixed(2).replace('.', ',')}`);
+        }
 
         setVendaRealizadaBase(valorVenda);
         setPesoRealizado(realizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
         setPesoRealizadoBase(realizado);
 
-        const valorAnoAnterior = response.data.valor_ano_anterior || 0;
+        const valorAnoAnterior = data.valor_ano_anterior || 0;
         setValorAnoAnteriorBase(valorAnoAnterior);
       } catch (error) {
         console.error('Erro ao buscar os indicadores:', error);
@@ -242,23 +220,16 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
         setVendaTotalFormatada(null);
       }
 
-      const objetivoFin = parseFloat(objetivoFinanceiro?.replace(/[^\d,-]/g, '').replace(',', '.') || '0');
+      const objetivoFin = parseFloat((objetivoFinanceiro?.replace(/[^\d,-]/g, '').replace(',', '.') || '0'));
       const percentualCorrigido = objetivoFin ? (novoValor / objetivoFin) * 100 : 0;
       const variacaoCorrigida = novoValor - objetivoFin;
 
       setVendaPercentual(`${percentualCorrigido.toFixed(2)}%`);
-      // Exibição da variação com símbolo de R$ e sinal negativo corretamente posicionado
-      setVendaVariacao(`${variacaoCorrigida.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace('R$', '')}` );  // Remove 'R$' da string
-      // Exibição da variação com símbolo de R$ e sinal negativo corretamente posicionado
-          if (variacaoCorrigida < 0) {
-            setVendaVariacao(
-              `R$ -${Math.abs(variacaoCorrigida).toFixed(2).replace('.', ',')}`  // Adiciona duas casas decimais e substitui o ponto por vírgula
-            );
-          } else {
-            setVendaVariacao(
-              `R$ ${variacaoCorrigida.toFixed(2).replace('.', ',')}`  // Adiciona duas casas decimais e substitui o ponto por vírgula
-            );
-          }
+      if (variacaoCorrigida < 0) {
+        setVendaVariacao(`R$ -${Math.abs(variacaoCorrigida).toFixed(2).replace('.', ',')}`);
+      } else {
+        setVendaVariacao(`R$ ${variacaoCorrigida.toFixed(2).replace('.', ',')}`);
+      }
 
       const novoPeso = usarPDV ? pesoRealizadoBase + pesoPDV : pesoRealizadoBase;
       setPesoRealizado(novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
@@ -282,22 +253,19 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     const fetchPDV = async () => {
       setLoading(true);
       try {
-        const token = localStorage.getItem('token');
         const { de, ate } = periodoSelecionado;
-        const responsePDV = await api.get(`http://localhost:8000/indicadores/pdv/?de=${de}&ate=${ate}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const { data } = await api.get('/indicadores/pdv/', { params: { de, ate } });
 
-        const valorPDV = responsePDV.data.vendas_pdv?.venda_realizada || 0;
-        const pesoPDV = responsePDV.data.vendas_pdv?.peso_realizado || 0;
-        const vendaAnoAnterior = responsePDV.data.vendas_pdv?.venda_realizada_ano_anterior || 0;
+        const valorPDV = data.vendas_pdv?.venda_realizada || 0;
+        const pesoPDV = data.vendas_pdv?.peso_realizado || 0;
+        const vendaAnoAnterior = data.vendas_pdv?.venda_realizada_ano_anterior || 0;
 
         setValorPDVBase(valorPDV);
         setPesoPDVBase(pesoPDV);
         setVendaPDVAnoAnterior(vendaAnoAnterior);
         atualizarValoresPDV(valorPDV, pesoPDV);
       } catch (err) {
-        console.error("Erro ao buscar vendas de PDV:", err);
+        console.error('Erro ao buscar vendas de PDV:', err);
       }
       setLoading(false);
     };
@@ -313,16 +281,12 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     } else {
       atualizarValoresPDV(valorPDVBase || 0, pesoPDVBase || 0);
     }
-  }, [usarPDV, periodoSelecionado, vendaRealizadaBase, valorPDVBase, objetivoFinanceiro]);
+  }, [usarPDV, periodoSelecionado, vendaRealizadaBase, valorPDVBase, objetivoFinanceiro, peso, pesoRealizadoBase, pesoPDVBase]);
 
   useEffect(() => {
-    if (
-      vendaRealizadaBase != null &&
-      valorAnoAnteriorBase != null &&
-      vendaPDVAnoAnterior != null
-    ) {
+    if (vendaRealizadaBase != null && valorAnoAnteriorBase != null && vendaPDVAnoAnterior != null) {
       const somaAnoAnterior = valorAnoAnteriorBase + vendaPDVAnoAnterior;
-      const percentual = somaAnoAnterior > 0 ? ((vendaRealizadaBase / somaAnoAnterior) * 100) - 100 : 0;
+      const percentual = somaAnoAnterior > 0 ? (vendaRealizadaBase / somaAnoAnterior) * 100 - 100 : 0;
       setEvolucao_venda_vendapdv(`${percentual.toFixed(2)}%`);
     }
   }, [vendaRealizadaBase, valorAnoAnteriorBase, vendaPDVAnoAnterior]);
@@ -335,16 +299,10 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
         </div>
       )}
       <div className="modo-toggle">
-        <button
-          onClick={() => setModo('indicadores')}
-          className={modo === 'indicadores' ? 'ativo-indicadores' : ''}
-        >
+        <button onClick={() => setModo('indicadores')} className={modo === 'indicadores' ? 'ativo-indicadores' : ''}>
           🎯 Indicadores
         </button>
-        <button
-          onClick={() => setModo('graficos')}
-          className={modo === 'graficos' ? 'ativo-graficos' : ''}
-        >
+        <button onClick={() => setModo('graficos')} className={modo === 'graficos' ? 'ativo-graficos' : ''}>
           📊 Graficos
         </button>
       </div>
@@ -379,43 +337,47 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
                 height={160}
               />
             </div>
-            {/* 🆕 Gráfico de Mix */}
-                <div>
-                  <h4>Mix</h4>
-                  <ReactSpeedometer
-                    maxValue={100}mixPercentual
-                    value={parseFloat((mixPercentual || '0').replace('%', ''))}
-                    segments={5}
-                    height={160}
-                  />
-                </div>
+            <div>
+              <h4>Mix</h4>
+              <ReactSpeedometer
+                maxValue={100}
+                value={parseFloat((mixPercentual || '0').replace('%', ''))}
+                segments={5}
+                height={160}
+              />
+            </div>
           </div>
         </div>
       ) : (
         <div className="indicativos-container">
           <div className="indicativo-stack">
-            <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'}  className="card-objetivo" />
-            <Card title="Evo % vs Ano Ant. (R$)" value={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'} subtitle={`Ano Anterior: ${evolucaoValor ?? '--'}`} className="card-evolucao" />
+            <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'} className="card-objetivo" />
+            <Card
+              title="Evo % vs Ano Ant. (R$)"
+              value={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'}
+              subtitle={`Ano Anterior: ${evolucaoValor ?? '--'}`}
+              className="card-evolucao"
+            />
           </div>
 
           <Card
             title="Venda Realizada"
             value={
-              usarPDV
-                ? (
-                    <>
-                      <div>{vendaRealizadaBase?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-                      <div>PDV: {vendaPDVFormatada}</div>
-                      <div>Total: {vendaTotalFormatada}</div>
-                    </>
-                  )
-                : vendaRealizada
+              usarPDV ? (
+                <>
+                  <div>{vendaRealizadaBase?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                  <div>PDV: {vendaPDVFormatada}</div>
+                  <div>Total: {vendaTotalFormatada}</div>
+                </>
+              ) : (
+                vendaRealizada
+              )
             }
             subtitle="Faturamento"
             percentage={vendaPercentual ?? '...'}
             subtitle2=" Cobertura Atual"
             variation={vendaVariacao ?? '...'}
-             className="card-venda"
+            className="card-venda"
           />
 
           <Card
@@ -427,32 +389,34 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
             percentage={alocacaoPercentual ?? '...'}
             subtitle2=" Cobertura Prevista"
             variation={alocacaoVariacao ?? '...'}
-             className="card-alocacao"
+            className="card-alocacao"
           />
+
           <Card
             title="Captado"
             value={captadoValor ?? '...'}
             subtitle="Valor Captado"
-             percentage={percCaptado ?? '0%'}
+            percentage={percCaptado ?? '0%'}
             subtitle2=" Cobertura"
             variation="0"
             className="card-captar"
           />
+
           <Card
             title="Peso"
             value={peso ?? '...'}
             subtitle="OBJETIVO KG"
             title2="Realizado KG"
             value2={
-              usarPDV
-                ? (
-                    <>
-                      <div>{pesoRealizadoBase?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                      <div>PDV: {pesoPDVFormatado}</div>
-                      <div>Total: {pesoTotalFormatado}</div>
-                    </>
-                  )
-                : pesoRealizado ?? '...'
+              usarPDV ? (
+                <>
+                  <div>{pesoRealizadoBase?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                  <div>PDV: {pesoPDVFormatado}</div>
+                  <div>Total: {pesoTotalFormatado}</div>
+                </>
+              ) : (
+                pesoRealizado ?? '...'
+              )
             }
             percentage={pesoPercentual}
             subtitle2=" Cobertura"
@@ -469,8 +433,9 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
             percentage={positivadoPercentual}
             subtitle2=" Cobertura"
             variation={positivadoVariacao}
-             className="card-positivado"
+            className="card-positivado"
           />
+
           <Card
             title="MIX"
             value={objetivoMix ?? '...'}

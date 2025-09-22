@@ -1,72 +1,65 @@
 # backend/dashboard/services/indicadores/funcionario_service.py
-from django.db import connections
+from dashboard.db_conn import query_all
 
-def listar_funcionarios(search='', limit=20):
+def listar_funcionarios(search: str = '', limit: int = 20):
     """
-    Lista funcionarios com base no termo de busca
-    Retorna apenas funcionarios ativos com campos relevantes para o cadastro
+    Lista funcionários ativos filtrando por nome.
+    Retorna campos relevantes para cadastro.
     """
-    with connections['dados_industria'].cursor() as cursor:
-        cursor.execute("""
-            SELECT TOP (%s)
-                f.CodFuncionario,
-                f.Funcionario,
-                f.Vendedor,
-                f.Supervisor,
-                f.Transportador,
-                f.TransportadorAux,
-                f.Entregador,
-                f.Cobrador,
-                f.Gerente,
-                f.UnidGestora,
-                f.email
-            FROM Funcionario f
-            WHERE f.Ativo = 1
-              AND f.Funcionario LIKE %s
-            ORDER BY f.Funcionario
-        """, [limit, f'%{search}%'])
-        columns = [col[0] for col in cursor.description]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+    limit = max(1, int(limit))  # evita SQL injection e valores inválidos
+    sql = f"""
+        SELECT TOP ({limit})
+            f.CodFuncionario,
+            f.Funcionario,
+            f.Vendedor,
+            f.Supervisor,
+            f.Transportador,
+            f.TransportadorAux,
+            f.Entregador,
+            f.Cobrador,
+            f.Gerente,
+            f.UnidGestora,
+            f.email
+        FROM Funcionario f
+        WHERE f.Ativo = 1
+          AND f.Funcionario LIKE ?
+        ORDER BY f.Funcionario
+    """
+    return query_all(sql, [f'%{search}%'])
 
-def obter_funcionario_por_codigo(cod_funcionario):
+def obter_funcionario_por_codigo(cod_funcionario: int):
     """
-    Obtem os dados de um funcionario especifico pelo codigo
+    Obtém dados completos de um funcionário específico (ativo).
     """
-    with connections['dados_industria'].cursor() as cursor:
-        cursor.execute("""
-            SELECT 
-                CodFuncionario,
-                Funcionario,
-                Vendedor,
-                Supervisor,
-                Transportador,
-                TransportadorAux,
-                Entregador,
-                Cobrador,
-                Gerente,
-                UnidGestora,
-                email
-            FROM Funcionario
-            WHERE CodFuncionario = %s
-              AND Ativo = 1
-        """, [cod_funcionario])
+    sql = """
+        SELECT 
+            CodFuncionario,
+            Funcionario,
+            Vendedor,
+            Supervisor,
+            Transportador,
+            TransportadorAux,
+            Entregador,
+            Cobrador,
+            Gerente,
+            UnidGestora,
+            email
+        FROM Funcionario
+        WHERE CodFuncionario = ?
+          AND Ativo = 1
+    """
+    rows = query_all(sql, [cod_funcionario])
+    return rows[0] if rows else None
 
-        columns = [col[0] for col in cursor.description]
-        rows = cursor.fetchall()
-        return dict(zip(columns, rows[0])) if rows else None
-
-def get_funcionario_por_codigo(cod_funcionario):
-    with connections['dados_industria'].cursor() as cursor:
-        cursor.execute("""
-            SELECT CodFuncionario, Funcionario
-            FROM Funcionario
-            WHERE CodFuncionario = %s
-              AND Ativo = 1
-        """, [cod_funcionario])
-        row = cursor.fetchone()
-        if row:
-            return {
-                "CodFuncionario": row[0],
-                "Funcionario": row[1]
-            }
-        return None
+def get_funcionario_por_codigo(cod_funcionario: int):
+    """
+    Retorna apenas código e nome (ativo).
+    """
+    sql = """
+        SELECT CodFuncionario, Funcionario
+        FROM Funcionario
+        WHERE CodFuncionario = ?
+          AND Ativo = 1
+    """
+    rows = query_all(sql, [cod_funcionario])
+    return rows[0] if rows else None

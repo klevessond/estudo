@@ -1,29 +1,34 @@
-import axios from 'axios';
-import { createBrowserHistory } from 'history';
+// frontend/src/api.js
+import axios from "axios";
 
-const history = createBrowserHistory();
+// Se houver REACT_APP_API_URL, usa. Senão, monta a partir do hostname atual.
+const baseURL =
+  (process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.replace(/\/$/, "")) ||
+  `http://${window.location.hostname}:8000`;
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000',
+  baseURL,           // ex.: http://72.60.151.69:8000
+  timeout: 60000,
+  headers: { "Content-Type": "application/json" },
 });
 
-// Adiciona token automaticamente
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+console.log("[API] baseURL =", baseURL);
+// Anexa token Bearer automaticamente
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Se token inválido, redireciona para login
+// Se 401, limpa token e vai pro /login
 api.interceptors.response.use(
-  response => response,
-  error => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      history.push('/login');
-      window.location.reload();
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      localStorage.removeItem("token");
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }

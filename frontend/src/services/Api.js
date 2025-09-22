@@ -1,27 +1,25 @@
-import axios from 'axios';
+// frontend/src/services/Api.js
+import axios from "axios";
 
-// Criando uma instância do axios com configurações base
+// Se seu backend expõe os endpoints de clientes em /api/clientes/,
+// deixe o fallback com /api.
+// Caso NÃO use o prefixo /api no Django, remova o "/api" do fallback.
+const fallback = `${window.location.protocol}//${window.location.hostname}:8000/api`;
+const baseURL = (process.env.REACT_APP_API_URL || fallback).replace(/\/$/, "");
+
 const api = axios.create({
-    baseURL: 'http://127.0.0.1:8000/api',
-    timeout: 15000,
-    headers: {
-        'Content-Type': 'application/json',
-    }
+  baseURL,
+  timeout: 15000,
+  headers: { "Content-Type": "application/json" },
 });
 
-// Objeto com todas as chamadas da API
 const apiServices = {
-    // Clientes
-    getClientes: () => api.get('/clientes/'),
-    getClienteById: (id) => api.get(`/clientes/${id}/`),
-    createCliente: (data) => api.post('/clientes/', data),
-    updateCliente: (id, data) => api.put(`/clientes/${id}/`, data),
-    deleteCliente: (id) => api.delete(`/clientes/${id}/`),
-
-    // Você pode adicionar outras rotas aqui seguindo o mesmo padrão
-    // Exemplo para produtos:
-    // getProdutos: () => api.get('/produtos/'),
-    // createProduto: (data) => api.post('/produtos/', data),
+  // Clientes
+  getClientes: () => api.get("/clientes/"),
+  getClienteById: (id) => api.get(`/clientes/${id}/`),
+  createCliente: (data) => api.post("/clientes/", data),
+  updateCliente: (id, data) => api.put(`/clientes/${id}/`, data),
+  deleteCliente: (id) => api.delete(`/clientes/${id}/`),
 };
 
 export default apiServices;
