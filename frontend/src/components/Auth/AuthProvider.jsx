@@ -1,46 +1,41 @@
-import { createContext, useContext, useEffect, useState } from "react";
+// src/components/Auth/AuthProvider.jsx
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import api from "../../api";
 
 const AuthCtx = createContext(null);
 
 export function AuthProvider({ children }) {
   const [me, setMe] = useState(null);
   const [loadingMe, setLoadingMe] = useState(true);
-  const apiBase = `http://${window.location.hostname}:8000`;
+
+  const loadMe = useCallback(async () => {
+    setLoadingMe(true);
+    try {
+      // Envia cookie de sessão se houver (útil quando autenticação é via sessionid)
+      const { data } = await api.get("/me/", { withCredentials: true });
+      // esperado: { id, username, first_name, last_name, is_superuser, profile:{...}, roles:[...] }
+      setMe(data || null);
+    } catch (_err) {
+      setMe(null);
+    } finally {
+      setLoadingMe(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function load() {
-      setLoadingMe(true);
-      try {
-        const headers = {};
-        // Se usa JWT:
-        // const token = localStorage.getItem('access');
-        // if (token) headers.Authorization = `Bearer ${token}`;
+    loadMe();
+  }, [loadMe]);
 
-        const res = await fetch(`${apiBase}/me/`, {
-          method: 'GET',
-          headers,
-          credentials: 'include', // mantenha se usa sessão do Django
-        });
-        if (!res.ok) throw new Error('unauthorized');
-        const json = await res.json();
-        setMe(json); // { id, username, first_name, last_name, is_superuser, profile:{...}, roles:[...] }
-      } catch {
-        setMe(null);
-      } finally {
-        setLoadingMe(false);
-      }
-    }
-    load();
-  }, [apiBase]);
-
-  const hasRole = (roles = []) => {
+  const hasRole = useCallback((roles = []) => {
     if (!me?.roles) return false;
-    if (me.roles.includes('admin')) return true;
-    return roles.some(r => me.roles.includes(r));
-  };
+    if (me.roles.includes("admin")) return true;
+    return roles.some((r) => me.roles.includes(r));
+  }, [me]);
+
+  const refreshMe = useCallback(() => loadMe(), [loadMe]);
 
   return (
-    <AuthCtx.Provider value={{ me, loadingMe, hasRole, refreshMe: () => window.location.reload() }}>
+    <AuthCtx.Provider value={{ me, loadingMe, hasRole, refreshMe }}>
       {children}
     </AuthCtx.Provider>
   );

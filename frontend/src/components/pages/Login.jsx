@@ -1,29 +1,41 @@
 // src/components/pages/Login.jsx
-import React, { useState } from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/auth.jsx'; // <-- usa o contexto
-import './Login.css';
-import logo from '../../assets/logo.png';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/auth.jsx";
+import api from "../../api"; // <- usa o cliente axios centralizado (sem hardcode de host)
+import "./Login.css";
+import logo from "../../assets/logo.png";
 
 const Login = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const { login } = useAuth();                 // <-- pega a ação do contexto
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const { login } = useAuth();
   const navigate = useNavigate();
-  const apiBase = `http://${window.location.hostname}:8000`;
 
   const handleLogin = async () => {
+    if (submitting) return;
+    setSubmitting(true);
     try {
-      const response = await axios.post(`${apiBase}/api/token/`, { username, password });
+      // Chame sempre /api/token/ (Nginx faz proxy para o backend)
+      const { data } = await api.post(
+        "/token/",
+        { username, password },
+        { withCredentials: true } // ok mesmo usando JWT; ignora se não houver cookie
+      );
 
-      // Em vez de mexer direto no localStorage, use o contexto:
-      // Isso atualiza o "authVersion" e força o provider a refazer o /me/
-      login(response.data.access);
+      // Salva o JWT via contexto (o interceptor pegará localStorage.token)
+      login(data.access);
 
-      navigate('/');
-    } catch (error) {
-      alert('Usuário ou senha inválidos');
+      // (Opcional) guarde o refresh se você usar refresh flow depois:
+      if (data.refresh) localStorage.setItem("refresh", data.refresh);
+
+      navigate("/");
+    } catch (err) {
+      console.error("[Login] erro ao autenticar:", err);
+      alert("Usuário ou senha inválidos");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -32,18 +44,26 @@ const Login = () => {
       <div className="login-card">
         <img src={logo} alt="Logo da empresa" className="login-logo" />
         <h2>Login</h2>
+
         <input
           value={username}
-          onChange={e => setUsername(e.target.value)}
+          onChange={(e) => setUsername(e.target.value)}
           placeholder="Usuário"
+          autoComplete="username"
         />
+
         <input
           value={password}
-          onChange={e => setPassword(e.target.value)}
+          onChange={(e) => setPassword(e.target.value)}
           type="password"
           placeholder="Senha"
+          autoComplete="current-password"
+          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
         />
-        <button onClick={handleLogin}>Entrar</button>
+
+        <button onClick={handleLogin} disabled={submitting}>
+          {submitting ? "Entrando..." : "Entrar"}
+        </button>
       </div>
     </div>
   );

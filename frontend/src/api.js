@@ -1,32 +1,37 @@
-// frontend/src/api.js
 import axios from "axios";
 
-// Em produção, padrão é "/api" (Nginx proxy -> backend).
-// Em dev, você pode setar REACT_APP_API_URL=http://localhost:8000
+const isProd = process.env.NODE_ENV === "production";
+
+const envBase =
+  process.env.REACT_APP_API_URL &&
+  process.env.REACT_APP_API_URL.replace(/\/$/, "");
+
 const baseURL =
-  (process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.replace(/\/$/, "")) ||
-  "/api";
+  envBase ||
+  (isProd ? `${window.location.origin}/api` : `http://127.0.0.1:8002`);
 
 const api = axios.create({
   baseURL,
-  timeout: 60000,
+  timeout: 360000,
   headers: { "Content-Type": "application/json" },
 });
 
-// token Bearer
+console.log("[API] baseURL =", baseURL);
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// se 401 -> login
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err?.response?.status === 401) {
       localStorage.removeItem("token");
-      if (window.location.pathname !== "/login") window.location.href = "/login";
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(err);
   }
