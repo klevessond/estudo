@@ -1,139 +1,152 @@
+/* =========================================================
+   IndicativosDeVenda.css — versão consolidada
+   - Mantém cores originais dos cards (.card-*)
+   - Linha única SEM scroll horizontal (todos os KPIs em 1 linha)
+   - Tipografia/espaços ultra-compactos
+   - Sem duplicidades de classe
+   ========================================================= */
+
+/* Wrapper geral (mantido) */
 .indicativos-wrapper {
-    padding: 0rem;
-  }
-  
-  .indicativos-buttons {
-    display: flex;
-    gap: 1.0rem;
-    margin-bottom: 1rem;
-    flex-wrap: wrap;
-  }
-  
-  .indicativo-button {
-    background-color: #f0f0f0;
-    border: 1px solid #ccc;
-    color: #333;
-    font-weight: 600;
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-  }
-  
-  .indicativo-button:hover {
-    background-color: #e0e0e0;
-  }
-  
-  .indicativos-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.2rem;
-    justify-content: flex-start; /* <- alinhamento à esquerda */
-    align-items: flex-start;
-    padding-top: 0.0rem;
-  }
-  
-  .indicativo-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    height: 100%;
-  }
-  .indicativo-card {
-    background-color: #075396;
-    color: white;
-    border-radius: 1rem;
-    padding: 0.5rem;
-    width: 180px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    
-  }
-  
-  .card-header h2 {
-    display: flex;
-    margin: 0;
-    justify-content: space-between;
-    align-items: center;
-    
-  }
-  
-  .card-icon {
-    width: 24px;
-    height: 24px;
-  }
-  
-  .card-value,
-  .card-percentage {
-    font-size: 1.5rem;
-    font-weight: bold;
-    margin: 0;
-  }
-  
-  .card-subtitle {
-    font-size: 1.1rem;
-    margin: 0;
-    opacity: 0.9;
-  }
-  
-  .card-subtitle2 {
-    font-size: 1.1rem;
-    margin: 0;
-    opacity: 0.9;
-  }
-  
-  .card-variation {
-    font-size: 1.3rem;
-    margin-top: 0.25rem;
-  }
+  padding: 0rem;
+}
 
-  .indicativo-button {
-    background-color: #f0f0f0;
-    border: 2px solid transparent;
-    color: #333;
-    font-weight: 600;
-    padding: 0.7rem 1.4rem;
-    border-radius: 10px;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-  }
-  
-  .indicativo-button:hover {
-    background-color: #e0e0e0;
-  }
-  
-  .indicativo-button.active {
-    background-color: #1e88e5;
-    color: white;
-    border-color: #0d47a1;
-  }
+/* Botões de filtro/grupo (mantido, unificado) */
+.indicativos-buttons {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
 
-  .card-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem; /* ajuste fino da distância entre valor e subtítulo */
-    margin-bottom: 0.25rem; /* se quiser um espaçamento entre os grupos */
-  }
-  
-  /* Debug visual para identificar espaçamentos 
-.indicativos-wrapper,
-.indicativos-container,
-.indicativos-tabela {
-  border: 1px solid red;
+.indicativo-button {
+  background-color: #f0f0f0;
+  border: 2px solid transparent; /* unificado */
+  color: #333;
+  font-weight: 600;
+  padding: 0.7rem 1.4rem;
+  border-radius: 10px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.indicativo-button:hover { background-color: #e0e0e0; }
+.indicativo-button.active {
+  background-color: #1e88e5;
+  color: #fff;
+  border-color: #0d47a1;
+}
+
+/* =========================================================
+   LAYOUT DOS CARDS — LINHA ÚNICA SEM SCROLL HORIZONTAL
+   ========================================================= */
+
+/* 1) Faixa em linha única e SEM rolagem lateral */
+.indicativos-container {
+  display: flex;
+  flex-wrap: nowrap;      /* nunca quebra linha */
+  gap: 6px;
+  overflow-x: hidden;     /* sem scroll horizontal */
+  align-items: stretch;
+  padding-top: 0rem;      /* preserva sua configuração original */
+  padding-bottom: 0;      /* sem “sobras” */
+}
+
+/* 2) Os dois primeiro cards do "stack" entram na mesma linha */
+.indicativo-stack {
+  display: contents;      /* “achata” no fluxo, mantendo JSX */
+}
+
+/* 3) Card base — divide igualmente a largura da faixa */
+.indicativo-card {
+  /* remove width fixa original (180px) e permite encolher */
+  flex: 1 1 0;            /* cada card ocupa parte igual da faixa */
+  min-width: 0;           /* ESSENCIAL: permite encolher além do conteúdo */
+  width: auto;
+
+  background-color: #075396; /* cor base (sobrescrita pelas .card-*) */
+  color: #fff;
+  border-radius: 10px;    /* 1rem -> 10px, mais compacto */
+  padding: 6px;           /* 0.5rem -> 6px */
+  box-shadow: 0 3px 10px rgba(0,0,0,0.07);
+  overflow: hidden;       /* evita “vazar” conteúdo */
+  word-break: break-word; /* quebra palavras longas */
+}
+
+/* Cabeçalho com ícone */
+.card-header {
+  display: flex;
   margin: 0;
-  padding: 0;
-}*/
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+.card-header h2 {
+  margin: 0;
+  font-weight: 800;
+  font-size: clamp(10px, 2.8vw, 12px);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-icon { width: 14px; height: 14px; flex: 0 0 auto; }
 
+/* Grupos internos */
+.card-group {
+  display: grid;          /* mais compacto que flex + column */
+  gap: 1px;               /* ajuste fino entre valor/subtítulo */
+  margin: 0;
+}
+
+/* Tipografia compacta e fluida */
+.card-value,
+.card-percentage {
+  font-size: clamp(12px, 3.4vw, 14px); /* 1.5rem -> compact */
+  font-weight: 800;
+  margin: 0;
+  line-height: 1.05;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-subtitle,
+.card-subtitle2 {
+  font-size: clamp(10px, 2.8vw, 12px); /* 1.1rem -> compact */
+  margin: 0;
+  opacity: 0.9;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-variation {
+  font-size: clamp(10px, 3vw, 12px); /* 1.3rem -> compact */
+  margin: 0;               /* reduz margem superior para caber melhor */
+  opacity: 0.9;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Responsividade extrema (telas muito estreitas) */
+@media (max-width: 380px) {
+  .indicativos-container { gap: 4px; }
+  .indicativo-card { padding: 5px; border-radius: 8px; }
+  .card-icon { width: 12px; height: 12px; }
+}
+
+/* =========================================================
+   Loader (mantido)
+   ========================================================= */
 .overlay-loader {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(255, 255, 255, 0.6); /* leve esmaecimento */
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  inset: 0; /* equivale a top/left/right/bottom:0 */
+  background-color: rgba(255, 255, 255, 0.6);
+  display: grid;
+  place-items: center;
   z-index: 10;
   pointer-events: none; /* garante que os cards não sejam clicáveis durante loading */
 }
@@ -146,17 +159,16 @@
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
+/* =========================================================
+   Toggle de modo (mantido, com leves ajustes)
+   ========================================================= */
 .modo-toggle {
   margin-bottom: 1rem;
   display: flex;
   gap: 1rem;
 }
-
 .modo-toggle button {
   padding: 0.8rem 1.5rem;
   font-size: 1rem;
@@ -166,52 +178,33 @@
   background-color: #f0f0f0;
   color: #333;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
   transition: all 0.3s ease;
 }
+.modo-toggle button:hover { background-color: #e0e0e0; }
+.modo-toggle button.ativo-indicadores { background-color: #007bff; color: #fff; }
+.modo-toggle button.ativo-graficos   { background-color: #28a745; color: #fff; }
 
-.modo-toggle button:hover {
-  background-color: #e0e0e0;
-}
+/* =========================================================
+   Paleta por tipo de card (cores originais preservadas)
+   ========================================================= */
+.card-objetivo   { background-color: #43A047; }   /* Verde */
+.card-evolucao   { background-color: #43A047; }   /* Verde */
+.card-venda      { background-color: #1e3ef4; }   /* Azul forte */
+.card-alocacao   { background-color: #1e3ef4; }   /* Azul forte */
+.card-captar     { background-color: #00fb2193; } /* Amarelo/laranja translúcido */
+.card-peso       { background-color: #3949AB; }   /* Azul escuro */
+.card-positivado { background-color: #3949AB; }   /* Azul escuro */
+.card-mix        { background-color: #3949AB; }   /* Azul escuro */
 
-.modo-toggle button.ativo-indicadores {
-  background-color: #007bff;
-  color: white;
-}
-
-.modo-toggle button.ativo-graficos {
-  background-color: #28a745;
-  color: white;
-}
-
-.card-objetivo {
-  background-color: #43A047; /* Azul */
-}
-
-.card-evolucao {
-  background-color: #43A047; /* Verde */
-}
-
-.card-venda {
-  background-color: #1e3ef4; /* Laranja */
-}
-
-.card-alocacao {
-  background-color: #1e3ef4; /* Roxo */
-}
-
-.card-captar {
-  background-color: #00fb2193; /* Amarelo/laranja */
-}
-
-.card-peso {
-  background-color: #3949AB; /* Azul escuro */
-}
-
-.card-positivado {
-  background-color: #3949AB; /* Verde água */
-}
-
-.card-mix {
-  background-color: #3949AB; /* Marrom */
+/* Garantir contraste de texto branco sobre backgrounds coloridos */
+.indicativo-card.card-objetivo,
+.indicativo-card.card-evolucao,
+.indicativo-card.card-venda,
+.indicativo-card.card-alocacao,
+.indicativo-card.card-captar,
+.indicativo-card.card-peso,
+.indicativo-card.card-positivado,
+.indicativo-card.card-mix {
+  color: #fff;
 }
