@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.db import connections
 from django.http import JsonResponse
+from django.db import transaction
 import pandas as pd
 from django.db.models import Sum
 from rest_framework.views import APIView
@@ -346,7 +347,7 @@ class ObjetivoMensalView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        mes = request.query_params.get('mes')  # Ex: 2024-06
+        mes = request.query_params.get('mes')
         if not mes:
             return Response({"error": "Informe o parâmetro 'mes'."}, status=400)
 
@@ -362,25 +363,33 @@ class ObjetivoMensalView(APIView):
 
     def post(self, request):
         data = request.data.copy()
-        data['usuario'] = request.user.id  # mantenha o ID aqui
-        serializer = ObjetivoMensalSerializer(data=data, context={'request': request})  # adicione o contexto
+        data['usuario'] = request.user.id
+        serializer = ObjetivoMensalSerializer(data=data, context={'request': request})
         if serializer.is_valid():
-            print(f"[DEBUG][OBJETIVO_MENSAL][IN] usuario={request.user.id}, mes={data.get('mes_referencia')}, "
-              f"financeiro={data.get('objetivo_financeiro')}, mix={data.get('objetivo_mix')}")
+            print(
+                f"[DEBUG][OBJETIVO_MENSAL][IN] usuario={request.user.id}, mes={data.get('mes_referencia')}, "
+                f"financeiro={data.get('objetivo_financeiro')}, mix={data.get('objetivo_mix')}, "
+                f"peso={data.get('objetivo_peso')}, pos={data.get('objetivo_positivacao')}"
+            )
+
             objetivo, created = ObjetivoMensal.objects.update_or_create(
                 usuario=request.user,
                 mes_referencia=data['mes_referencia'],
                 defaults={
                     "objetivo_financeiro": data.get('objetivo_financeiro'),
-                    "objetivo_mix": data.get('objetivo_mix')
+                    "objetivo_mix": data.get('objetivo_mix'),
+                    "objetivo_peso": data.get('objetivo_peso'),               # 🆕
+                    "objetivo_positivacao": data.get('objetivo_positivacao') # 🆕
                 }
             )
-            print(f"[DEBUG][OBJETIVO_MENSAL][OUT] created={created}, "
-              f"financeiro={objetivo.objetivo_financeiro}, mix={objetivo.objetivo_mix}")
-            
+
+            print(
+                f"[DEBUG][OBJETIVO_MENSAL][OUT] created={created}, "
+                f"financeiro={objetivo.objetivo_financeiro}, mix={objetivo.objetivo_mix}, "
+                f"peso={objetivo.objetivo_peso}, pos={objetivo.objetivo_positivacao}"
+            )
             return Response(ObjetivoMensalSerializer(objetivo).data)
         return Response(serializer.errors, status=400)
-    
 
 
 
@@ -549,58 +558,103 @@ class ObjetivoMensalVendedorView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Espera receber: /objetivos-vendedores/?mes=2025-07
+        # Espera: /objetivos-vendedores/?mes_referencia=YYYY-MM-01
         mes = request.query_params.get('mes_referencia')
         if not mes:
-            return Response({"error": "Informe o parâmetro 'mes' no formato YYYY-MM."}, status=400)
+            return Response({"error": "Informe o parâmetro 'mes_referencia' no formato YYYY-MM-01."}, status=400)
+
         objetivos = ObjetivoMensalVendedor.objects.filter(mes_referencia=mes)
+
         resultado = []
         for obj in objetivos:
             resultado.append({
                 "vendedor_id": obj.vendedor_id,
                 "nome_vendedor": obj.nome_vendedor,
-                "objetivo_financeiro": float(obj.objetivo_financeiro),
-                "objetivo_mix": float(obj.objetivo_mix)
+                "objetivo_financeiro": float(obj.objetivo_financeiro or 0),
+                "objetivo_mix": float(obj.objetivo_mix or 0),
+                "objetivo_peso": float(getattr(obj, "objetivo_peso", 0) or 0),             # 🆕
+                "objetivo_positivacao": int(getattr(obj, "objetivo_positivacao", 0) or 0), # 🆕
             })
-
         return Response({"objetivos": resultado})
 
     def post(self, request):
+        """
+        Payload:
+        {
+          "mes_referencia": "YYYY-MM-01",
+          "objetivos": [
+            {
+              "vendedor_id": 23,
+              "nome_vendedor": "Fulano",
+              "objetivo_financeiro": 12345.67,
+              "objetivo_mix": 50,
+              "objetivo_peso": 1000.50,        # 🆕 kg
+              "objetivo_positivacao": 120      # 🆕 clientes
+            }
+          ]
+        }
+        """
         data = request.data
         mes_referencia = data.get("mes_referencia")
         objetivos = data.get("objetivos", [])
-        total_empresa = 0
-        total_mix = 0
 
-        for obj in objetivos:
-            vendedor_id = obj["vendedor_id"]
-            nome = obj["nome_vendedor"]
-            valor = obj["objetivo_financeiro"]
-            valormix = obj["objetivo_mix"]
-            total_empresa += float(valor)
-            total_mix += valormix 
-            print(f"[DEBUG][OBJ-VEND ITEM] vendedor_id={vendedor_id}, nome={nome}, financeiro={valor}, mix={valormix}")
+        if not mes_referencia or not isinstance(objetivos, list):
+            return Response({"error": "Envie 'mes_referencia' e a lista 'objetivos'."}, status=400)
 
-            ObjetivoMensalVendedor.objects.update_or_create(
+        total_empresa_fin = 0.0
+        total_empresa_mix = 0.0
+        total_empresa_peso = 0.0   # 🆕
+        total_empresa_pos = 0      # 🆕
+
+        with transaction.atomic():
+            for obj in objetivos:
+                vendedor_id = obj.get("vendedor_id")
+                nome = obj.get("nome_vendedor", "")
+
+                # Conversões seguras mantendo a lógica
+                valor_fin = float(obj.get("objetivo_financeiro", 0) or 0)
+                valor_mix = float(obj.get("objetivo_mix", 0) or 0)
+                valor_peso = float(obj.get("objetivo_peso", 0) or 0)          # 🆕
+                valor_pos = int(obj.get("objetivo_positivacao", 0) or 0)      # 🆕
+
+                total_empresa_fin += valor_fin
+                total_empresa_mix += valor_mix
+                total_empresa_peso += valor_peso
+                total_empresa_pos += valor_pos
+
+                print(
+                    f"[DEBUG][OBJ-VEND ITEM] vendedor_id={vendedor_id}, nome={nome}, "
+                    f"financeiro={valor_fin}, mix={valor_mix}, peso={valor_peso}, pos={valor_pos}"
+                )
+
+                ObjetivoMensalVendedor.objects.update_or_create(
+                    mes_referencia=mes_referencia,
+                    vendedor_id=str(vendedor_id),
+                    defaults={
+                        "nome_vendedor": nome,
+                        "objetivo_financeiro": valor_fin,
+                        "objetivo_mix": valor_mix,
+                        "objetivo_peso": valor_peso,             # 🆕
+                        "objetivo_positivacao": valor_pos,       # 🆕
+                    }
+                )
+
+            # Atualiza o total da empresa no modelo consolidado
+            ObjetivoMensal.objects.update_or_create(
+                usuario=request.user,
                 mes_referencia=mes_referencia,
-                vendedor_id=vendedor_id,
                 defaults={
-                    "nome_vendedor": nome,
-                    "objetivo_financeiro": valor,
-                    "objetivo_mix": valormix
+                    "objetivo_financeiro": total_empresa_fin,
+                    "objetivo_mix": total_empresa_mix,
+                    "objetivo_peso": total_empresa_peso,         # 🆕
+                    "objetivo_positivacao": total_empresa_pos,   # 🆕
                 }
             )
-            print(f"[DEBUG][OBJETIVO_MENSAL] usuario={request.user.id}, mes={mes_referencia}, financeiro_total={total_empresa}, mix_final={valormix}")
-        # Atualiza ou cria o objetivo total da empresa no modelo ObjetivoMensal
-        ObjetivoMensal.objects.update_or_create(
-            usuario=request.user,
-            mes_referencia=mes_referencia,
-            defaults={
-                "objetivo_financeiro": total_empresa,
-                "objetivo_mix": total_mix
-            }
-        )
 
+        print(
+            f"[DEBUG][OBJETIVO_MENSAL][TOTAL] usuario={request.user.id}, mes={mes_referencia}, "
+            f"fin={total_empresa_fin}, mix={total_empresa_mix}, peso={total_empresa_peso}, pos={total_empresa_pos}"
+        )
         return Response({"message": "Objetivos cadastrados com sucesso."})
     
 
