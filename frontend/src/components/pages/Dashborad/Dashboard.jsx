@@ -61,24 +61,35 @@ const Dashboard = () => {
     }
   }, [isRestricted, modo]);
 
-  return (
-    <div>
-      <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-        <PeriodoSelector
-          onChange={(dados) => {
-            if (dados?.de && dados?.ate) {
-              setPeriodoSelecionado({ de: dados.de, ate: dados.ate });
-            } else if (dados?.mes) {
-              const [ano, mes] = dados.mes.split('-');
-              const de = `${ano}-${mes}-01`;
-              const ate = new Date(Number(ano), Number(mes), 0).toISOString().split('T')[0];
-              setPeriodoSelecionado({ de, ate });
-            }
-          }}
-          usarPDV={usarPDV}
-          onTogglePDV={() => setUsarPDV(prev => !prev)}
-        />
+return (
+  <main className="dashboard">
+    <div className="dashboard-container">
 
+      {/* TOPO FIXO: filtros colapsáveis */}
+      <div className="sticky-top">
+        <details className="filters" open={false}>
+          <summary>Selecionar período</summary>
+          <PeriodoSelector
+            onChange={(dados) => {
+              if (dados?.de && dados?.ate) {
+                setPeriodoSelecionado({ de: dados.de, ate: dados.ate });
+              } else if (dados?.mes) {
+                const [ano, mes] = dados.mes.split('-');
+                const de = `${ano}-${mes}-01`;
+                const ate = new Date(Number(ano), Number(mes), 0)
+                  .toISOString()
+                  .split('T')[0];
+                setPeriodoSelecionado({ de, ate });
+              }
+            }}
+            usarPDV={usarPDV}
+            onTogglePDV={() => setUsarPDV(prev => !prev)}
+          />
+        </details>
+      </div>
+
+      {/* KPIs EM FAIXA HORIZONTAL (carrossel com snap) */}
+      <div className="kpi-strip">
         <IndicativosDeVenda
           periodoSelecionado={periodoSelecionado}
           usarPDV={usarPDV}
@@ -86,9 +97,9 @@ const Dashboard = () => {
         />
       </div>
 
-      {/* Botões de modo: só mostram para admin/supervisor */}
+      {/* Botões de modo */}
       {!isRestricted && (
-        <div style={{ margin: '1rem 0', display: 'flex', gap: '0.75rem' }}>
+        <div style={{ margin: '8px 0', display: 'flex', gap: '8px' }}>
           <button
             className={`btn-modo ${modo === 'geral' ? 'ativo' : ''}`}
             onClick={() => setModo('geral')}
@@ -106,27 +117,27 @@ const Dashboard = () => {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'row', gap: '1rem', alignItems: 'flex-start' }}>
-        <div style={{ flex: 2 }}>
+      {/* SEÇÕES INFERIORES — empilha no mobile; 2 colunas no desktop */}
+      <div className="grid-2">
+        <section className="section">
           {/* “Geral” sempre aparece para todos */}
           {modo === 'geral' && !isRestricted && (
             <BarChartColaboradores dados={vendasColaboradores} />
           )}
 
-          {/* “Individual” só fica acessível quando há permissão e houve seleção */}
+          {/* “Individual” só com permissão e seleção */}
           {!isRestricted && modo === 'individual' && colaboradorSelecionado && (
             <>
               <CardsColaborador
                 colaborador={colaboradorSelecionado}
                 objetivosVendedores={objetivosVendedores}
-                periodoSelecionado={periodoSelecionado}
               />
               {colaboradorSelecionado.colaborador}
             </>
           )}
-        </div>
+        </section>
 
-        <div style={{ flex: 1 }}>
+        <section className="section">
           {/* Tabela de vendedores só para admin/supervisor */}
           {modo === 'geral' && podeVerTabela && (
             <IndicativosTabelaVendedor
@@ -140,18 +151,20 @@ const Dashboard = () => {
             />
           )}
 
-          {/* Exemplo especial “Ana Paula” continua, mas só no fluxo permitido */}
+          {/* Exemplo especial “Ana Paula” */}
           {!isRestricted &&
             modo === 'individual' &&
             colaboradorSelecionado &&
             colaboradorSelecionado.colaborador.includes('Ana Paula Silva Peixoto') && (
               <CardsDetalhadosVendedor />
-            )
-          }
-        </div>
+            )}
+        </section>
       </div>
+
     </div>
-  );
+  </main>
+);
+
 };
 
 export default Dashboard;
