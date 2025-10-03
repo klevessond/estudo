@@ -291,6 +291,32 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     }
   }, [vendaRealizadaBase, valorAnoAnteriorBase, vendaPDVAnoAnterior]);
 
+  // ===== Gauge reutilizável com valor central e legenda =====
+  const Gauge = ({ label, percent }) => {
+    const val =
+      typeof percent === 'number'
+        ? percent
+        : parseFloat(String(percent || '0').replace('%', '').replace(',', '.')) || 0;
+
+    return (
+      <div>
+        <h4>
+          {label} <small style={{ opacity: 0.7 }}>({val.toFixed(2)}%)</small>
+        </h4>
+        <ReactSpeedometer
+          maxValue={100}
+          value={val}
+          segments={5}
+          height={160}
+          currentValueText="${value}%"
+          valueFormat=".2f"
+          needleTransitionDuration={500}
+          needleTransition="easeElastic"
+        />
+      </div>
+    );
+  };
+
   return (
     <div style={{ position: 'relative' }}>
       {loading && (
@@ -310,42 +336,10 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
         <div className="dashboard-graficos">
           <h2>Velocímetros de Meta</h2>
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-            <div>
-              <h4>Venda</h4>
-              <ReactSpeedometer
-                maxValue={100}
-                value={parseFloat((vendaPercentual || '0').replace('%', ''))}
-                segments={5}
-                height={160}
-              />
-            </div>
-            <div>
-              <h4>Peso</h4>
-              <ReactSpeedometer
-                maxValue={100}
-                value={parseFloat((pesoPercentual || '0').replace('%', ''))}
-                segments={5}
-                height={160}
-              />
-            </div>
-            <div>
-              <h4>Positivação</h4>
-              <ReactSpeedometer
-                maxValue={100}
-                value={parseFloat((positivadoPercentual || '0').replace('%', ''))}
-                segments={5}
-                height={160}
-              />
-            </div>
-            <div>
-              <h4>Mix</h4>
-              <ReactSpeedometer
-                maxValue={100}
-                value={parseFloat((mixPercentual || '0').replace('%', ''))}
-                segments={5}
-                height={160}
-              />
-            </div>
+            <Gauge label="Venda"       percent={vendaPercentual} />
+            <Gauge label="Peso"        percent={pesoPercentual} />
+            <Gauge label="Positivação" percent={positivadoPercentual} />
+            <Gauge label="Mix"         percent={mixPercentual} />
           </div>
         </div>
       ) : (
