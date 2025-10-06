@@ -12,8 +12,8 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
     obj => obj.codFuncionario === codFuncionario
   );
 
-  const objetivoPeso = dadosColaborador?.objetivo || 0;
-  const obrotaTotal = dadosColaborador?.obrotatotal || 0;
+  const objetivoPeso = dadosColaborador?.objetivo_peso ?? 0;  
+  const obrotaTotal = dadosColaborador?.objetivo_positivacao ?? 0;
   const pesototalvendido = colaborador.pesototalvendido || 0;
   const qtdClientes = colaborador.qtdClientes || 0;
   const objetivoFinanceiro = dadosColaborador?.objetivo_financeiro || 0;

@@ -107,7 +107,8 @@ class MinhasRotasSupervisorView(APIView):
 
     def get(self, request):
         ctx = get_role_context(request.user)
-        rotas = rotas_usuario(ctx)  # -> None (sem filtro) ou [1,2,3]
+        info = buscar_rotas_usuario(ctx)  # <- CORRETO
+        rotas = info.get("rotas") if info else None
         return Response({
             "papel": "supervisor" if ctx.is_supervisor else ("admin" if ctx.is_admin else "outro"),
             "cod_funcionario": ctx.cod_funcionario,
@@ -164,21 +165,24 @@ class IndicadoresView(APIView):
 
         
 
-        #  OBJETIVOS
-        # Buscar objetivo peso e positivação do SQL Server
-        objetivo = buscar_objetivo_peso_positivacao(data_inicio, data_fim,cod_vendedores=vendedores)
-        objetivo["objetivo_peso"] = round(objetivo.get("objetivo_peso", 0), 2)
-        objetivo["objetivo_positivacao"] = round(objetivo.get("objetivo_positivacao", 0), 2)
+        #  OBJETIVOS — tudo do SQLite agora
+        objetivo_mensal_data = get_objetivo_mensal_serializado(
+            request.user, data_inicio, cod_vendedores=vendedores
+        )
 
-
-
-        # Buscar objetivo financeiro e mix do banco local
-        objetivo_mensal_data = get_objetivo_mensal_serializado(request.user, data_inicio, cod_vendedores=vendedores)
-        objetivo_financeiro = float(objetivo_mensal_data.get("objetivo_financeiro", 0) or 0)
-        objetivo_mix = float(objetivo_mensal_data.get("objetivo_mix", 0) or 0)
+        objetivo = {
+            "financeiro":           round(float(objetivo_mensal_data.get("objetivo_financeiro") or 0), 2),
+            "objetivo_mix":         round(float(objetivo_mensal_data.get("objetivo_mix") or 0), 2),
+            "objetivo_peso":        round(float(objetivo_mensal_data.get("objetivo_peso") or 0), 2),
+            "objetivo_positivacao": round(float(objetivo_mensal_data.get("objetivo_positivacao") or 0), 2),
+        }
         objetivos_vendedores = get_objetivos_vendedores_por_mes(data_inicio)
-        objetivo["financeiro"] = round(float(objetivo_financeiro or 0), 2)
-        objetivo["objetivo_mix"] = round(float(objetivo_mix or 0), 2)
+
+        # IMPORTANTÍSSIMO: defina variáveis locais para usar nos cálculos abaixo
+        objetivo_financeiro   = objetivo["financeiro"]
+        objetivo_mix          = objetivo["objetivo_mix"]
+        objetivo_peso         = objetivo["objetivo_peso"]
+        objetivo_positivacao  = objetivo["objetivo_positivacao"]
 
         # --- helpers p/ tipos ---
         def _to_int(v):
@@ -194,14 +198,17 @@ class IndicadoresView(APIView):
                 return 0.0
 
         # --- lista de vendedores conforme papel ---
-        vendedores_list = rotas_info.get("vendedores") if rotas_info else None
-        # se for vendedor, use todos os vendedores da mesma área de supervisão
+        # use a lista decidida antes (rotas do supervisor, etc.)
+        vendedores_list = vendedores
+
+        # se for vendedor, filtre APENAS pelo próprio cod_funcionario
         if ctx.is_vendedor:
-            from dashboard.services.indicadores.rotas_simples import buscar_vendedores_mesma_supervisao
-            vendedores_list = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario)
+            vendedores_list = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else []
 
-        vendedores_set = {v for v in map(_to_int, (vendedores_list or [])) if v is not None}
-
+        # constrói o set robusto
+        vendedores_set = {
+            _to_int(v) for v in (vendedores_list or []) if _to_int(v) is not None
+}
         # =========================
         # VENDAS REALIZADAS (NOVO)
         # =========================
@@ -313,6 +320,7 @@ class IndicadoresView(APIView):
             },
             "vendas": vendido,
             "realizado_peso": {
+                "realizado": round(peso_realizado, 2),  
                 "percentual": round(percentual, 2),
                 "variacao": round(variacao, 2),
             },
@@ -438,7 +446,7 @@ def get_objetivo_mensal_serializado(user, data_inicio, cod_vendedores=None):
         data_inicio_formatada = datetime.strptime(data_inicio, "%Y-%m-%d").date()
         mes_referencia = data_inicio_formatada.replace(day=1)
 
-        # NOVO: se veio lista de vendedores, somar objetivos dos vendedores no mês
+        # Se veio lista de vendedores, somar objetivos dos vendedores no mês (SQLite)
         if cod_vendedores:
             ids = [str(v) for v in cod_vendedores]  # vendedor_id é CharField
             agg = ObjetivoMensalVendedor.objects.filter(
@@ -446,14 +454,18 @@ def get_objetivo_mensal_serializado(user, data_inicio, cod_vendedores=None):
                 vendedor_id__in=ids
             ).aggregate(
                 objetivo_financeiro=Sum('objetivo_financeiro'),
-                objetivo_mix=Sum('objetivo_mix')
+                objetivo_mix=Sum('objetivo_mix'),
+                objetivo_peso=Sum('objetivo_peso'),                       # 🆕
+                objetivo_positivacao=Sum('objetivo_positivacao'),         # 🆕
             )
             return {
-                "objetivo_financeiro": float(agg['objetivo_financeiro'] or 0),
-                "objetivo_mix": float(agg['objetivo_mix'] or 0),
+                "objetivo_financeiro": float(agg.get('objetivo_financeiro') or 0),
+                "objetivo_mix": float(agg.get('objetivo_mix') or 0),
+                "objetivo_peso": float(agg.get('objetivo_peso') or 0),                     # 🆕
+                "objetivo_positivacao": float(agg.get('objetivo_positivacao') or 0),       # 🆕
             }
 
-        # fallback: objetivo mensal do usuário (como já era)
+        # Fallback: objetivo mensal do usuário no SQLite
         objetivo = ObjetivoMensal.objects.get(usuario=user, mes_referencia=mes_referencia)
         serializer = ObjetivoMensalSerializer(objetivo)
         return serializer.data
@@ -462,6 +474,8 @@ def get_objetivo_mensal_serializado(user, data_inicio, cod_vendedores=None):
         return {
             "objetivo_financeiro": 0,
             "objetivo_mix": 0,
+            "objetivo_peso": 0,             # 🆕
+            "objetivo_positivacao": 0,      # 🆕
         }
 
 def ajustar_data_para_ano_anterior(data_str):
@@ -670,7 +684,9 @@ def get_objetivos_vendedores_por_mes(data_inicio):
             "vendedor_id": obj.vendedor_id,
             "nome_vendedor": obj.nome_vendedor,
             "objetivo_financeiro": float(obj.objetivo_financeiro),
-            "objetivo_mix": float(obj.objetivo_mix)
+            "objetivo_mix": float(obj.objetivo_mix),
+            "objetivo_peso": float(getattr(obj, "objetivo_peso", 0) or 0),                
+            "objetivo_positivacao": int(getattr(obj, "objetivo_positivacao", 0) or 0),     
         })
     return resultado
 

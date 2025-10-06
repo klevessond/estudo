@@ -80,24 +80,26 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
 
         console.log('IndicativosDeVenda Dados completos da API:', data);
         console.log('IndicativosDeVenda Existe objetivo.detalhamento?', !!data.objetivo?.detalhamento);
-
+        console.log('OBJ alvo', data.objetivo);
+        console.log('PESO realizado (vendas/realizado_peso):', data.vendas?.peso_realizado, data.realizado_peso?.realizado);
         const objetivos = [];
 
         if (Array.isArray(data.objetivo?.detalhamento)) {
           const detalhamento = data.objetivo.detalhamento.map(item => ({
             codFuncionario: Number(item.CodFuncionario),
             nomeFuncionario: item.Funcionario,
-            objetivo: item.ObjetivoTotalVendedor || 0,
-            obrotatotal: item.PositivacaoTotalVendedor || 0,
+            // ⚠️ não trazemos mais objetivos de peso/positivação do SQL Server
           }));
           objetivos.push(...detalhamento);
-        }
+          }
 
         if (Array.isArray(data.objetivos_vendedores)) {
           const vendedores = data.objetivos_vendedores.map(item => ({
             codFuncionario: Number(item.vendedor_id),
             objetivo_financeiro: item.objetivo_financeiro || 0,
             objetivo_mix: item.objetivo_mix || 0,
+            objetivo_peso: item.objetivo_peso ?? 0,
+            objetivo_positivacao: item.objetivo_positivacao ?? 0,
             nomeFuncionario: item.nome_vendedor,
           }));
           objetivos.push(...vendedores);
@@ -120,7 +122,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
         const percentual = data.realizado_peso?.percentual || 0;
         const variacao = data.realizado_peso?.variacao || 0;
         const valor = data.objetivo?.objetivo_peso || 0;
-        const realizado = data.vendas?.peso_realizado || 0;
+        const realizado = Number((data.realizado_peso?.realizado ?? data.vendas?.peso_realizado ?? 0));
 
         setPesoRealizado(realizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
         setPeso(valor.toLocaleString('pt-BR'));
