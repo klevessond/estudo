@@ -155,6 +155,7 @@ const Dashboard = () => {
                 }}
                 onDadosAtualizados={setVendasColaboradores}
                 onObjetivosRecebidos={setObjetivosVendedores}
+                objetivosVendedores={objetivosVendedores}
               />
             )}
 
