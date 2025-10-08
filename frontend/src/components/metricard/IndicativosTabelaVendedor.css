@@ -1,14 +1,61 @@
 th {
-    font-weight: bold;
-    border-bottom: 2px solid #0074c2;
-  }
-  
-  td {
-    border-bottom: 1px solid #ccc;
-  }
-  
-  table {
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-  }
-  
+  font-weight: bold;
+  border-bottom: 2px solid #0074c2;
+}
+
+td {
+  border-bottom: 1px solid #ccc;
+}
+
+table {
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+}
+
+/* Badge base */
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+
+/* Percentual de cobertura — 4 faixas */
+.perc-lt25 {            /* < 25% */
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.perc-lt50 {            /* 25% a <50% */
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: #fed7aa;
+}
+
+.perc-lt75 {            /* 50% a <75% */
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.perc-gte100 {          /* 75% a 100%+ (agregamos 75–99 e >=100 em “meta batendo”) */
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+/* Variação — 2 cores */
+.var-pos {              /* positivo */
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+.var-neg {              /* negativo */
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}

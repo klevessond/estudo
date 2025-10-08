@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.db import connections
 from django.http import JsonResponse
+from django.db import transaction
 import pandas as pd
 from django.db.models import Sum
 from rest_framework.views import APIView
@@ -106,7 +107,8 @@ class MinhasRotasSupervisorView(APIView):
 
     def get(self, request):
         ctx = get_role_context(request.user)
-        rotas = rotas_usuario(ctx)  # -> None (sem filtro) ou [1,2,3]
+        info = buscar_rotas_usuario(ctx)  # <- CORRETO
+        rotas = info.get("rotas") if info else None
         return Response({
             "papel": "supervisor" if ctx.is_supervisor else ("admin" if ctx.is_admin else "outro"),
             "cod_funcionario": ctx.cod_funcionario,
@@ -132,11 +134,10 @@ class IndicadoresView(APIView):
         data_inicio = request.GET.get('de')
         data_fim = request.GET.get('ate')
         
-
         if not data_inicio or not data_fim:
             return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
 
-         # ===== LOG DO PERFIL QUE ESTÁ FAZENDO A CHAMADA =====
+        # ===== LOG DO PERFIL QUE ESTÁ FAZENDO A CHAMADA =====
         ctx = get_role_context(request.user)
         logger.info(
             "[IndicadoresView] user=%s id=%s roles=%s cod_funcionario=%s cod_unid_gestora=%s de=%s ate=%s ip=%s",
@@ -151,35 +152,42 @@ class IndicadoresView(APIView):
         )
         # ====================================================
 
-         # 1) Busca as rotas do supervisor (ou None se admin/outro papel)
-        rotas_info = buscar_rotas_usuario(ctx)           # -> {'rotas': None|[...], 'detalhado': [...]}
-        rotas_codigos = rotas_info.get("rotas") if rotas_info else None  # ex.: [335, 3, 4, 7, 8, 10, 12, 13, 304, 307]
-        # lista de vendedores:
-        vendedores = rotas_info.get("vendedores") if rotas_info else None
-        # se o usuário for vendedor e não vier lista, use o próprio cod_funcionario
-        if ctx.is_vendedor and (not vendedores):
-            vendedores = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else None
+        # 1) Rotas / vendedores conforme papel
+        rotas_info = buscar_rotas_usuario(ctx)  # -> {'rotas': None|[...], 'detalhado': [...], 'vendedores': [...]}
+        rotas_codigos = rotas_info.get("rotas") if rotas_info else None
 
+        # 🔧 Se for VENDEDOR, usar a lista da MESMA SUPERVISÃO
+        if ctx.is_vendedor:
+            try:
+                vendedores = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario) or [int(ctx.cod_funcionario)]
+            except Exception:
+                vendedores = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else None
+        else:
+            # supervisor/admin mantém a lista vinda de rotas (ou None = sem filtro)
+            vendedores = rotas_info.get("vendedores") if rotas_info else None
 
-        
+        logger.debug(f"[IndicadoresView] vendedores considerados para escopo: {vendedores}")
 
-        #  OBJETIVOS
-        # Buscar objetivo peso e positivação do SQL Server
-        objetivo = buscar_objetivo_peso_positivacao(data_inicio, data_fim,cod_vendedores=vendedores)
-        objetivo["objetivo_peso"] = round(objetivo.get("objetivo_peso", 0), 2)
-        objetivo["objetivo_positivacao"] = round(objetivo.get("objetivo_positivacao", 0), 2)
+        #  OBJETIVOS — tudo do SQLite agora
+        objetivo_mensal_data = get_objetivo_mensal_serializado(
+            request.user, data_inicio, cod_vendedores=vendedores
+        )
 
-
-
-        # Buscar objetivo financeiro e mix do banco local
-        objetivo_mensal_data = get_objetivo_mensal_serializado(request.user, data_inicio, cod_vendedores=vendedores)
-        objetivo_financeiro = float(objetivo_mensal_data.get("objetivo_financeiro", 0) or 0)
-        objetivo_mix = float(objetivo_mensal_data.get("objetivo_mix", 0) or 0)
+        objetivo = {
+            "financeiro":           round(float(objetivo_mensal_data.get("objetivo_financeiro") or 0), 2),
+            "objetivo_mix":         round(float(objetivo_mensal_data.get("objetivo_mix") or 0), 2),
+            "objetivo_peso":        round(float(objetivo_mensal_data.get("objetivo_peso") or 0), 2),
+            "objetivo_positivacao": round(float(objetivo_mensal_data.get("objetivo_positivacao") or 0), 2),
+        }
         objetivos_vendedores = get_objetivos_vendedores_por_mes(data_inicio)
-        objetivo["financeiro"] = round(float(objetivo_financeiro or 0), 2)
-        objetivo["objetivo_mix"] = round(float(objetivo_mix or 0), 2)
 
-        # --- helpers p/ tipos ---
+        # variáveis locais
+        objetivo_financeiro   = objetivo["financeiro"]
+        objetivo_mix          = objetivo["objetivo_mix"]
+        objetivo_peso         = objetivo["objetivo_peso"]
+        objetivo_positivacao  = objetivo["objetivo_positivacao"]
+
+        # helpers p/ tipos
         def _to_int(v):
             try:
                 return int(str(v).strip())
@@ -192,17 +200,12 @@ class IndicadoresView(APIView):
             except (TypeError, ValueError):
                 return 0.0
 
-        # --- lista de vendedores conforme papel ---
-        vendedores_list = rotas_info.get("vendedores") if rotas_info else None
-        # se for vendedor, use todos os vendedores da mesma área de supervisão
-        if ctx.is_vendedor:
-            from dashboard.services.indicadores.rotas_simples import buscar_vendedores_mesma_supervisao
-            vendedores_list = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario)
-
-        vendedores_set = {v for v in map(_to_int, (vendedores_list or [])) if v is not None}
+        # lista/set de vendedores p/ filtro
+        vendedores_list = vendedores or []
+        vendedores_set = { _to_int(v) for v in vendedores_list if _to_int(v) is not None }
 
         # =========================
-        # VENDAS REALIZADAS (NOVO)
+        # VENDAS REALIZADAS (ÁREA)
         # =========================
         vendido = buscar_vendas_por_vendedor(data_inicio, data_fim)
         lista = vendido.get("vendas_por_vendedor", []) or []
@@ -215,11 +218,8 @@ class IndicadoresView(APIView):
         venda_realizada = sum(_to_float(it.get("ValorLiquido")) for it in lista)
         peso_realizado  = sum(_to_float(it.get("PesoTotal"))    for it in lista)
 
-        print(f"[DEBUG] venda_realizada (soma ValorLiquido): {venda_realizada}")
-        print(f"[DEBUG] peso_realizado (soma PesoTotal): {peso_realizado}")
-
         # ===========================================
-        # VENDAS DO MESMO PERÍODO NO ANO ANTERIOR (NOVO)
+        # VENDAS DO MESMO PERÍODO NO ANO ANTERIOR
         # ===========================================
         ano_anterior_inicio = ajustar_data_para_ano_anterior(data_inicio)
         ano_anterior_fim    = ajustar_data_para_ano_anterior(data_fim)
@@ -231,72 +231,102 @@ class IndicadoresView(APIView):
 
         venda_ano_anterior = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa) or 1.0  # evita div/0
         
-        #  POSITIVAÇÃO
-        positivacao = buscar_positivacao_por_rota(data_inicio, data_fim,rotas=rotas_codigos,cod_vendedores=vendedores)
-        print(f"[DEBUG] rotas (positivação) {rotas_codigos}")
-        print(f"[DEBUG] vendedores (positivação) {vendedores}")
+        #  POSITIVAÇÃO (área)
+        positivacao = buscar_positivacao_por_rota(data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores)
         positivacao_realizado_geral = positivacao.get("positivacao_realizado_geral", 0)
         objetivo_positivacao = objetivo.get('objetivo_positivacao', 0)
         percentual_positivacao = safe_divide(positivacao_realizado_geral, objetivo_positivacao) * 100
         variacao_positivacao = positivacao_realizado_geral  - objetivo_positivacao
 
-        #   MIX
-        dados_mix = buscar_venda_mix(data_inicio, data_fim,cod_vendedores=vendedores)
+        # MIX (área)
+        dados_mix = buscar_venda_mix(data_inicio, data_fim, cod_vendedores=vendedores)
         mix_realizado = dados_mix["mix_realizado"]
         
-        # Pré-venda
-        #chave = f"prevenda_{data_inicio}_{data_fim}"
-        #prevenda = get_cached_data(chave, lambda: buscar_pre_venda(data_inicio, data_fim,cod_vendedores=vendedores))
-        prevenda = buscar_pre_venda(data_inicio, data_fim,cod_vendedores=vendedores)
+        # Pré-venda (área)
+        prevenda = buscar_pre_venda(data_inicio, data_fim, cod_vendedores=vendedores)
         valor_prevenda = prevenda.get("pre_venda_valor", 0)
         valor_alocado = venda_realizada + valor_prevenda
-       
 
-        
-         # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
+        # KPIs (área)
         variacao = peso_realizado - objetivo.get("objetivo_peso", 0)
         percentual = safe_divide(peso_realizado, objetivo.get("objetivo_peso", 1)) * 100
         percentual_cobertura = safe_divide(venda_realizada, objetivo_financeiro) * 100
-        print(f"[DEBUG] venda_realizada {venda_realizada}")
-        print(f"[DEBUG] objetivo_financeiro {objetivo_financeiro}")
-       
-        variacao_financeira =   venda_realizada - objetivo_financeiro
-        print(f"[DEBUG] variacao_financeira {variacao_financeira}")
+        variacao_financeira = venda_realizada - objetivo_financeiro
         venda_realizada_float = float(venda_realizada)
         venda_ano_anterior_float = float(venda_ano_anterior)
-        evolucao_percentual = safe_divide( venda_realizada_float - venda_ano_anterior_float, venda_ano_anterior_float) * 100
-        percentual_mix = safe_divide(mix_realizado,objetivo_mix) * 100
+        evolucao_percentual = safe_divide(venda_realizada_float - venda_ano_anterior_float, venda_ano_anterior_float) * 100
+        percentual_mix = safe_divide(mix_realizado, objetivo_mix) * 100
         variacao_mix = mix_realizado - objetivo_mix
-        percentual_prevenda_alocado = safe_divide(valor_alocado,objetivo_financeiro)*100
+        percentual_prevenda_alocado = safe_divide(valor_alocado, objetivo_financeiro) * 100
         variacao_prevenda = valor_alocado - objetivo_financeiro
 
-        # === RUPTURA (Captado) ===
-        # 'vendedores' pode ser None, int/str, ou lista (ex.: [23])
-        vendedores_list = _to_int_list(vendedores)
-        if not vendedores_list:
-            # nenhum vendedor definido -> consolidado (sem filtro)
+        # === RUPTURA (Captado) (área) ===
+        vendedores_list_int = _to_int_list(vendedores)
+        if not vendedores_list_int:
             ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=None)
-        elif len(vendedores_list) == 1:
-            # exatamente 1 -> filtro "="
-            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=vendedores_list[0], cod_vendedores=None)
+        elif len(vendedores_list_int) == 1:
+            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=vendedores_list_int[0], cod_vendedores=None)
         else:
-            # 2+ -> filtro "IN (...)"
-            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=vendedores_list)
+            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=vendedores_list_int)
 
         ruptura_total = 0.0
         for r in (ruptura_dados.get("resumo") or []):
             ruptura_total += float(r.get("TotalValor") or 0)
         ruptura_total = round(ruptura_total, 2)
         percentual_captado = round(safe_divide(ruptura_total, venda_realizada) * 100, 2)
-       
-       
-       
-        print(f"[DEBUG] venda do ano anterior {venda_ano_anterior}")
-        print(f"[DEBUG] percentual {evolucao_percentual}")
-        print(f"[DEBUG] ruptura_total={ruptura_total} | vendido={venda_realizada} | %captado/vendido={percentual_captado}")
 
-        
-        
+        # ========= NOVO: BLOCO "minha_visao" (vendedor logado) =========
+        minha_visao = None
+        try:
+            meu_cod = _to_int(ctx.cod_funcionario)
+            # linha de venda do meu vendedor
+            minha_linha = None
+            for it in lista:
+                if _to_int(it.get("codcampo")) == meu_cod:
+                    minha_linha = it
+                    break
+
+            # objetivos do meu vendedor
+            obj_meu = None
+            for o in objetivos_vendedores or []:
+                if str(o.get("vendedor_id")) == str(meu_cod):
+                    obj_meu = o
+                    break
+
+            if minha_linha or obj_meu:
+                my_venda = _to_float((minha_linha or {}).get("ValorLiquido"))
+                my_peso  = _to_float((minha_linha or {}).get("PesoTotal"))
+                my_mix   = _to_float((minha_linha or {}).get("Mix"))
+
+                my_obj_fin  = _to_float((obj_meu or {}).get("objetivo_financeiro"))
+                my_obj_peso = _to_float((obj_meu or {}).get("objetivo_peso"))
+                my_obj_mix  = _to_float((obj_meu or {}).get("objetivo_mix"))
+                my_obj_pos  = _to_float((obj_meu or {}).get("objetivo_positivacao"))
+
+                minha_visao = {
+                    "cod_funcionario": meu_cod,
+                    "colaborador": (minha_linha or {}).get("Campo"),
+                    "realizado_financeiro": round(my_venda, 2),
+                    "realizado_peso": round(my_peso, 2),
+                    "mix_realizado": round(my_mix, 2),
+                    "objetivo_financeiro": round(my_obj_fin, 2),
+                    "objetivo_peso": round(my_obj_peso, 2),
+                    "objetivo_mix": round(my_obj_mix, 2),
+                    "objetivo_positivacao": round(my_obj_pos, 2),
+                    "percentual_cobertura": round(safe_divide(my_venda, my_obj_fin) * 100, 2) if my_obj_fin else 0.0,
+                    "variacao_financeira": round(my_venda - my_obj_fin, 2),
+                    "percentual_peso": round(safe_divide(my_peso, my_obj_peso) * 100, 2) if my_obj_peso else 0.0,
+                    "variacao_peso": round(my_peso - my_obj_peso, 2),
+                    "percentual_mix": round(safe_divide(my_mix, my_obj_mix) * 100, 2) if my_obj_mix else 0.0,
+                    "variacao_mix": round(my_mix - my_obj_mix, 2),
+                }
+        except Exception as e:
+            logger.exception(f"[IndicadoresView][minha_visao] erro ao montar: {e}")
+            minha_visao = None
+
+        # garante que o payload de vendas vá FILTRADO
+        vendido["vendas_por_vendedor"] = lista
+
         return Response({
             "objetivo": objetivo,
             "objetivos_vendedores": objetivos_vendedores,
@@ -304,14 +334,15 @@ class IndicadoresView(APIView):
                 "valor_ano_anterior": round(venda_ano_anterior, 2),
                 "percentual": round(evolucao_percentual)  # positivo/negativo
             },
-            "pre-venda":{
-                    "valor_prevenda": round(valor_prevenda,2),
-                    "valor_alocado": round(valor_alocado,2),
-                    "percentual_prevenda_alocado": round(percentual_prevenda_alocado,2),
-                    "variacao_prevenda": round(variacao_prevenda,2)
+            "pre-venda": {
+                "valor_prevenda": round(valor_prevenda, 2),
+                "valor_alocado": round(valor_alocado, 2),
+                "percentual_prevenda_alocado": round(percentual_prevenda_alocado, 2),
+                "variacao_prevenda": round(variacao_prevenda, 2)
             },
-            "vendas": vendido,
+            "vendas": vendido,  # já com 'vendas_por_vendedor' filtrado
             "realizado_peso": {
+                "realizado": round(peso_realizado, 2),  
                 "percentual": round(percentual, 2),
                 "variacao": round(variacao, 2),
             },
@@ -320,33 +351,33 @@ class IndicadoresView(APIView):
                 "percentual_cobertura": round(percentual_cobertura, 2),
                 "variacao": round(variacao_financeira, 2)
             },
-            
-             "positivacao":{
-                "realizado":positivacao_realizado_geral,
+            "positivacao": {
+                "realizado": positivacao_realizado_geral,
                 "percentual": percentual_positivacao,
                 "variacao": variacao_positivacao
-           },
-           "realizado_mix":{
-                "realizado":mix_realizado,
-                "percentual":percentual_mix,
-                "variacao":variacao_mix
-           },
+            },
+            "realizado_mix": {
+                "realizado": mix_realizado,
+                "percentual": percentual_mix,
+                "variacao": variacao_mix
+            },
             "positivacao_detalhada": positivacao,
-            
             "ruptura": {
                 "total_valor": ruptura_total,
-                 "percentual_captado": percentual_captado
-            }
-
-
+                "percentual_captado": percentual_captado
+            },
+            # ===== NOVO: KPIs do vendedor logado =====
+            "minha_visao": minha_visao,
         })
+
+
     
 
 class ObjetivoMensalView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        mes = request.query_params.get('mes')  # Ex: 2024-06
+        mes = request.query_params.get('mes')
         if not mes:
             return Response({"error": "Informe o parâmetro 'mes'."}, status=400)
 
@@ -362,25 +393,33 @@ class ObjetivoMensalView(APIView):
 
     def post(self, request):
         data = request.data.copy()
-        data['usuario'] = request.user.id  # mantenha o ID aqui
-        serializer = ObjetivoMensalSerializer(data=data, context={'request': request})  # adicione o contexto
+        data['usuario'] = request.user.id
+        serializer = ObjetivoMensalSerializer(data=data, context={'request': request})
         if serializer.is_valid():
-            print(f"[DEBUG][OBJETIVO_MENSAL][IN] usuario={request.user.id}, mes={data.get('mes_referencia')}, "
-              f"financeiro={data.get('objetivo_financeiro')}, mix={data.get('objetivo_mix')}")
+            print(
+                f"[DEBUG][OBJETIVO_MENSAL][IN] usuario={request.user.id}, mes={data.get('mes_referencia')}, "
+                f"financeiro={data.get('objetivo_financeiro')}, mix={data.get('objetivo_mix')}, "
+                f"peso={data.get('objetivo_peso')}, pos={data.get('objetivo_positivacao')}"
+            )
+
             objetivo, created = ObjetivoMensal.objects.update_or_create(
                 usuario=request.user,
                 mes_referencia=data['mes_referencia'],
                 defaults={
                     "objetivo_financeiro": data.get('objetivo_financeiro'),
-                    "objetivo_mix": data.get('objetivo_mix')
+                    "objetivo_mix": data.get('objetivo_mix'),
+                    "objetivo_peso": data.get('objetivo_peso'),               # 🆕
+                    "objetivo_positivacao": data.get('objetivo_positivacao') # 🆕
                 }
             )
-            print(f"[DEBUG][OBJETIVO_MENSAL][OUT] created={created}, "
-              f"financeiro={objetivo.objetivo_financeiro}, mix={objetivo.objetivo_mix}")
-            
+
+            print(
+                f"[DEBUG][OBJETIVO_MENSAL][OUT] created={created}, "
+                f"financeiro={objetivo.objetivo_financeiro}, mix={objetivo.objetivo_mix}, "
+                f"peso={objetivo.objetivo_peso}, pos={objetivo.objetivo_positivacao}"
+            )
             return Response(ObjetivoMensalSerializer(objetivo).data)
         return Response(serializer.errors, status=400)
-    
 
 
 
@@ -429,7 +468,7 @@ def get_objetivo_mensal_serializado(user, data_inicio, cod_vendedores=None):
         data_inicio_formatada = datetime.strptime(data_inicio, "%Y-%m-%d").date()
         mes_referencia = data_inicio_formatada.replace(day=1)
 
-        # NOVO: se veio lista de vendedores, somar objetivos dos vendedores no mês
+        # Se veio lista de vendedores, somar objetivos dos vendedores no mês (SQLite)
         if cod_vendedores:
             ids = [str(v) for v in cod_vendedores]  # vendedor_id é CharField
             agg = ObjetivoMensalVendedor.objects.filter(
@@ -437,14 +476,18 @@ def get_objetivo_mensal_serializado(user, data_inicio, cod_vendedores=None):
                 vendedor_id__in=ids
             ).aggregate(
                 objetivo_financeiro=Sum('objetivo_financeiro'),
-                objetivo_mix=Sum('objetivo_mix')
+                objetivo_mix=Sum('objetivo_mix'),
+                objetivo_peso=Sum('objetivo_peso'),                       # 🆕
+                objetivo_positivacao=Sum('objetivo_positivacao'),         # 🆕
             )
             return {
-                "objetivo_financeiro": float(agg['objetivo_financeiro'] or 0),
-                "objetivo_mix": float(agg['objetivo_mix'] or 0),
+                "objetivo_financeiro": float(agg.get('objetivo_financeiro') or 0),
+                "objetivo_mix": float(agg.get('objetivo_mix') or 0),
+                "objetivo_peso": float(agg.get('objetivo_peso') or 0),                     # 🆕
+                "objetivo_positivacao": float(agg.get('objetivo_positivacao') or 0),       # 🆕
             }
 
-        # fallback: objetivo mensal do usuário (como já era)
+        # Fallback: objetivo mensal do usuário no SQLite
         objetivo = ObjetivoMensal.objects.get(usuario=user, mes_referencia=mes_referencia)
         serializer = ObjetivoMensalSerializer(objetivo)
         return serializer.data
@@ -453,6 +496,8 @@ def get_objetivo_mensal_serializado(user, data_inicio, cod_vendedores=None):
         return {
             "objetivo_financeiro": 0,
             "objetivo_mix": 0,
+            "objetivo_peso": 0,             # 🆕
+            "objetivo_positivacao": 0,      # 🆕
         }
 
 def ajustar_data_para_ano_anterior(data_str):
@@ -549,58 +594,103 @@ class ObjetivoMensalVendedorView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Espera receber: /objetivos-vendedores/?mes=2025-07
+        # Espera: /objetivos-vendedores/?mes_referencia=YYYY-MM-01
         mes = request.query_params.get('mes_referencia')
         if not mes:
-            return Response({"error": "Informe o parâmetro 'mes' no formato YYYY-MM."}, status=400)
+            return Response({"error": "Informe o parâmetro 'mes_referencia' no formato YYYY-MM-01."}, status=400)
+
         objetivos = ObjetivoMensalVendedor.objects.filter(mes_referencia=mes)
+
         resultado = []
         for obj in objetivos:
             resultado.append({
                 "vendedor_id": obj.vendedor_id,
                 "nome_vendedor": obj.nome_vendedor,
-                "objetivo_financeiro": float(obj.objetivo_financeiro),
-                "objetivo_mix": float(obj.objetivo_mix)
+                "objetivo_financeiro": float(obj.objetivo_financeiro or 0),
+                "objetivo_mix": float(obj.objetivo_mix or 0),
+                "objetivo_peso": float(getattr(obj, "objetivo_peso", 0) or 0),             # 🆕
+                "objetivo_positivacao": int(getattr(obj, "objetivo_positivacao", 0) or 0), # 🆕
             })
-
         return Response({"objetivos": resultado})
 
     def post(self, request):
+        """
+        Payload:
+        {
+          "mes_referencia": "YYYY-MM-01",
+          "objetivos": [
+            {
+              "vendedor_id": 23,
+              "nome_vendedor": "Fulano",
+              "objetivo_financeiro": 12345.67,
+              "objetivo_mix": 50,
+              "objetivo_peso": 1000.50,        # 🆕 kg
+              "objetivo_positivacao": 120      # 🆕 clientes
+            }
+          ]
+        }
+        """
         data = request.data
         mes_referencia = data.get("mes_referencia")
         objetivos = data.get("objetivos", [])
-        total_empresa = 0
-        total_mix = 0
 
-        for obj in objetivos:
-            vendedor_id = obj["vendedor_id"]
-            nome = obj["nome_vendedor"]
-            valor = obj["objetivo_financeiro"]
-            valormix = obj["objetivo_mix"]
-            total_empresa += float(valor)
-            total_mix += valormix 
-            print(f"[DEBUG][OBJ-VEND ITEM] vendedor_id={vendedor_id}, nome={nome}, financeiro={valor}, mix={valormix}")
+        if not mes_referencia or not isinstance(objetivos, list):
+            return Response({"error": "Envie 'mes_referencia' e a lista 'objetivos'."}, status=400)
 
-            ObjetivoMensalVendedor.objects.update_or_create(
+        total_empresa_fin = 0.0
+        total_empresa_mix = 0.0
+        total_empresa_peso = 0.0   # 🆕
+        total_empresa_pos = 0      # 🆕
+
+        with transaction.atomic():
+            for obj in objetivos:
+                vendedor_id = obj.get("vendedor_id")
+                nome = obj.get("nome_vendedor", "")
+
+                # Conversões seguras mantendo a lógica
+                valor_fin = float(obj.get("objetivo_financeiro", 0) or 0)
+                valor_mix = float(obj.get("objetivo_mix", 0) or 0)
+                valor_peso = float(obj.get("objetivo_peso", 0) or 0)          # 🆕
+                valor_pos = int(obj.get("objetivo_positivacao", 0) or 0)      # 🆕
+
+                total_empresa_fin += valor_fin
+                total_empresa_mix += valor_mix
+                total_empresa_peso += valor_peso
+                total_empresa_pos += valor_pos
+
+                print(
+                    f"[DEBUG][OBJ-VEND ITEM] vendedor_id={vendedor_id}, nome={nome}, "
+                    f"financeiro={valor_fin}, mix={valor_mix}, peso={valor_peso}, pos={valor_pos}"
+                )
+
+                ObjetivoMensalVendedor.objects.update_or_create(
+                    mes_referencia=mes_referencia,
+                    vendedor_id=str(vendedor_id),
+                    defaults={
+                        "nome_vendedor": nome,
+                        "objetivo_financeiro": valor_fin,
+                        "objetivo_mix": valor_mix,
+                        "objetivo_peso": valor_peso,             # 🆕
+                        "objetivo_positivacao": valor_pos,       # 🆕
+                    }
+                )
+
+            # Atualiza o total da empresa no modelo consolidado
+            ObjetivoMensal.objects.update_or_create(
+                usuario=request.user,
                 mes_referencia=mes_referencia,
-                vendedor_id=vendedor_id,
                 defaults={
-                    "nome_vendedor": nome,
-                    "objetivo_financeiro": valor,
-                    "objetivo_mix": valormix
+                    "objetivo_financeiro": total_empresa_fin,
+                    "objetivo_mix": total_empresa_mix,
+                    "objetivo_peso": total_empresa_peso,         # 🆕
+                    "objetivo_positivacao": total_empresa_pos,   # 🆕
                 }
             )
-            print(f"[DEBUG][OBJETIVO_MENSAL] usuario={request.user.id}, mes={mes_referencia}, financeiro_total={total_empresa}, mix_final={valormix}")
-        # Atualiza ou cria o objetivo total da empresa no modelo ObjetivoMensal
-        ObjetivoMensal.objects.update_or_create(
-            usuario=request.user,
-            mes_referencia=mes_referencia,
-            defaults={
-                "objetivo_financeiro": total_empresa,
-                "objetivo_mix": total_mix
-            }
-        )
 
+        print(
+            f"[DEBUG][OBJETIVO_MENSAL][TOTAL] usuario={request.user.id}, mes={mes_referencia}, "
+            f"fin={total_empresa_fin}, mix={total_empresa_mix}, peso={total_empresa_peso}, pos={total_empresa_pos}"
+        )
         return Response({"message": "Objetivos cadastrados com sucesso."})
     
 
@@ -616,7 +706,9 @@ def get_objetivos_vendedores_por_mes(data_inicio):
             "vendedor_id": obj.vendedor_id,
             "nome_vendedor": obj.nome_vendedor,
             "objetivo_financeiro": float(obj.objetivo_financeiro),
-            "objetivo_mix": float(obj.objetivo_mix)
+            "objetivo_mix": float(obj.objetivo_mix),
+            "objetivo_peso": float(getattr(obj, "objetivo_peso", 0) or 0),                
+            "objetivo_positivacao": int(getattr(obj, "objetivo_positivacao", 0) or 0),     
         })
     return resultado
 

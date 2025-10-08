@@ -6,7 +6,7 @@ from django.contrib.auth.models import User
 class ObjetivoMensalSerializer(serializers.ModelSerializer):
     class Meta:
         model = ObjetivoMensal
-        fields = ['id', 'usuario', 'mes_referencia', 'objetivo_financeiro', 'objetivo_mix']
+        fields = ['id', 'usuario', 'mes_referencia', 'objetivo_financeiro', 'objetivo_mix','objetivo_peso', 'objetivo_positivacao',]
 
 class ProfileSerializer(serializers.ModelSerializer):
     class Meta:

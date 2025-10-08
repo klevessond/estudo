@@ -3,7 +3,7 @@ import './CardsColaborador.css';
 import ResumoSegmentoPies from '../Piechart/ResumoSegmentoPies';
 import ReactSpeedometer from 'react-d3-speedometer';
 
-const CardsColaborador = ({ colaborador, objetivosVendedores,periodoSelecionado }) => {
+const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado }) => {
   const [modo, setModo] = React.useState('graficos');
   if (!colaborador) return null;
 
@@ -12,17 +12,17 @@ const CardsColaborador = ({ colaborador, objetivosVendedores,periodoSelecionado 
     obj => obj.codFuncionario === codFuncionario
   );
 
-  const objetivoPeso = dadosColaborador?.objetivo || 0;
-  const obrotaTotal = dadosColaborador?.obrotatotal || 0;
+  const objetivoPeso = dadosColaborador?.objetivo_peso ?? 0;  
+  const obrotaTotal = dadosColaborador?.objetivo_positivacao ?? 0;
   const pesototalvendido = colaborador.pesototalvendido || 0;
   const qtdClientes = colaborador.qtdClientes || 0;
   const objetivoFinanceiro = dadosColaborador?.objetivo_financeiro || 0;
-  const percentualFinanceiro = objetivoFinanceiro > 0
-    ? (colaborador.faturado / objetivoFinanceiro) * 100
-    : 0;
+
   const faturado = colaborador.faturado || 0;
+  const percentualFinanceiro = objetivoFinanceiro > 0 ? (faturado / objetivoFinanceiro) * 100 : 0;
   const variacaoFinanceira = objetivoFinanceiro ? (faturado - objetivoFinanceiro) : 0;
-  const porcentagemPositivação = obrotaTotal > 0 ? (qtdClientes / obrotaTotal) * 100 : 0;
+
+  const porcentagemPositivacao = obrotaTotal > 0 ? (qtdClientes / obrotaTotal) * 100 : 0;
   const porcentagemPeso = objetivoPeso > 0 ? (pesototalvendido / objetivoPeso) * 100 : 0;
 
   const mixRealizado = colaborador.mix || 0;
@@ -35,16 +35,42 @@ const CardsColaborador = ({ colaborador, objetivosVendedores,periodoSelecionado 
     return 'progress-low';
   };
 
+  // ===== Gauge reutilizável com valor central e legenda =====
+  const Gauge = ({ label, valuePercent }) => {
+    const val = Number.isFinite(valuePercent) ? valuePercent : 0;
+
+    return (
+      <div>
+        <h4>
+          {label} <small style={{ opacity: 0.7 }}>({val.toFixed(2)}%)</small>
+        </h4>
+        <ReactSpeedometer
+          maxValue={100}
+          value={val}
+          segments={5}
+          height={160}
+          currentValueText="${value}%"
+          valueFormat=".2f"
+          needleTransitionDuration={500}
+          needleTransition="easeElastic"
+        />
+      </div>
+    );
+  };
+
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <h2 className="card-title" style={{
-          fontSize: '1.5rem',
-          color: '#0074c2',
-          borderBottom: '2px solid #0074c2',
-          paddingBottom: '0.5rem',
-          marginBottom: 0
-        }}>
+        <h2
+          className="card-title"
+          style={{
+            fontSize: '1.5rem',
+            color: '#0074c2',
+            borderBottom: '2px solid #0074c2',
+            paddingBottom: '0.5rem',
+            marginBottom: 0
+          }}
+        >
           {colaborador.colaborador}
         </h2>
         <div>
@@ -68,51 +94,19 @@ const CardsColaborador = ({ colaborador, objetivosVendedores,periodoSelecionado 
         <div className="dashboard-graficos" style={{ marginTop: '1rem' }}>
           <h3>Velocímetros de Meta</h3>
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-            <div>
-              <h4>Faturado</h4>
-              <ReactSpeedometer
-                maxValue={100}
-                value={parseFloat(percentualFinanceiro.toFixed(1))}
-                segments={5}
-                height={160}
+            <Gauge label="Faturado"    valuePercent={parseFloat(percentualFinanceiro.toFixed(2))} />
+            <Gauge label="Peso"        valuePercent={parseFloat(porcentagemPeso.toFixed(2))} />
+            <Gauge label="Positivação" valuePercent={parseFloat(porcentagemPositivacao.toFixed(2))} />
+            <Gauge label="Mix"         valuePercent={parseFloat(porcentagemMix.toFixed(2))} />
+
+            {/* 🆕 Pizzas por Segmento (Clientes e Positivações) */}
+            <div style={{ marginTop: '1.5rem', flexBasis: '100%' }}>
+              <h3>Composição por Segmento</h3>
+              <ResumoSegmentoPies
+                periodoSelecionado={periodoSelecionado}
+                codFuncionario={Number(colaborador.codFuncionario)}
               />
             </div>
-            <div>
-              <h4>Peso</h4>
-              <ReactSpeedometer
-                maxValue={100}
-                value={parseFloat(porcentagemPeso.toFixed(1))}
-                segments={5}
-                height={160}
-              />
-            </div>
-            <div>
-              <h4>Positivação</h4>
-              <ReactSpeedometer
-                maxValue={100}
-                value={parseFloat(porcentagemPositivação.toFixed(1))}
-                segments={5}
-                height={160}
-              />
-            </div>
-            {/* 🆕 Gráfico de Mix */}
-                <div>
-                  <h4>Mix</h4>
-                  <ReactSpeedometer
-                    maxValue={100}
-                    value={parseFloat(porcentagemMix.toFixed(1))}
-                    segments={5}
-                    height={160}
-                  />
-                </div>
-                {/* 🆕 Pizzas por Segmento (Clientes e Positivações) */}
-         <div style={{ marginTop: '1.5rem' }}>
-           <h3>Composição por Segmento</h3>
-           <ResumoSegmentoPies
-             periodoSelecionado={periodoSelecionado}
-             codFuncionario={Number(colaborador.codFuncionario)}
-           />
-         </div>
           </div>
         </div>
       ) : (
@@ -159,12 +153,12 @@ const CardsColaborador = ({ colaborador, objetivosVendedores,periodoSelecionado 
             <div>{qtdClientes} / {obrotaTotal.toLocaleString('pt-BR')}</div>
             <div className="progress-container">
               <div
-                className={`progress-bar ${getProgressClass(porcentagemPositivação)}`}
-                style={{ width: `${Math.min(porcentagemPositivação, 100)}%` }}
+                className={`progress-bar ${getProgressClass(porcentagemPositivacao)}`}
+                style={{ width: `${Math.min(porcentagemPositivacao, 100)}%` }}
               />
             </div>
             <div>Objetivo: {obrotaTotal.toLocaleString('pt-BR')} clientes</div>
-            <div>Progresso: {porcentagemPositivação.toFixed(1)}%</div>
+            <div>Progresso: {porcentagemPositivacao.toFixed(1)}%</div>
           </div>
 
           {/* Card Peso */}
@@ -180,20 +174,20 @@ const CardsColaborador = ({ colaborador, objetivosVendedores,periodoSelecionado 
             <div>Objetivo: {objetivoPeso.toLocaleString('pt-BR')} kg</div>
             <div>Progresso: {porcentagemPeso.toFixed(1)}%</div>
           </div>
-             
-              <div className="card" style={{ background: '#f3e8ff' }}>
-                <div className="card-title">Mix de Produtos:</div>
-                <div>{mixRealizado} / {objetivoMix} itens</div>
-                <div className="progress-container">
-                  <div
-                    className={`progress-bar ${getProgressClass(porcentagemMix)}`}
-                    style={{ width: `${Math.min(porcentagemMix, 100)}%` }}
-                  />
-                </div>
-                <div>Objetivo: {objetivoMix} itens</div>
-                <div>Progresso: {porcentagemMix.toFixed(1)}%</div>
-              </div>
 
+          {/* Card Mix */}
+          <div className="card" style={{ background: '#f3e8ff' }}>
+            <div className="card-title">Mix de Produtos:</div>
+            <div>{mixRealizado} / {objetivoMix} itens</div>
+            <div className="progress-container">
+              <div
+                className={`progress-bar ${getProgressClass(porcentagemMix)}`}
+                style={{ width: `${Math.min(porcentagemMix, 100)}%` }}
+              />
+            </div>
+            <div>Objetivo: {objetivoMix} itens</div>
+            <div>Progresso: {porcentagemMix.toFixed(1)}%</div>
+          </div>
         </div>
       )}
     </>

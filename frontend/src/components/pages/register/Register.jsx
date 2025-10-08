@@ -2,12 +2,14 @@
 import './register.css';
 import { useNavigate } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
-import api from '../../../api'; // <- usa a instância central (pega REACT_APP_API_URL e anexa o token)
+import api from '../../../api';
 
 const RegisterObjetivosVendedores = () => {
   const [vendedores, setVendedores] = useState([]);
   const [objetivosFinanceiros, setObjetivosFinanceiros] = useState({});
   const [objetivosMix, setObjetivosMix] = useState({});
+  const [objetivosPeso, setObjetivosPeso] = useState({});             // 🆕
+  const [objetivosPos, setObjetivosPos] = useState({});               // 🆕
   const [mesReferencia, setMesReferencia] = useState('');
   const navigate = useNavigate();
 
@@ -15,36 +17,35 @@ const RegisterObjetivosVendedores = () => {
     const today = new Date();
     const y = today.getFullYear();
     const m = String(today.getMonth() + 1).padStart(2, '0');
-
-    // controlado pelo input <input type="month" />
     setMesReferencia(`${y}-${m}`);
-
-    // usamos dia 01 para consultar os objetivos do mês
     const mesReferenciaAtual = `${y}-${m}-01`;
 
     (async () => {
       try {
-        // 1) lista de vendedores
         const { data: venResp } = await api.get('/todos-vendedores/');
         const lista = venResp.detalhamento || [];
         setVendedores(lista);
 
-        // 2) objetivos existentes do mês
         const { data: objResp } = await api.get('/objetivos-vendedores/', {
           params: { mes_referencia: mesReferenciaAtual },
         });
         const existentes = objResp.objetivos || [];
 
-        // 3) pré-preenche os inputs com o que já existe
         const objFin = {};
         const objMix = {};
+        const objPeso = {}; // 🆕
+        const objPos  = {}; // 🆕
         lista.forEach((v) => {
           const e = existentes.find((x) => Number(x.vendedor_id) === v.CodFuncionario);
-          objFin[v.CodFuncionario] = e ? e.objetivo_financeiro : '';
-          objMix[v.CodFuncionario] = e ? e.objetivo_mix : '';
+          objFin[v.CodFuncionario]  = e ? e.objetivo_financeiro      : '';
+          objMix[v.CodFuncionario]  = e ? e.objetivo_mix             : '';
+          objPeso[v.CodFuncionario] = e ? e.objetivo_peso            : '';   // 🆕
+          objPos[v.CodFuncionario]  = e ? e.objetivo_positivacao     : '';   // 🆕
         });
         setObjetivosFinanceiros(objFin);
         setObjetivosMix(objMix);
+        setObjetivosPeso(objPeso);   // 🆕
+        setObjetivosPos(objPos);     // 🆕
       } catch (err) {
         console.error('Erro ao buscar vendedores/objetivos:', err);
         setVendedores([]);
@@ -52,13 +53,10 @@ const RegisterObjetivosVendedores = () => {
     })();
   }, []);
 
-  const handleFinanceiroChange = (id, value) => {
-    setObjetivosFinanceiros((prev) => ({ ...prev, [id]: value }));
-  };
-
-  const handleMixChange = (id, value) => {
-    setObjetivosMix((prev) => ({ ...prev, [id]: value }));
-  };
+  const handleFinanceiroChange = (id, value) => setObjetivosFinanceiros((p) => ({ ...p, [id]: value }));
+  const handleMixChange        = (id, value) => setObjetivosMix((p) => ({ ...p, [id]: value }));
+  const handlePesoChange       = (id, value) => setObjetivosPeso((p) => ({ ...p, [id]: value }));        // 🆕
+  const handlePosChange        = (id, value) => setObjetivosPos((p) => ({ ...p, [id]: value }));         // 🆕
 
   const handleSubmit = async () => {
     const dataFormatada = `${mesReferencia}-01`;
@@ -66,9 +64,11 @@ const RegisterObjetivosVendedores = () => {
       mes_referencia: dataFormatada,
       objetivos: vendedores.map((v) => ({
         vendedor_id: v.CodFuncionario,
-        nome_vendedor: v.Nome, // seu endpoint retorna Nome (já conferimos no backend)
+        nome_vendedor: v.Nome,
         objetivo_financeiro: parseFloat(objetivosFinanceiros[v.CodFuncionario]) || 0,
         objetivo_mix: parseFloat(objetivosMix[v.CodFuncionario]) || 0,
+        objetivo_peso: parseFloat(objetivosPeso[v.CodFuncionario]) || 0,         // 🆕 envia kg
+        objetivo_positivacao: parseInt(objetivosPos[v.CodFuncionario]) || 0,     // 🆕 envia clientes
       })),
     };
 
@@ -86,13 +86,10 @@ const RegisterObjetivosVendedores = () => {
     }
   };
 
-  const totalFinanceiro = Object.values(objetivosFinanceiros)
-    .reduce((acc, v) => acc + (parseFloat(v) || 0), 0)
-    .toFixed(2);
-
-  const totalMix = Object.values(objetivosMix)
-    .reduce((acc, v) => acc + (parseFloat(v) || 0), 0)
-    .toFixed(2);
+  const totalFinanceiro = Object.values(objetivosFinanceiros).reduce((acc, v) => acc + (parseFloat(v) || 0), 0).toFixed(2);
+  const totalMix        = Object.values(objetivosMix).reduce((acc, v) => acc + (parseFloat(v) || 0), 0).toFixed(2);
+  const totalPeso       = Object.values(objetivosPeso).reduce((acc, v) => acc + (parseFloat(v) || 0), 0).toFixed(2);   // 🆕
+  const totalPos        = Object.values(objetivosPos).reduce((acc, v) => acc + (parseInt(v) || 0), 0);                  // 🆕
 
   return (
     <div className="register-container">
@@ -100,11 +97,7 @@ const RegisterObjetivosVendedores = () => {
 
       <div className="register-card register-form">
         <label>Mês de Referência:</label>
-        <input
-          type="month"
-          value={mesReferencia}
-          onChange={(e) => setMesReferencia(e.target.value)}
-        />
+        <input type="month" value={mesReferencia} onChange={(e) => setMesReferencia(e.target.value)} />
       </div>
 
       <div className="register-card">
@@ -114,6 +107,8 @@ const RegisterObjetivosVendedores = () => {
               <th>Vendedor</th>
               <th>Objetivo Financeiro (R$)</th>
               <th>Objetivo Mix</th>
+              <th>Objetivo Peso (kg)</th>           {/* 🆕 */}
+              <th>Objetivo Positivação (clientes)</th> {/* 🆕 */}
             </tr>
           </thead>
           <tbody>
@@ -134,20 +129,33 @@ const RegisterObjetivosVendedores = () => {
                     onChange={(e) => handleMixChange(v.CodFuncionario, e.target.value)}
                   />
                 </td>
+                <td>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={objetivosPeso[v.CodFuncionario] || ''}
+                    onChange={(e) => handlePesoChange(v.CodFuncionario, e.target.value)}
+                    placeholder="kg"
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    value={objetivosPos[v.CodFuncionario] || ''}
+                    onChange={(e) => handlePosChange(v.CodFuncionario, e.target.value)}
+                    placeholder="clientes"
+                  />
+                </td>
               </tr>
             ))}
 
-            {/* Linha de totalização */}
+            {/* totalização */}
             <tr className="register-total-row">
-              <td>
-                <strong>Total Empresa</strong>
-              </td>
-              <td>
-                <strong>{totalFinanceiro}</strong>
-              </td>
-              <td>
-                <strong>{totalMix}</strong>
-              </td>
+              <td><strong>Total Empresa</strong></td>
+              <td><strong>{totalFinanceiro}</strong></td>
+              <td><strong>{totalMix}</strong></td>
+              <td><strong>{totalPeso}</strong></td>      {/* 🆕 */}
+              <td><strong>{totalPos}</strong></td>       {/* 🆕 */}
             </tr>
           </tbody>
         </table>
