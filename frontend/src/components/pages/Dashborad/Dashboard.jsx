@@ -14,7 +14,7 @@ import IndicativosDeVenda from '../../metricard/IndicativosDeVenda';
 import CardsColaborador from '../../metricard/CardsColaborador';
 import IndicativosTabelaVendedor from '../../metricard/IndicativosTabelaVendedor';
 import PeriodoSelector from '../../ResumoVendas/PeriodoSelector';
-import BarChartColaboradores from '../../BarChart/BarChartColaboradores';
+import BarChartsColaboradoresKPIs from '../../BarChart/BarChartsColaboradoresKPIs';
 import CardsDetalhadosVendedor from '../../metricard/CardsDetalhadosVendedor';
 import { useAuth } from '../../../contexts/auth';
 import './Dashboard.css';
@@ -128,9 +128,13 @@ const Dashboard = () => {
         <div className="grid-2">
           <section className="section">
             {/* “Geral” sempre aparece para todos */}
-            {modo === 'geral' && !isRestricted && (
-              <BarChartColaboradores dados={vendasColaboradores} />
-            )}
+              {modo === 'geral' && !isRestricted && (
+                <BarChartsColaboradoresKPIs   
+                  dados={vendasColaboradores}
+                  objetivos={objetivosVendedores}
+                />
+              )}
+
 
             {/* “Individual” só com permissão e seleção */}
             {!isRestricted && modo === 'individual' && colaboradorSelecionado && (
