@@ -134,11 +134,10 @@ class IndicadoresView(APIView):
         data_inicio = request.GET.get('de')
         data_fim = request.GET.get('ate')
         
-
         if not data_inicio or not data_fim:
             return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
 
-         # ===== LOG DO PERFIL QUE ESTÁ FAZENDO A CHAMADA =====
+        # ===== LOG DO PERFIL QUE ESTÁ FAZENDO A CHAMADA =====
         ctx = get_role_context(request.user)
         logger.info(
             "[IndicadoresView] user=%s id=%s roles=%s cod_funcionario=%s cod_unid_gestora=%s de=%s ate=%s ip=%s",
@@ -153,17 +152,21 @@ class IndicadoresView(APIView):
         )
         # ====================================================
 
-         # 1) Busca as rotas do supervisor (ou None se admin/outro papel)
-        rotas_info = buscar_rotas_usuario(ctx)           # -> {'rotas': None|[...], 'detalhado': [...]}
-        rotas_codigos = rotas_info.get("rotas") if rotas_info else None  # ex.: [335, 3, 4, 7, 8, 10, 12, 13, 304, 307]
-        # lista de vendedores:
-        vendedores = rotas_info.get("vendedores") if rotas_info else None
-        # se o usuário for vendedor e não vier lista, use o próprio cod_funcionario
-        if ctx.is_vendedor and (not vendedores):
-            vendedores = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else None
+        # 1) Rotas / vendedores conforme papel
+        rotas_info = buscar_rotas_usuario(ctx)  # -> {'rotas': None|[...], 'detalhado': [...], 'vendedores': [...]}
+        rotas_codigos = rotas_info.get("rotas") if rotas_info else None
 
+        # 🔧 Se for VENDEDOR, usar a lista da MESMA SUPERVISÃO
+        if ctx.is_vendedor:
+            try:
+                vendedores = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario) or [int(ctx.cod_funcionario)]
+            except Exception:
+                vendedores = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else None
+        else:
+            # supervisor/admin mantém a lista vinda de rotas (ou None = sem filtro)
+            vendedores = rotas_info.get("vendedores") if rotas_info else None
 
-        
+        logger.debug(f"[IndicadoresView] vendedores considerados para escopo: {vendedores}")
 
         #  OBJETIVOS — tudo do SQLite agora
         objetivo_mensal_data = get_objetivo_mensal_serializado(
@@ -178,13 +181,13 @@ class IndicadoresView(APIView):
         }
         objetivos_vendedores = get_objetivos_vendedores_por_mes(data_inicio)
 
-        # IMPORTANTÍSSIMO: defina variáveis locais para usar nos cálculos abaixo
+        # variáveis locais
         objetivo_financeiro   = objetivo["financeiro"]
         objetivo_mix          = objetivo["objetivo_mix"]
         objetivo_peso         = objetivo["objetivo_peso"]
         objetivo_positivacao  = objetivo["objetivo_positivacao"]
 
-        # --- helpers p/ tipos ---
+        # helpers p/ tipos
         def _to_int(v):
             try:
                 return int(str(v).strip())
@@ -197,20 +200,12 @@ class IndicadoresView(APIView):
             except (TypeError, ValueError):
                 return 0.0
 
-        # --- lista de vendedores conforme papel ---
-        # use a lista decidida antes (rotas do supervisor, etc.)
-        vendedores_list = vendedores
+        # lista/set de vendedores p/ filtro
+        vendedores_list = vendedores or []
+        vendedores_set = { _to_int(v) for v in vendedores_list if _to_int(v) is not None }
 
-        # se for vendedor, filtre APENAS pelo próprio cod_funcionario
-        if ctx.is_vendedor:
-            vendedores_list = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else []
-
-        # constrói o set robusto
-        vendedores_set = {
-            _to_int(v) for v in (vendedores_list or []) if _to_int(v) is not None
-}
         # =========================
-        # VENDAS REALIZADAS (NOVO)
+        # VENDAS REALIZADAS (ÁREA)
         # =========================
         vendido = buscar_vendas_por_vendedor(data_inicio, data_fim)
         lista = vendido.get("vendas_por_vendedor", []) or []
@@ -223,11 +218,8 @@ class IndicadoresView(APIView):
         venda_realizada = sum(_to_float(it.get("ValorLiquido")) for it in lista)
         peso_realizado  = sum(_to_float(it.get("PesoTotal"))    for it in lista)
 
-        print(f"[DEBUG] venda_realizada (soma ValorLiquido): {venda_realizada}")
-        print(f"[DEBUG] peso_realizado (soma PesoTotal): {peso_realizado}")
-
         # ===========================================
-        # VENDAS DO MESMO PERÍODO NO ANO ANTERIOR (NOVO)
+        # VENDAS DO MESMO PERÍODO NO ANO ANTERIOR
         # ===========================================
         ano_anterior_inicio = ajustar_data_para_ano_anterior(data_inicio)
         ano_anterior_fim    = ajustar_data_para_ano_anterior(data_fim)
@@ -239,72 +231,102 @@ class IndicadoresView(APIView):
 
         venda_ano_anterior = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa) or 1.0  # evita div/0
         
-        #  POSITIVAÇÃO
-        positivacao = buscar_positivacao_por_rota(data_inicio, data_fim,rotas=rotas_codigos,cod_vendedores=vendedores)
-        print(f"[DEBUG] rotas (positivação) {rotas_codigos}")
-        print(f"[DEBUG] vendedores (positivação) {vendedores}")
+        #  POSITIVAÇÃO (área)
+        positivacao = buscar_positivacao_por_rota(data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores)
         positivacao_realizado_geral = positivacao.get("positivacao_realizado_geral", 0)
         objetivo_positivacao = objetivo.get('objetivo_positivacao', 0)
         percentual_positivacao = safe_divide(positivacao_realizado_geral, objetivo_positivacao) * 100
         variacao_positivacao = positivacao_realizado_geral  - objetivo_positivacao
 
-        #   MIX
-        dados_mix = buscar_venda_mix(data_inicio, data_fim,cod_vendedores=vendedores)
+        # MIX (área)
+        dados_mix = buscar_venda_mix(data_inicio, data_fim, cod_vendedores=vendedores)
         mix_realizado = dados_mix["mix_realizado"]
         
-        # Pré-venda
-        #chave = f"prevenda_{data_inicio}_{data_fim}"
-        #prevenda = get_cached_data(chave, lambda: buscar_pre_venda(data_inicio, data_fim,cod_vendedores=vendedores))
-        prevenda = buscar_pre_venda(data_inicio, data_fim,cod_vendedores=vendedores)
+        # Pré-venda (área)
+        prevenda = buscar_pre_venda(data_inicio, data_fim, cod_vendedores=vendedores)
         valor_prevenda = prevenda.get("pre_venda_valor", 0)
         valor_alocado = venda_realizada + valor_prevenda
-       
 
-        
-         # Cálculos de percentual realizado e valor do captado para variação em deficit ou superávit 
+        # KPIs (área)
         variacao = peso_realizado - objetivo.get("objetivo_peso", 0)
         percentual = safe_divide(peso_realizado, objetivo.get("objetivo_peso", 1)) * 100
         percentual_cobertura = safe_divide(venda_realizada, objetivo_financeiro) * 100
-        print(f"[DEBUG] venda_realizada {venda_realizada}")
-        print(f"[DEBUG] objetivo_financeiro {objetivo_financeiro}")
-       
-        variacao_financeira =   venda_realizada - objetivo_financeiro
-        print(f"[DEBUG] variacao_financeira {variacao_financeira}")
+        variacao_financeira = venda_realizada - objetivo_financeiro
         venda_realizada_float = float(venda_realizada)
         venda_ano_anterior_float = float(venda_ano_anterior)
-        evolucao_percentual = safe_divide( venda_realizada_float - venda_ano_anterior_float, venda_ano_anterior_float) * 100
-        percentual_mix = safe_divide(mix_realizado,objetivo_mix) * 100
+        evolucao_percentual = safe_divide(venda_realizada_float - venda_ano_anterior_float, venda_ano_anterior_float) * 100
+        percentual_mix = safe_divide(mix_realizado, objetivo_mix) * 100
         variacao_mix = mix_realizado - objetivo_mix
-        percentual_prevenda_alocado = safe_divide(valor_alocado,objetivo_financeiro)*100
+        percentual_prevenda_alocado = safe_divide(valor_alocado, objetivo_financeiro) * 100
         variacao_prevenda = valor_alocado - objetivo_financeiro
 
-        # === RUPTURA (Captado) ===
-        # 'vendedores' pode ser None, int/str, ou lista (ex.: [23])
-        vendedores_list = _to_int_list(vendedores)
-        if not vendedores_list:
-            # nenhum vendedor definido -> consolidado (sem filtro)
+        # === RUPTURA (Captado) (área) ===
+        vendedores_list_int = _to_int_list(vendedores)
+        if not vendedores_list_int:
             ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=None)
-        elif len(vendedores_list) == 1:
-            # exatamente 1 -> filtro "="
-            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=vendedores_list[0], cod_vendedores=None)
+        elif len(vendedores_list_int) == 1:
+            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=vendedores_list_int[0], cod_vendedores=None)
         else:
-            # 2+ -> filtro "IN (...)"
-            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=vendedores_list)
+            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=vendedores_list_int)
 
         ruptura_total = 0.0
         for r in (ruptura_dados.get("resumo") or []):
             ruptura_total += float(r.get("TotalValor") or 0)
         ruptura_total = round(ruptura_total, 2)
         percentual_captado = round(safe_divide(ruptura_total, venda_realizada) * 100, 2)
-       
-       
-       
-        print(f"[DEBUG] venda do ano anterior {venda_ano_anterior}")
-        print(f"[DEBUG] percentual {evolucao_percentual}")
-        print(f"[DEBUG] ruptura_total={ruptura_total} | vendido={venda_realizada} | %captado/vendido={percentual_captado}")
 
-        
-        
+        # ========= NOVO: BLOCO "minha_visao" (vendedor logado) =========
+        minha_visao = None
+        try:
+            meu_cod = _to_int(ctx.cod_funcionario)
+            # linha de venda do meu vendedor
+            minha_linha = None
+            for it in lista:
+                if _to_int(it.get("codcampo")) == meu_cod:
+                    minha_linha = it
+                    break
+
+            # objetivos do meu vendedor
+            obj_meu = None
+            for o in objetivos_vendedores or []:
+                if str(o.get("vendedor_id")) == str(meu_cod):
+                    obj_meu = o
+                    break
+
+            if minha_linha or obj_meu:
+                my_venda = _to_float((minha_linha or {}).get("ValorLiquido"))
+                my_peso  = _to_float((minha_linha or {}).get("PesoTotal"))
+                my_mix   = _to_float((minha_linha or {}).get("Mix"))
+
+                my_obj_fin  = _to_float((obj_meu or {}).get("objetivo_financeiro"))
+                my_obj_peso = _to_float((obj_meu or {}).get("objetivo_peso"))
+                my_obj_mix  = _to_float((obj_meu or {}).get("objetivo_mix"))
+                my_obj_pos  = _to_float((obj_meu or {}).get("objetivo_positivacao"))
+
+                minha_visao = {
+                    "cod_funcionario": meu_cod,
+                    "colaborador": (minha_linha or {}).get("Campo"),
+                    "realizado_financeiro": round(my_venda, 2),
+                    "realizado_peso": round(my_peso, 2),
+                    "mix_realizado": round(my_mix, 2),
+                    "objetivo_financeiro": round(my_obj_fin, 2),
+                    "objetivo_peso": round(my_obj_peso, 2),
+                    "objetivo_mix": round(my_obj_mix, 2),
+                    "objetivo_positivacao": round(my_obj_pos, 2),
+                    "percentual_cobertura": round(safe_divide(my_venda, my_obj_fin) * 100, 2) if my_obj_fin else 0.0,
+                    "variacao_financeira": round(my_venda - my_obj_fin, 2),
+                    "percentual_peso": round(safe_divide(my_peso, my_obj_peso) * 100, 2) if my_obj_peso else 0.0,
+                    "variacao_peso": round(my_peso - my_obj_peso, 2),
+                    "percentual_mix": round(safe_divide(my_mix, my_obj_mix) * 100, 2) if my_obj_mix else 0.0,
+                    "variacao_mix": round(my_mix - my_obj_mix, 2),
+                }
+        except Exception as e:
+            logger.exception(f"[IndicadoresView][minha_visao] erro ao montar: {e}")
+            minha_visao = None
+
+        # garante que o payload de vendas vá FILTRADO
+        vendido["vendas_por_vendedor"] = lista
+
         return Response({
             "objetivo": objetivo,
             "objetivos_vendedores": objetivos_vendedores,
@@ -312,13 +334,13 @@ class IndicadoresView(APIView):
                 "valor_ano_anterior": round(venda_ano_anterior, 2),
                 "percentual": round(evolucao_percentual)  # positivo/negativo
             },
-            "pre-venda":{
-                    "valor_prevenda": round(valor_prevenda,2),
-                    "valor_alocado": round(valor_alocado,2),
-                    "percentual_prevenda_alocado": round(percentual_prevenda_alocado,2),
-                    "variacao_prevenda": round(variacao_prevenda,2)
+            "pre-venda": {
+                "valor_prevenda": round(valor_prevenda, 2),
+                "valor_alocado": round(valor_alocado, 2),
+                "percentual_prevenda_alocado": round(percentual_prevenda_alocado, 2),
+                "variacao_prevenda": round(variacao_prevenda, 2)
             },
-            "vendas": vendido,
+            "vendas": vendido,  # já com 'vendas_por_vendedor' filtrado
             "realizado_peso": {
                 "realizado": round(peso_realizado, 2),  
                 "percentual": round(percentual, 2),
@@ -329,26 +351,26 @@ class IndicadoresView(APIView):
                 "percentual_cobertura": round(percentual_cobertura, 2),
                 "variacao": round(variacao_financeira, 2)
             },
-            
-             "positivacao":{
-                "realizado":positivacao_realizado_geral,
+            "positivacao": {
+                "realizado": positivacao_realizado_geral,
                 "percentual": percentual_positivacao,
                 "variacao": variacao_positivacao
-           },
-           "realizado_mix":{
-                "realizado":mix_realizado,
-                "percentual":percentual_mix,
-                "variacao":variacao_mix
-           },
+            },
+            "realizado_mix": {
+                "realizado": mix_realizado,
+                "percentual": percentual_mix,
+                "variacao": variacao_mix
+            },
             "positivacao_detalhada": positivacao,
-            
             "ruptura": {
                 "total_valor": ruptura_total,
-                 "percentual_captado": percentual_captado
-            }
-
-
+                "percentual_captado": percentual_captado
+            },
+            # ===== NOVO: KPIs do vendedor logado =====
+            "minha_visao": minha_visao,
         })
+
+
     
 
 class ObjetivoMensalView(APIView):
