@@ -510,7 +510,6 @@ def ajustar_data_para_ano_anterior(data_str):
     
 
 class IndicadoresPDV(APIView):
-
     def get(self, request):
         data_inicio = request.GET.get("de")
         data_fim = request.GET.get("ate")
@@ -519,21 +518,23 @@ class IndicadoresPDV(APIView):
 
         try:
             dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
-            print(f"[DEBUG] Vendas PDV {dados_pdv['valor_pdv']} e peso {dados_pdv['peso_pdv']}")
-            venda_realizada_PDV= float(dados_pdv["valor_pdv"])
-            peso_realizado_PDV = float(dados_pdv["peso_pdv"])
-            ano_anterior_inicio_PDV = ajustar_data_para_ano_anterior(data_inicio)
-            ano_anterior_fim_PDV = ajustar_data_para_ano_anterior(data_fim)
-            dados_pdv_anoanterior = buscar_vendas_pdv(ano_anterior_inicio_PDV, ano_anterior_fim_PDV)
+            venda_realizada_PDV = float(dados_pdv["valor_pdv"] or 0)
+            peso_realizado_PDV  = float(dados_pdv["peso_pdv"] or 0)
 
-            return Response({"vendas_pdv":{
-                            "venda_realizada":venda_realizada_PDV, 
-                            "peso_realizado":peso_realizado_PDV,
-                            "venda_realizada_ano_anterior":dados_pdv_anoanterior["valor_pdv"],
-            }})
+            ano_anterior_inicio_PDV = ajustar_data_para_ano_anterior(data_inicio)
+            ano_anterior_fim_PDV    = ajustar_data_para_ano_anterior(data_fim)
+            dados_pdv_anoanterior   = buscar_vendas_pdv(ano_anterior_inicio_PDV, ano_anterior_fim_PDV)
+
+            return Response({
+                "vendas_pdv": {
+                    "venda_realizada": venda_realizada_PDV,
+                    "peso_realizado": peso_realizado_PDV,
+                    "venda_realizada_ano_anterior": float(dados_pdv_anoanterior.get("valor_pdv", 0) or 0),
+                }
+            })
         except Exception as e:
+            logger.exception("Erro em IndicadoresPDV: de=%s ate=%s", data_inicio, data_fim)
             return Response({"error": str(e)}, status=500)
-        
 
 class VendasPorVendedorView(APIView):
     def get(self, request):

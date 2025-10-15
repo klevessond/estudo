@@ -11,11 +11,11 @@ const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, v
       {icon && <img src={icon} alt="Ícone" className="card-icon" />}
     </div>
     <div className="card-group">
-      <p className="card-value">{value}</p>
+      <div className="card-value">{value}</div>
       {subtitle && <p className="card-subtitle">{subtitle}</p>}
     </div>
     <div className="card-group">
-      <p className="card-value">{value2}</p>
+      <div className="card-value">{value2}</div>
     </div>
     <div className="card-subtitle">
       {title2}
