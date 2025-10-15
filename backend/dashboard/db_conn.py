@@ -78,7 +78,7 @@ def query_all(sql: str, params=None, timeout: int = 30):
 
     with _connect(timeout_connect=open_timeout, attempts=3) as cn:
         # Timeout de execução do comando (segundos)
-        cn.timeout = max(15, timeout)
+        cn.timeout = max(180, timeout)
         with cn.cursor() as cur:
             cur.execute(sql, params or [])
             # Avança até o primeiro result set com colunas

@@ -42,7 +42,7 @@ def buscar_vendas_pdv(data_inicio, data_fim) -> Dict[str, Any]:
           AND N.Venda = 1
           AND V.Status = 0
           AND V.CodPedidoVenda = 0             -- PDV: não é pedido (NFC-e)
-          AND V.UnidGestora IN (1,2,3,4,5,6,8,9,10)
+          AND V.UnidGestora IN (select UnidGestora from UnidadeGestora)
           AND V.DataVenda >= ?
           AND V.DataVenda <  ?
     """
