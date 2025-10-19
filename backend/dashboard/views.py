@@ -219,18 +219,89 @@ class IndicadoresView(APIView):
         peso_realizado  = sum(_to_float(it.get("PesoTotal"))    for it in lista)
 
         # ===========================================
-        # VENDAS DO MESMO PERÍODO NO ANO ANTERIOR
+        # VENDAS DO MESMO PERÍODO NO ANO ANTERIOR  
         # ===========================================
-        ano_anterior_inicio = ajustar_data_para_ano_anterior(data_inicio)
-        ano_anterior_fim    = ajustar_data_para_ano_anterior(data_fim)
+        # Regras:
+        # - Se o mês consultado == mês atual, comparar de data_inicio até "hoje" (mesmo dia no ano anterior).
+        # - Caso contrário (mês passado), comparar mês completo como antes (de/ate - 1 ano).
 
-        res_aa  = buscar_vendas_por_vendedor(ano_anterior_inicio, ano_anterior_fim)
+        def last_day_of_month(y, m):
+            # sem imports: calcula último dia do mês (considera bissexto)
+            if m in (1,3,5,7,8,10,12):
+                return 31
+            if m in (4,6,9,11):
+                return 30
+            # fevereiro
+            is_leap = (y % 4 == 0) and (y % 100 != 0 or y % 400 == 0)
+            return 29 if is_leap else 28
+
+        def _ajusta_data_aa(d: date) -> date:
+            """Troca o ano pra (ano-1), se 29/02 ajusta p/ 28/02 quando necessário."""
+            try:
+                return d.replace(year=d.year - 1)
+            except ValueError:
+                # 29/02 em ano não-bissexto
+                return d.replace(year=d.year - 1, day=28)
+
+        # parse datas
+        de_dt = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+        ate_dt = datetime.strptime(data_fim, "%Y-%m-%d").date()
+        hoje = date.today()
+
+        if de_dt.year == hoje.year and de_dt.month == hoje.month:
+            # mês atual: vai até o "hoje" do ano anterior (limitado ao fim do mês)
+            aa_ini = _ajusta_data_aa(de_dt)
+            aa_last_day = last_day_of_month(aa_ini.year, aa_ini.month)
+            # mesmo dia de "hoje" no ano anterior, mas não pode passar do fim do mês
+            end_day = min(hoje.day, aa_last_day)
+            aa_fim = date(aa_ini.year, aa_ini.month, end_day)
+        else:
+            # mês passado ou outro: usa o mês completo (como antes)
+            aa_ini = _ajusta_data_aa(de_dt)
+            aa_fim = _ajusta_data_aa(ate_dt)
+
+        res_aa  = buscar_vendas_por_vendedor(aa_ini.strftime("%Y-%m-%d"), aa_fim.strftime("%Y-%m-%d"))
+        print(f"[DEBUG][VENDA ANO ANTERIOR INTEIRA] {res_aa}")
         lista_aa = res_aa.get("vendas_por_vendedor", []) or []
         if vendedores_set:
             lista_aa = [it for it in lista_aa if _to_int(it.get("codcampo")) in vendedores_set]
 
         venda_ano_anterior = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa) or 1.0  # evita div/0
-        
+        print(f"[DEBUG][VENDA ANO ANTERIOR] {venda_ano_anterior}")
+        ##índice por vendedor do ANO ANTERIOR (para merge no payload de vendas) ---
+        def _num(v):
+            try:
+                return float(v or 0)
+            except Exception:
+                return 0.0
+
+        aa_by_cod = {}
+        for it in lista_aa:
+            cod = _to_int(it.get("codcampo"))
+            if cod is None:
+                continue
+            aa_by_cod[cod] = {
+                "Ano_anterior_QtdClientes": _num(it.get("QtdClientes")),
+                "Ano_anterior_ValorLiquido": _num(it.get("ValorLiquido")),
+                "Ano_anterior_PesoTotal": _num(it.get("PesoTotal")),
+                "Ano_anterior_Mix": _num(it.get("Mix")),
+            }
+
+        # --- injeta campos *Ano_anterior_* em cada item de lista (ano atual) ---
+        for it in lista:
+            cod = _to_int(it.get("codcampo"))
+            aa = aa_by_cod.get(cod, {})
+            it.update(aa)
+
+        # --- agregado do ano anterior (da mesma amostra de vendedores) ---
+        ano_anterior_agregado = {
+            "QtdClientes": sum(_num(x.get("Ano_anterior_QtdClientes")) for x in lista),
+            "ValorLiquido": sum(_num(x.get("Ano_anterior_ValorLiquido")) for x in lista),
+            "PesoTotal": sum(_num(x.get("Ano_anterior_PesoTotal")) for x in lista),
+            "Mix": sum(_num(x.get("Ano_anterior_Mix")) for x in lista),
+        }
+
+
         #  POSITIVAÇÃO (área)
         positivacao = buscar_positivacao_por_rota(data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores)
         positivacao_realizado_geral = positivacao.get("positivacao_realizado_geral", 0)
@@ -326,6 +397,7 @@ class IndicadoresView(APIView):
 
         # garante que o payload de vendas vá FILTRADO
         vendido["vendas_por_vendedor"] = lista
+        #vendido["ano_anterior_agregado"] = ano_anterior_agregado
 
         return Response({
             "objetivo": objetivo,
