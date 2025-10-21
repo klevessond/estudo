@@ -136,9 +136,9 @@
 :root{
   --kpi-blue: #0074c2;
   --kpi-green: #17a673;
-  --kpi-orange: #ff9f1a;
+  --kpi-orange: #ff1a1a;
   --kpi-text: #1f2937;
-  --kpi-muted: #6b7280;
+  --kpi-muted: #ff0101;
   --kpi-bg: #ffffff;
   --kpi-border: #e5e7eb;
 }

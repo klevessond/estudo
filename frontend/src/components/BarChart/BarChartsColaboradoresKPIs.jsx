@@ -8,6 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  LabelList,
 } from 'recharts';
 import './BarChartsColaboradoresKPIs.css';
 
@@ -34,11 +35,12 @@ const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [] }) => {
   const dataset = useMemo(() => {
     const rows = (dados || []).map((v) => {
       const obj = objetivosMap.get(String(v.codFuncionario)) || {};
-      const nomeCurto = String(v.colaborador || '')
-        .trim()
-        .split(' ')
-        .slice(0, 2)
-        .join(' ') || '—';
+      const nomeCurto =
+        String(v.colaborador || '')
+          .trim()
+          .split(' ')
+          .slice(0, 2)
+          .join(' ') || '—';
 
       let pct = 0;
       if (modo === 'financeiro') {
@@ -68,23 +70,27 @@ const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [] }) => {
         const obj = objetivosMap.get(String(v.codFuncionario)) || {};
         // financeiro
         acc.finReal += Number(v.faturado || 0);
-        acc.finObj  += Number(obj.objetivo_financeiro || 0);
+        acc.finObj += Number(obj.objetivo_financeiro || 0);
         // positivação
         acc.posReal += Number(v.qtdClientes || 0);
-        acc.posObj  += Number(obj.objetivo_positivacao || 0);
+        acc.posObj += Number(obj.objetivo_positivacao || 0);
         // peso
         acc.pesoReal += Number(v.pesototalvendido || 0);
-        acc.pesoObj  += Number(obj.objetivo_peso || 0);
+        acc.pesoObj += Number(obj.objetivo_peso || 0);
         // mix
         acc.mixReal += Number(v.mix || 0);
-        acc.mixObj  += Number(obj.objetivo_mix || 0);
+        acc.mixObj += Number(obj.objetivo_mix || 0);
         return acc;
       },
       {
-        finReal: 0, finObj: 0,
-        posReal: 0, posObj: 0,
-        pesoReal: 0, pesoObj: 0,
-        mixReal: 0, mixObj: 0,
+        finReal: 0,
+        finObj: 0,
+        posReal: 0,
+        posObj: 0,
+        pesoReal: 0,
+        pesoObj: 0,
+        mixReal: 0,
+        mixObj: 0,
       }
     );
   }, [dados, objetivosMap]);
@@ -112,12 +118,26 @@ const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [] }) => {
     mix: '% — Mix',
   }[modo];
 
-  // eixo Y adaptativo (mín. 100, sobe em múltiplos de 10 conforme topo e média)
+  // eixo Y adaptativo (mín. 100, sobe em múltiplos de 10 conforme topo, média + 10% de folga)
   const yMax = useMemo(() => {
     const top = Math.max(dataset[0]?.Percentual || 0, mediaPct, 100);
     const step = 10;
-    return Math.ceil(top / step) * step;
+    return Math.ceil((top * 1.1) / step) * step;
   }, [dataset, mediaPct]);
+
+  // Label custom pra aparecer no topo da barra (ex.: "87.5%")
+  const renderBarLabel = (props) => {
+    const { x, y, width, height, value } = props;
+    const val = Number(value ?? 0);
+    if (!Number.isFinite(val) || height < 12) return null; // oculta em barras muito baixas
+    const cx = x + width / 2;
+    const cy = y - 6; // 6px acima do topo da barra
+    return (
+      <text x={cx} y={cy} textAnchor="middle" className="bar-label">
+        {val.toFixed(1)}%
+      </text>
+    );
+  };
 
   return (
     <div className="barcharts-kpis">
@@ -166,11 +186,25 @@ const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [] }) => {
               formatter={(value) => `${Number(value).toFixed(2)}%`}
               contentStyle={{ borderRadius: 10, boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}
             />
-            {/* Linha de meta (100%) */}
-            <ReferenceLine y={100} stroke="var(--kpi-green)" strokeDasharray="3 3" label="Meta 100%" />
-            {/* Linha de média da equipe */}
-            <ReferenceLine y={mediaPct} stroke="var(--kpi-orange)" strokeDasharray="6 2" label={`Média ${mediaPct.toFixed(1)}%`} />
-            <Bar dataKey="Percentual" fill="var(--kpi-blue)" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="Percentual" fill="var(--kpi-blue)" radius={[6, 6, 0, 0]}>
+                <LabelList dataKey="Percentual" content={renderBarLabel} />
+              </Bar>
+
+              {/* Agora as linhas ficam NA FRENTE porque vêm depois no DOM */}
+              <ReferenceLine
+                y={mediaPct}
+                stroke="var(--kpi-orange)"
+                strokeDasharray="6 2"
+                strokeWidth={2}
+                label={{ value: `Média ${mediaPct.toFixed(1)}%`, position: 'center', fill: 'var(--danger, red)' }}
+              />
+              <ReferenceLine
+                y={100}
+                stroke="var(--kpi-green)"
+                strokeDasharray="3 3"
+                strokeWidth={2}
+                label="Meta 100%"
+              />
           </BarChart>
         </ResponsiveContainer>
       </div>
