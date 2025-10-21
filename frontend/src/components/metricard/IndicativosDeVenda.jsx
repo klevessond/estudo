@@ -4,6 +4,8 @@ import ReactSpeedometer from 'react-d3-speedometer';
 import api from '../../api';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 
+const dlog = (...args) => console.log('[IndicativosDeVenda]', ...args);
+
 const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, variation, icon, className }) => (
   <div className={`indicativo-card ${className || ''}`}>
     <div className="card-header">
@@ -81,13 +83,21 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
 
   const [modo, setModo] = useState('indicadores');
 
-  // ====== NOVO: cache do payload bruto + toggle do escopo ======
+  // ====== cache do payload bruto + toggle do escopo ======
   const [rawData, setRawData] = useState(null);
   const [somarArea, setSomarArea] = useState(false); // false: individual, true: soma da área
 
   // helpers
   const fmtMoeda = (n) => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const fmtNum2  = (n) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  const pct = (num, den) => (Number(den) ? (Number(num) / Number(den)) * 100 : 0);
+
+  const getMinhaLinha = (data) => {
+    const meuCod = Number(data?.minha_visao?.cod_funcionario || 0);
+    if (!meuCod) return null;
+    const arr = data?.vendas?.vendas_por_vendedor || [];
+    return arr.find(x => Number(x?.codcampo) === meuCod) || null;
+  };
 
   // ===== Evolução (Ano Anterior) sensível ao escopo =====
   const applyEvolucaoFromRaw = (data, isArea, atualOverride) => {
@@ -96,9 +106,8 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     let valorAnoAnterior = 0;
 
     if (isArea) {
-      // tenta vir do backend (agregado)
+      // tenta vir agregado; fallback: soma por vendedor
       valorAnoAnterior = Number(data?.vendas?.ano_anterior_agregado?.ValorLiquido || 0);
-      // fallback: soma por vendedor caso agregado não exista/venha zero
       if (!valorAnoAnterior && Array.isArray(data?.vendas?.vendas_por_vendedor)) {
         valorAnoAnterior = data.vendas.vendas_por_vendedor.reduce(
           (acc, x) => acc + Number(x?.Ano_anterior_ValorLiquido || 0),
@@ -106,18 +115,8 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
         );
       }
     } else {
-      // individual: localizar minha linha e pegar a base do ano anterior
-      const meuCod = Number(data?.minha_visao?.cod_funcionario || 0);
-      if (meuCod && Array.isArray(data?.vendas?.vendas_por_vendedor)) {
-        const linha = data.vendas.vendas_por_vendedor.find(
-          (x) => Number(x?.codcampo) === meuCod
-        );
-        valorAnoAnterior = Number(linha?.Ano_anterior_ValorLiquido || 0);
-      }
-      // fallback final para consolidado do backend
-      if (!valorAnoAnterior) {
-        valorAnoAnterior = Number(data?.evolucao?.valor_ano_anterior || 0);
-      }
+      const linha = getMinhaLinha(data);
+      valorAnoAnterior = Number(linha?.Ano_anterior_ValorLiquido || 0) || Number(data?.evolucao?.valor_ano_anterior || 0);
     }
 
     setValorAnoAnteriorBase(valorAnoAnterior);
@@ -135,7 +134,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
           ? (data?.realizado_financeiro?.valor || 0)
           : (data?.minha_visao?.realizado_financeiro || 0)
       );
-      // fallback: se individual sem minha_visao, usa agregado atual
       if (!isArea && !atual) {
         atual = Number(data?.realizado_financeiro?.valor || 0);
       }
@@ -146,21 +144,29 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       setEvolucaoAnoAnterior(`${perc.toFixed(2)}%`);
     } else {
       const percBack = Number(data?.evolucao?.percentual || 0);
-      setEvolucaoAnoAnterior(`${percBack.toFixed(2)}%`);
+      setEvolucaoAnoAnterior(`${(percBack || 0).toFixed(2)}%`);
     }
   };
 
-  // ========= aplica "escopo individual" usando data.minha_visao =========
+  // ========= aplica "escopo individual" =========
   const applyIndividualFromRaw = (data) => {
     if (!data) return;
+
     const m = data.minha_visao;
+    const linha = getMinhaLinha(data);
+
+    dlog('applyIndividualFromRaw - minha_visao:', m);
+    dlog('applyIndividualFromRaw - minha linha:', linha);
+
     if (m) {
       // Venda
       setVendaRealizada(fmtMoeda(m.realizado_financeiro));
       setVendaRealizadaBase(m.realizado_financeiro);
       setObjetivoFinanceiro(fmtMoeda(m.objetivo_financeiro));
       setVendaPercentual(`${Number(m.percentual_cobertura || 0).toFixed(2)}%`);
-      setVendaVariacao(`R$ ${Number(m.variacao_financeira || 0) < 0 ? '-' : ''}${Math.abs(Number(m.variacao_financeira || 0)).toFixed(2).replace('.', ',')}`);
+      setVendaVariacao(
+        `R$ ${Number(m.variacao_financeira || 0) < 0 ? '-' : ''}${Math.abs(Number(m.variacao_financeira || 0)).toFixed(2).replace('.', ',')}`
+      );
 
       // Peso
       setPeso((Number(m.objetivo_peso || 0)).toLocaleString('pt-BR'));
@@ -175,7 +181,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       setMixPercentual(`${Number(m.percentual_mix || 0).toFixed(2)}%`);
       setMixVariacao(String(Number(m.variacao_mix || 0)));
     } else {
-      // Fallback: individual sem minha_visao → usa agregados atuais do backend
+      // Fallback: individual sem minha_visao → usa agregados atuais
       const percentual = data.realizado_peso?.percentual || 0;
       const variacao = data.realizado_peso?.variacao || 0;
       const objetivoPeso = data.objetivo?.objetivo_peso || 0;
@@ -205,41 +211,45 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       setMixVariacao(String(data.realizado_mix?.variacao || 0));
     }
 
-    // Positivação / Alocação / Ruptura
-    const objetivoPos = data.objetivo?.objetivo_positivacao || 0;
-    const positivado = data.positivacao?.realizado || 0;
-    const percentualPos = data.positivacao?.percentual || 0;
-    const variacaoPos = data.positivacao?.variacao || 0;
-    setPositivadoObjetivo((objetivoPos).toLocaleString('pt-BR'));
-    setPositivadoRealizado((positivado).toLocaleString('pt-BR'));
-    setPositivadoPercentual(`${Number(percentualPos).toFixed(2)}%`);
-    setPositivadoVariacao((variacaoPos).toLocaleString('pt-BR'));
+    // ==== NOVO: Individual — usa linha do vendedor ====
+    const vendaAtual = Number(m?.realizado_financeiro || 0);
+    const objFin     = Number(m?.objetivo_financeiro || 0);
 
-    const alocacao = data['pre-venda'] || {};
-    const valorAlocado = alocacao.valor_alocado || 0;
-    const valorPrevenda = alocacao.valor_prevenda || 0;
-    const percentualAlocado = alocacao.percentual_prevenda_alocado || 0;
-    const variacaoPrevenda = alocacao.variacao_prevenda || 0;
+    const pre = Number(linha?.PreVenda_Valor || 0);
+    const ruptura = Number(linha?.Ruptura_TotalValor || 0);
 
+    // NOVO: positivação (realizado) = QtdClientes da linha
+    const posReal = Number(linha?.QtdClientes || 0);
+    // objetivo de positivação: preferir minha_visao; fallback: objetivo geral
+    const objPos  = Number(m?.objetivo_positivacao ?? data?.objetivo?.objetivo_positivacao ?? 0);
+
+    dlog('INDIVIDUAL pre:', pre, 'ruptura:', ruptura, 'posReal(QtdClientes):', posReal, 'objPos:', objPos);
+
+    // Alocação (Fat + A Faturar)
+    const valorAlocado = vendaAtual + pre;
+    setAlocacaoPrevenda(fmtMoeda(pre));
     setAlocacaoRealizada(fmtMoeda(valorAlocado));
-    setAlocacaoPrevenda(fmtMoeda(valorPrevenda));
-    setAlocacaoPercentual(`${Number(percentualAlocado).toFixed(2)}%`);
+    const percAlocado = pct(valorAlocado, objFin);
+    setAlocacaoPercentual(`${percAlocado.toFixed(2)}%`);
     setAlocacaoVariacao(
-      Number(variacaoPrevenda) < 0
-        ? `R$ -${Math.abs(Number(variacaoPrevenda)).toFixed(2).replace('.', ',')}`
-        : `R$ ${Number(variacaoPrevenda).toFixed(2).replace('.', ',')}`
+      (valorAlocado - objFin).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
     );
 
-    const captado = Number(data?.ruptura?.total_valor || 0);
-    setCaptadoValor(fmtMoeda(captado));
-    const _percCaptado = Number(data?.ruptura?.percentual_captado || 0);
-    setCpercCaptado(`${_percCaptado.toFixed(2)}%`);
+    // Ruptura (captado)
+    setCaptadoValor(fmtMoeda(ruptura));
+    setCpercCaptado(`${pct(ruptura, vendaAtual).toFixed(2)}%`);
+
+    // Positivação
+    setPositivadoObjetivo((objPos).toLocaleString('pt-BR'));
+    setPositivadoRealizado((posReal).toLocaleString('pt-BR'));
+    setPositivadoPercentual(`${pct(posReal, objPos).toFixed(2)}%`);
+    setPositivadoVariacao((posReal - objPos).toLocaleString('pt-BR'));
 
     // Evolução (Individual)
     applyEvolucaoFromRaw(data, false);
   };
 
-  // ========= aplica "escopo área" agregando vendedores já recebidos =========
+  // ========= aplica "escopo área" =========
   const applyAreaFromRaw = (data) => {
     if (!data) return;
 
@@ -266,7 +276,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     setPesoPercentual(`${Number(percentual).toFixed(2)}%`);
     setPesoVariacao(fmtNum2(Number(variacao)));
 
-    // Mix / Positivação / Ruptura / Alocação – mantêm como vêm da API (grupo)
+    // Mix – como vem da API (grupo)
     const objetivoMixValor = data.objetivo?.objetivo_mix || 0;
     setObjetivoMix(String(objetivoMixValor));
     const realizadoMix = data.realizado_mix?.realizado || 0;
@@ -276,33 +286,46 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     setMixPercentual(`${Number(percentualMix).toFixed(2)}%`);
     setMixVariacao(String(variacaoMix));
 
-    const objetivoPos = data.objetivo?.objetivo_positivacao || 0;
-    const positivado = data.positivacao?.realizado || 0;
-    const percentualPos = data.positivacao?.percentual || 0;
-    const variacaoPos = data.positivacao?.variacao || 0;
-    setPositivadoObjetivo((objetivoPos).toLocaleString('pt-BR'));
-    setPositivadoRealizado((positivado).toLocaleString('pt-BR'));
-    setPositivadoPercentual(`${Number(percentualPos).toFixed(2)}%`);
-    setPositivadoVariacao((variacaoPos).toLocaleString('pt-BR'));
+    // ==== NOVO: Área — usa vendas.agregados_area (fallback: somatório da lista) ====
+    const agg = data?.vendas?.agregados_area || {};
+    const list = data?.vendas?.vendas_por_vendedor || [];
+    const soma = (k) => list.reduce((acc, it) => acc + Number(it?.[k] || 0), 0);
 
-    const alocacao = data['pre-venda'] || {};
-    const valorAlocado = alocacao.valor_alocado || 0;
-    const valorPrevenda = alocacao.valor_prevenda || 0;
-    const percentualAlocado = alocacao.percentual_prevenda_alocado || 0;
-    const variacaoPrevenda = alocacao.variacao_prevenda || 0;
-    setAlocacaoRealizada(fmtMoeda(valorAlocado));
-    setAlocacaoPrevenda(fmtMoeda(valorPrevenda));
-    setAlocacaoPercentual(`${Number(percentualAlocado).toFixed(2)}%`);
-    setAlocacaoVariacao(
-      Number(variacaoPrevenda) < 0
-        ? `R$ -${Math.abs(Number(variacaoPrevenda)).toFixed(2).replace('.', ',')}`
-        : `R$ ${Number(variacaoPrevenda).toFixed(2).replace('.', ',')}`
+    const preAgg  = Number((agg.PreVenda_Valor ?? null) !== null ? agg.PreVenda_Valor : soma('PreVenda_Valor'));
+    const rupAgg  = Number((agg.Ruptura_TotalValor ?? null) !== null ? agg.Ruptura_TotalValor : soma('Ruptura_TotalValor'));
+
+    // NOVO: positivação (realizado do grupo) = soma de QtdClientes (fallback), se não vier agregados
+    const posAgg  = Number(
+      (agg.Positivacao_Realizado ?? null) !== null
+        ? agg.Positivacao_Realizado
+        : soma('QtdClientes')
     );
 
-    const captado = Number(data?.ruptura?.total_valor || 0);
-    setCaptadoValor(fmtMoeda(captado));
-    const _percCaptado = Number(data?.ruptura?.percentual_captado || 0);
-    setCpercCaptado(`${_percCaptado.toFixed(2)}%`);
+    dlog('AREA preAgg:', preAgg, 'rupAgg:', rupAgg, 'posAgg(QtdClientes soma):', posAgg);
+
+    // Alocação (Fat + A Faturar) – usa objetivo financeiro geral
+    const objFin = Number(data?.objetivo?.financeiro || 0);
+    const valorAlocado = valorVendaGrupo + preAgg;
+    setAlocacaoPrevenda(fmtMoeda(preAgg));
+    setAlocacaoRealizada(fmtMoeda(valorAlocado));
+    const percAlocado = pct(valorAlocado, objFin);
+    setAlocacaoPercentual(`${percAlocado.toFixed(2)}%`);
+    setAlocacaoVariacao(
+      (valorAlocado - objFin).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+    );
+
+    // Ruptura (captado) – percentual sobre venda do grupo
+    setCaptadoValor(fmtMoeda(rupAgg));
+    setCpercCaptado(`${pct(rupAgg, valorVendaGrupo).toFixed(2)}%`);
+
+    // Positivação – objetivo geral
+    const objPos = Number(data?.objetivo?.objetivo_positivacao || 0);
+    dlog('AREA objPos (objetivo_positivacao):', objPos);
+
+    setPositivadoObjetivo((objPos).toLocaleString('pt-BR'));
+    setPositivadoRealizado((posAgg).toLocaleString('pt-BR'));
+    setPositivadoPercentual(`${pct(posAgg, objPos).toFixed(2)}%`);
+    setPositivadoVariacao((posAgg - objPos).toLocaleString('pt-BR'));
 
     // Evolução (Área)
     applyEvolucaoFromRaw(data, true);
@@ -318,6 +341,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
 
       try {
         const { data } = await api.get('/Indicadores/', { params: { de, ate } });
+        dlog('payload bruto /Indicadores:', data);
 
         // notificar objetivos brutos (existente)
         const objetivos = [];
@@ -410,7 +434,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       setPesoPercentual(`${percentualPeso.toFixed(2)}%`);
       setPesoVariacao(variacaoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
 
-      // Atualiza também a evolução com “atual” sobrescrito (para manter coerência quando PDV altera valores)
+      // Atualiza evolução com override do “atual”
       if (rawData) {
         applyEvolucaoFromRaw(rawData, somarArea, novoValor);
       }
@@ -450,7 +474,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     }
   }, [usarPDV, periodoSelecionado, vendaRealizadaBase, valorPDVBase, objetivoFinanceiro, peso, pesoRealizadoBase, pesoPDVBase, rawData, somarArea]);
 
-  // Mantém cálculo opcional (venda base + PDV) para comparação de evolução com PDV incluído
+  // Evolução com PDV (opcional)
   useEffect(() => {
     if (vendaRealizadaBase != null && valorAnoAnteriorBase != null && vendaPDVAnoAnterior != null) {
       const somaAnoAnterior = valorAnoAnteriorBase + vendaPDVAnoAnterior;
@@ -484,7 +508,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     );
   };
 
-  // ====== Botão para alternar o escopo sem nova chamada ======
+  // ====== alternância de escopo ======
   const handleToggleArea = () => {
     const novo = !somarArea;
     setSomarArea(novo);

@@ -200,6 +200,12 @@ class IndicadoresView(APIView):
             except (TypeError, ValueError):
                 return 0.0
 
+        def _num(v):
+            try:
+                return float(v or 0)
+            except Exception:
+                return 0.0
+
         # lista/set de vendedores p/ filtro
         vendedores_list = vendedores or []
         vendedores_set = { _to_int(v) for v in vendedores_list if _to_int(v) is not None }
@@ -261,20 +267,15 @@ class IndicadoresView(APIView):
             aa_fim = _ajusta_data_aa(ate_dt)
 
         res_aa  = buscar_vendas_por_vendedor(aa_ini.strftime("%Y-%m-%d"), aa_fim.strftime("%Y-%m-%d"))
-        print(f"[DEBUG][VENDA ANO ANTERIOR INTEIRA] {res_aa}")
+        # print(f"[DEBUG][VENDA ANO ANTERIOR INTEIRA] {res_aa}")
         lista_aa = res_aa.get("vendas_por_vendedor", []) or []
         if vendedores_set:
             lista_aa = [it for it in lista_aa if _to_int(it.get("codcampo")) in vendedores_set]
 
         venda_ano_anterior = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa) or 1.0  # evita div/0
-        print(f"[DEBUG][VENDA ANO ANTERIOR] {venda_ano_anterior}")
-        ##índice por vendedor do ANO ANTERIOR (para merge no payload de vendas) ---
-        def _num(v):
-            try:
-                return float(v or 0)
-            except Exception:
-                return 0.0
+        # print(f"[DEBUG][VENDA ANO ANTERIOR] {venda_ano_anterior}")
 
+        # índice por vendedor do ANO ANTERIOR (para merge no payload de vendas)
         aa_by_cod = {}
         for it in lista_aa:
             cod = _to_int(it.get("codcampo"))
@@ -287,20 +288,19 @@ class IndicadoresView(APIView):
                 "Ano_anterior_Mix": _num(it.get("Mix")),
             }
 
-        # --- injeta campos *Ano_anterior_* em cada item de lista (ano atual) ---
+        # injeta campos *Ano_anterior_* em cada item de lista (ano atual)
         for it in lista:
             cod = _to_int(it.get("codcampo"))
             aa = aa_by_cod.get(cod, {})
             it.update(aa)
 
-        # --- agregado do ano anterior (da mesma amostra de vendedores) ---
+        # agregado do ano anterior (da mesma amostra de vendedores)
         ano_anterior_agregado = {
             "QtdClientes": sum(_num(x.get("Ano_anterior_QtdClientes")) for x in lista),
             "ValorLiquido": sum(_num(x.get("Ano_anterior_ValorLiquido")) for x in lista),
             "PesoTotal": sum(_num(x.get("Ano_anterior_PesoTotal")) for x in lista),
             "Mix": sum(_num(x.get("Ano_anterior_Mix")) for x in lista),
         }
-
 
         #  POSITIVAÇÃO (área)
         positivacao = buscar_positivacao_por_rota(data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores)
@@ -340,11 +340,60 @@ class IndicadoresView(APIView):
         else:
             ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=vendedores_list_int)
 
+        #print(f"[DEBUG]RUPTURA ] {ruptura_dados}")
         ruptura_total = 0.0
         for r in (ruptura_dados.get("resumo") or []):
             ruptura_total += float(r.get("TotalValor") or 0)
         ruptura_total = round(ruptura_total, 2)
         percentual_captado = round(safe_divide(ruptura_total, venda_realizada) * 100, 2)
+
+        # ========= NOVO: MERGE por-vendedor (Pré-venda, Ruptura, Positivação) =========
+        # 1) Pré-venda detalhada (esperado: prevenda['detalhado'] = [{CodVendedor, Valor}, ...])
+        pre_by_cod = {}
+        try:
+            for itp in (prevenda.get("detalhado") or []):
+                cod_v = _to_int(itp.get("CodVendedor"))
+                if cod_v is None:
+                    continue
+                pre_by_cod[cod_v] = _num(itp.get("Valor"))
+        except Exception:
+            pre_by_cod = {}
+
+        # 2) Ruptura detalhada (esperado: ruptura_dados['detalhado'] = [{CodVendedor, TotalValor}, ...])
+        rup_by_cod = {}
+        try:
+            for itr in (ruptura_dados.get("resumo") or []):
+                print(f"[DEBUG] dado do for {itr}")
+                cod_v = _to_int(itr.get("CodVendedor"))
+                if cod_v is None:
+                    continue
+                rup_by_cod[cod_v] = _num(itr.get("TotalValor"))
+        except Exception:
+            rup_by_cod = {}
+
+        # 3) Positivação detalhada (esperado: positivacao['detalhado'] = [{CodVendedor, Realizado|QtdClientes}, ...])
+        pos_by_cod = {}
+        try:
+            for itpos in (positivacao.get("detalhado") or []):
+                cod_v = _to_int(itpos.get("CodVendedor"))
+                if cod_v is None:
+                    continue
+                realizado = itpos.get("Realizado", itpos.get("QtdClientes", 0))
+                pos_by_cod[cod_v] = _num(realizado)
+        except Exception:
+            pos_by_cod = {}
+
+        # 4) Aplica nos itens do array principal
+        for it in lista:
+            cod = _to_int(it.get("codcampo"))
+            it["PreVenda_Valor"]        = pre_by_cod.get(cod, 0.0)
+            it["Ruptura_TotalValor"]    = rup_by_cod.get(cod, 0.0)
+            it["Positivacao_Realizado"] = pos_by_cod.get(cod, 0.0)
+
+        # 5) Agregados úteis p/ modo "área"
+        pre_venda_agregado = sum(_num(it.get("PreVenda_Valor")) for it in lista)
+        ruptura_agregado   = sum(_num(it.get("Ruptura_TotalValor")) for it in lista)
+        positivacao_agregado = sum(_num(it.get("Positivacao_Realizado")) for it in lista)
 
         # ========= NOVO: BLOCO "minha_visao" (vendedor logado) =========
         minha_visao = None
@@ -395,9 +444,14 @@ class IndicadoresView(APIView):
             logger.exception(f"[IndicadoresView][minha_visao] erro ao montar: {e}")
             minha_visao = None
 
-        # garante que o payload de vendas vá FILTRADO
-        vendido["vendas_por_vendedor"] = lista
-        #vendido["ano_anterior_agregado"] = ano_anterior_agregado
+        # ====== Payload final de vendas / agregados ======
+        vendido["vendas_por_vendedor"]   = lista
+        vendido["ano_anterior_agregado"] = ano_anterior_agregado
+        vendido["agregados_area"] = {
+            "PreVenda_Valor": pre_venda_agregado,
+            "Ruptura_TotalValor": ruptura_agregado,
+            "Positivacao_Realizado": positivacao_agregado,
+        }
 
         return Response({
             "objetivo": objetivo,
@@ -412,7 +466,7 @@ class IndicadoresView(APIView):
                 "percentual_prevenda_alocado": round(percentual_prevenda_alocado, 2),
                 "variacao_prevenda": round(variacao_prevenda, 2)
             },
-            "vendas": vendido,  # já com 'vendas_por_vendedor' filtrado
+            "vendas": vendido,  # já com 'vendas_por_vendedor' + merges + agregados
             "realizado_peso": {
                 "realizado": round(peso_realizado, 2),  
                 "percentual": round(percentual, 2),
@@ -441,6 +495,7 @@ class IndicadoresView(APIView):
             # ===== NOVO: KPIs do vendedor logado =====
             "minha_visao": minha_visao,
         })
+
 
 
     
