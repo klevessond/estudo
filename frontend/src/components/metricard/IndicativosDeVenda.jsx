@@ -81,6 +81,11 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
   const [captadoValor, setCaptadoValor] = useState(null);
   const [percCaptado, setCpercCaptado] = useState(null);
 
+  // NOVO: base numérica do captado para poder projetar quando PDV OFF
+  const [captadoBase, setCaptadoBase] = useState(0);
+  const [captadoProjTotalFmt, setCaptadoProjTotalFmt] = useState(null);
+  const [captadoProjPercentFmt, setCaptadoProjPercentFmt] = useState(null);
+
   const [modo, setModo] = useState('indicadores');
 
   // ====== cache do payload bruto + toggle do escopo ======
@@ -230,7 +235,10 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
       (valorAlocado - objFin).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
     );
 
+    // Captado base + exibido
+    setCaptadoBase(ruptura);
     setCaptadoValor(fmtMoeda(ruptura));
+    // % captado (comportamento atual – será sobrescrito na projeção quando PDV OFF)
     setCpercCaptado(`${pct(ruptura, vendaAtual).toFixed(2)}%`);
 
     setPositivadoObjetivo((objPos).toLocaleString('pt-BR'));
@@ -299,7 +307,10 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
       (valorAlocado - objFin).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
     );
 
+    // Captado base + exibido (área)
+    setCaptadoBase(rupAgg);
     setCaptadoValor(fmtMoeda(rupAgg));
+    // % captado (comportamento atual – será sobrescrito na projeção quando PDV OFF)
     setCpercCaptado(`${pct(rupAgg, valorVendaGrupo).toFixed(2)}%`);
 
     const objPos = Number(data?.objetivo?.objetivo_positivacao || 0);
@@ -554,6 +565,31 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     setEvolucaoValor(aaDisplay.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
   }, [valorAnoAnteriorBase, vendaPDVAnoAnterior, usarPDV]);
 
+  // ===== Projeção de CAPTADO (apenas quando PDV estiver DESLIGADO) =====
+  useEffect(() => {
+    if (usarPDV) {
+      // limpamos a projeção quando PDV está ON
+      setCaptadoProjTotalFmt(null);
+      setCaptadoProjPercentFmt(null);
+      return;
+    }
+    const vendaBase = Number(vendaRealizadaBase || 0);
+    const captadoNum = Number(captadoBase || 0);
+
+    // objetivoFinanceiro é string "R$ ..." -> parse numérico
+    const objetivoFinNum = parseFloat(
+      (objetivoFinanceiro?.replace(/[^\d,-]/g, '').replace(',', '.') || '0')
+    );
+
+    const totalProj = vendaBase + captadoNum; // venda + captado
+    const percProj  = objetivoFinNum ? (totalProj / objetivoFinNum) * 100 : 0;
+
+    setCaptadoProjTotalFmt(
+      totalProj.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    );
+    setCaptadoProjPercentFmt(`${percProj.toFixed(2)}%`);
+  }, [usarPDV, vendaRealizadaBase, captadoBase, objetivoFinanceiro]);
+
   const Gauge = ({ label, percent }) => {
     const val =
       typeof percent === 'number'
@@ -718,8 +754,11 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
             title="Captado"
             value={captadoValor ?? '...'}
             subtitle="Valor Captado"
-            percentage={percCaptado ?? '0%'}
-            subtitle2=" Cobertura"
+            /* quando PDV OFF mostramos projeção (venda + captado) e % potencial */
+            title2={!usarPDV ? 'Se vender captado' : undefined}
+            value2={!usarPDV ? (captadoProjTotalFmt ?? '--') : undefined}
+            percentage={!usarPDV ? (captadoProjPercentFmt ?? '0%') : (percCaptado ?? '0%')}
+            subtitle2={!usarPDV ? ' Cobertura potencial' : ' Cobertura'}
             variation="0"
             className="card-captar"
           />
