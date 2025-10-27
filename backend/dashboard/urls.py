@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from .views import IndicadoresView, ObjetivoMensalView,ObjetivoMensalResumoView,IndicadoresPDV,VendasPorVendedorView,ObjetivoMensalVendedorView
 from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionario_detail, me,TodosVendedoresView,RupturaView
-from .views import ResumoSegmentoAreaVendaView
+from .views import ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView
 urlpatterns = [
     path('dados-sql/', views.get_dados_sql, name='get_dados_sql'),
     path('api/clientes/', views.get_dados_sql_api, name='get_dados_sql_api'),
@@ -19,6 +19,8 @@ urlpatterns = [
     path("me/", me, name="me"),
     path('todos-vendedores/', TodosVendedoresView.as_view(), name='todos-vendedores'),
     path('ruptura/', RupturaView.as_view(), name='ruptura'),
-     path('resumo-segmento-area-venda/', ResumoSegmentoAreaVendaView.as_view(), name='resumo-segmento-area-venda'),
+    path('resumo-segmento-area-venda/', ResumoSegmentoAreaVendaView.as_view(), name='resumo-segmento-area-venda'),
+    path('indicadores/minha-ug/', MinhaUnidGestoraView.as_view(), name='minha-ug'),
+    path('indicadores/pdv-por-vendedor/', PDVPorVendedorAPIView.as_view(), name='pdv-por-vendedor'),
 
 ]

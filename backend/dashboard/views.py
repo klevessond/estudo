@@ -24,7 +24,7 @@ from rest_framework.validators import UniqueValidator
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser
 from .models import Profile
-from dashboard.services.usuarios.funcionario_service import listar_funcionarios,get_funcionario_por_codigo
+from dashboard.services.usuarios.funcionario_service import listar_funcionarios,get_funcionario_por_codigo,obter_unid_gestora,obter_unid_gestoras_por_vendedores
 import logging
 from dashboard.roles import get_role_context  
 from dashboard.services.indicadores.info_service import Todos_Vendedores
@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
 from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor,buscar_resumo_segmento_area_venda
-from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv
+from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 # Create your views here.
 
@@ -103,7 +103,7 @@ def get_dados_excel(request):
         return JsonResponse({'erro': str(e)}, status=500)
 
 class MinhasRotasSupervisorView(APIView):
-    permission_classes = [IsAuthenticated]
+    #permission_classes = [IsAuthenticated]
 
     def get(self, request):
         ctx = get_role_context(request.user)
@@ -501,7 +501,7 @@ class IndicadoresView(APIView):
     
 
 class ObjetivoMensalView(APIView):
-    permission_classes = [IsAuthenticated]
+    #permission_classes = [IsAuthenticated]
 
     def get(self, request):
         mes = request.query_params.get('mes')
@@ -636,32 +636,134 @@ def ajustar_data_para_ano_anterior(data_str):
         return data_atual.replace(year=data_atual.year - 1, day=28).strftime("%Y-%m-%d")
     
 
+class MinhaUnidGestoraView(APIView):
+    #permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        ctx = get_role_context(request.user)
+        ug = None
+        try:
+            cod_func = getattr(ctx, "cod_funcionario", None)
+            if cod_func is not None:
+                ug = obter_unid_gestora(int(cod_func))  # retorna str ou None
+        except Exception:
+            ug = None
+
+        return Response({"unid_gestora_usuario": ug})
+
+class PDVPorVendedorAPIView(APIView):
+    """
+    GET /api/indicadores/pdv-por-vendedor/?de=YYYY-MM-DD&ate=YYYY-MM-DD&vendedores=1,2,3
+
+    Para cada vendedor informado:
+      - busca as UGs associadas (funcionario_service)
+      - soma o PDV nessas UGs no período (pdv_service)
+    Retorna um dicionário por vendedor com ugs, pdv.valor, pdv.peso e o detalhado por UG.
+    """
+    #permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        de = request.query_params.get("de")
+        ate = request.query_params.get("ate")
+        vendedores_param = request.query_params.get("vendedores")  # "1,2,3"
+
+        if not de or not ate or not vendedores_param:
+            return Response(
+                {"detail": "Parâmetros obrigatórios: de, ate, vendedores"},
+                status=400,
+            )
+
+        try:
+            vendedor_ids = [int(x) for x in str(vendedores_param).split(",") if str(x).strip().isdigit()]
+            if not vendedor_ids:
+                return Response({"detail": "Lista de vendedores vazia."}, status=400)
+        except Exception:
+            return Response({"detail": "Parâmetro 'vendedores' inválido."}, status=400)
+
+        # mapa: vendedor_id -> [UGs...]
+        mapa_ugs = obter_unid_gestoras_por_vendedores(vendedor_ids)
+
+        resultado = {}
+        for vid in vendedor_ids:
+            ugs = mapa_ugs.get(vid, [])
+            detalhado = []
+            valor = 0.0
+            peso = 0.0
+
+            if ugs:
+                # filtra PDV apenas nessas UGs
+                detalhado = buscar_pdv_por_unid_gestora(de, ate, unid_gestoras=[str(u) for u in ugs])
+                valor = sum(float(r.get("ValorProdutos") or 0) for r in detalhado)
+                peso  = sum(float(r.get("Peso") or 0) for r in detalhado)
+
+            resultado[vid] = {
+                "vendedor_id": vid,
+                "ugs": ugs,
+                "pdv": {"valor": round(valor, 2), "peso": round(peso, 3)},
+                "detalhado": detalhado,  # [{UnidGestora, Qtd, QtdEmbalagem, ValorProdutos, Peso}, ...]
+            }
+
+        return Response({"resultado": resultado})
+
+
 class IndicadoresPDV(APIView):
+    #permission_classes = [IsAuthenticated]
+
     def get(self, request):
         data_inicio = request.GET.get("de")
         data_fim = request.GET.get("ate")
         if not data_inicio or not data_fim:
             return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
 
-        try:
-            dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
-            venda_realizada_PDV = float(dados_pdv["valor_pdv"] or 0)
-            peso_realizado_PDV  = float(dados_pdv["peso_pdv"] or 0)
+        # contexto básico (sem filtro por UG)
+        ctx = get_role_context(request.user)
 
-            ano_anterior_inicio_PDV = ajustar_data_para_ano_anterior(data_inicio)
-            ano_anterior_fim_PDV    = ajustar_data_para_ano_anterior(data_fim)
-            dados_pdv_anoanterior   = buscar_vendas_pdv(ano_anterior_inicio_PDV, ano_anterior_fim_PDV)
+        # obter UG do funcionário logado (apenas para informar ao front)
+        try:
+            cod_func = getattr(ctx, "cod_funcionario", None)
+            ug_usuario = obter_unid_gestora(int(cod_func)) if cod_func is not None else None
+        except Exception:
+            ug_usuario = None  # robustez contra erros
+
+        logger.info(
+            "[IndicadoresPDV] user=%s id=%s roles=%s de=%s ate=%s ug_usuario=%s ip=%s",
+            getattr(request.user, "username", None),
+            getattr(request.user, "id", None),
+            ",".join(getattr(ctx, "roles", []) or []) or "-",
+            data_inicio,
+            data_fim,
+            ug_usuario,
+            request.META.get("REMOTE_ADDR"),
+        )
+
+        try:
+            # período atual (agregado por UnidGestora – sem filtro)
+            dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
+            venda_realizada_PDV = float(dados_pdv.get("valor_pdv") or 0)
+            peso_realizado_PDV = float(dados_pdv.get("peso_pdv") or 0)
+            detalhado_atual = dados_pdv.get("detalhado", [])
+
+            # mesmo período do ano anterior (sem filtro)
+            ano_anterior_inicio = ajustar_data_para_ano_anterior(data_inicio)
+            ano_anterior_fim = ajustar_data_para_ano_anterior(data_fim)
+            dados_pdv_aa = buscar_vendas_pdv(ano_anterior_inicio, ano_anterior_fim)
+            venda_aa_total = float(dados_pdv_aa.get("valor_pdv", 0) or 0)
+            detalhado_aa = dados_pdv_aa.get("detalhado", [])
 
             return Response({
                 "vendas_pdv": {
                     "venda_realizada": venda_realizada_PDV,
                     "peso_realizado": peso_realizado_PDV,
-                    "venda_realizada_ano_anterior": float(dados_pdv_anoanterior.get("valor_pdv", 0) or 0),
-                }
+                    "venda_realizada_ano_anterior": venda_aa_total,
+                },
+                "detalhado_por_unid_gestora": detalhado_atual,     # [{UnidGestora, ValorTotal, Peso, ...}]
+                "detalhado_aa_por_unid_gestora": detalhado_aa,     # opcional para comparação por UG
+                "unid_gestora_usuario": ug_usuario,                # <- **novo**: UG do usuário logado (ou None)
             })
         except Exception as e:
             logger.exception("Erro em IndicadoresPDV: de=%s ate=%s", data_inicio, data_fim)
             return Response({"error": str(e)}, status=500)
+
 
 class VendasPorVendedorView(APIView):
     def get(self, request):
@@ -719,7 +821,7 @@ class VendasPorVendedorView(APIView):
         return Response({"resultado": resultado})
 
 class ObjetivoMensalVendedorView(APIView):
-    permission_classes = [IsAuthenticated]
+    #permission_classes = [IsAuthenticated]
 
     def get(self, request):
         # Espera: /objetivos-vendedores/?mes_referencia=YYYY-MM-01

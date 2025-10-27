@@ -214,3 +214,7 @@
 .dot-green{ background: var(--kpi-green); }
 .dot-orange{ background: var(--kpi-orange); }
 .spacer{ width: 16px; }
+
+:root { --kpi-red: #ef4444; }
+
+.dot-red { background: var(--kpi-red); }

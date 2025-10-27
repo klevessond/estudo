@@ -1,5 +1,5 @@
 // IndicativosTabelaVendedor.jsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -11,6 +11,8 @@ import {
 import api from '../../api';
 import './IndicativosTabelaVendedor.css';
 
+const dlog = (...args) => console.debug('[IndicativosTabelaVendedor]', ...args);
+
 /**
  * Props
  * - periodoSelecionado: { de, ate }
@@ -18,17 +20,37 @@ import './IndicativosTabelaVendedor.css';
  * - onDadosAtualizados: fn(tabela)
  * - onObjetivosRecebidos: fn(objVetores)
  * - objetivosVendedores: [{ codFuncionario, objetivo_financeiro, ... }]
+ * - usarPDV: boolean
+ * - pdvPorVendedor: Array<{ codFuncionario: number|string, valor?: number, peso?: number }>
  */
+
 const IndicativosTabelaVendedor = ({
   periodoSelecionado,
   onSelecionarColaborador,
   onDadosAtualizados,
   onObjetivosRecebidos,
   objetivosVendedores = [],
+  usarPDV = false,
+  pdvPorVendedor = [],
 }) => {
   const [globalFilter, setGlobalFilter] = useState('');
   const [baseData, setBaseData] = useState([]); // dados crus vindos da API
-  const [data, setData] = useState([]);         // dados enriquecidos com % e variação
+  const [data, setData] = useState([]);         // dados enriquecidos (com PDV somado quando ativo)
+
+  // Guarda a assinatura do último payload emitido ao pai
+  const lastEmittedSigRef = useRef('');
+
+  // LOG: entrada de props relevantes
+  useEffect(() => {
+    dlog('props -> periodoSelecionado:', periodoSelecionado, 'usarPDV:', usarPDV);
+  }, [periodoSelecionado, usarPDV]);
+
+  useEffect(() => {
+    dlog('props -> pdvPorVendedor (len):', Array.isArray(pdvPorVendedor) ? pdvPorVendedor.length : 'N/A');
+    if (Array.isArray(pdvPorVendedor)) {
+      dlog('props sample pdvPorVendedor (até 5):', pdvPorVendedor.slice(0, 5));
+    }
+  }, [pdvPorVendedor]);
 
   // Mapa rápido: codFuncionario -> objetivo_financeiro (número)
   const objetivoFinanceiroMap = useMemo(() => {
@@ -41,6 +63,29 @@ const IndicativosTabelaVendedor = ({
     return m;
   }, [objetivosVendedores]);
 
+  // Mapa de PDV por vendedor (codFuncionario -> {valor, peso})
+  const pdvMap = useMemo(() => {
+    const m = new Map();
+    if (!Array.isArray(pdvPorVendedor)) return m;
+
+    for (const item of pdvPorVendedor) {
+      const id = Number(item?.codFuncionario);
+      if (!Number.isFinite(id)) continue;
+      const v = Number(item?.valor || item?.ValorProdutos || 0);
+      const p = Number(item?.peso || item?.Peso || 0);
+      const prev = m.get(id) || { valor: 0, peso: 0 };
+      m.set(id, { valor: prev.valor + v, peso: prev.peso + p });
+    }
+
+    // LOG: resumo do mapa PDV
+    dlog('pdvMap size:', m.size);
+    if (m.size) {
+      const amostra = Array.from(m.entries()).slice(0, 5).map(([k, v]) => ({ codFuncionario: k, ...v }));
+      dlog('pdvMap sample (até 5):', amostra);
+    }
+    return m;
+  }, [pdvPorVendedor]);
+
   // 1) Busca a lista de vendas por vendedor (apenas quando o período muda)
   useEffect(() => {
     const fetchData = async () => {
@@ -49,8 +94,12 @@ const IndicativosTabelaVendedor = ({
         const url = `/vendas-por-vendedor/?de=${periodoSelecionado.de}&ate=${periodoSelecionado.ate}`;
         const { data: json } = await api.get(url);
 
-        // Monta a base da tabela (sem %/var ainda)
-        const tabelaBase = (json?.resultado?.vendas_por_vendedor || []).map((vendedor) => ({
+        const rows = Array.isArray(json?.resultado?.vendas_por_vendedor)
+          ? json.resultado.vendas_por_vendedor
+          : [];
+
+        // Monta a base (não mexe no nome)
+        const tabelaBase = rows.map((vendedor) => ({
           colaborador: (vendedor.Campo || '').trim(),
           codFuncionario: Number(vendedor.codcampo),
           faturado: Number(vendedor.ValorLiquido || 0),
@@ -62,40 +111,111 @@ const IndicativosTabelaVendedor = ({
         }));
 
         setBaseData(tabelaBase);
+
+        // LOG: base carregada
+        dlog('baseData carregada (len):', tabelaBase.length);
+        dlog('baseData sample (até 5):', tabelaBase.slice(0, 5));
+        const idsBase = tabelaBase.map((r) => r.codFuncionario).filter((x) => Number.isFinite(x));
+        dlog('codFuncionarios na base (até 10):', idsBase.slice(0, 10));
       } catch (error) {
-        console.error('Erro ao buscar dados de vendas por vendedor:', error);
+        console.error('[IndicativosTabelaVendedor] Erro ao buscar /vendas-por-vendedor:', error);
       }
     };
 
     fetchData();
   }, [periodoSelecionado]);
 
-  // 2) Enriquecer a base com % de cobertura e variação assim que objetivos chegarem
+  // 2) Enriquecer a base somando PDV (se ativo) e recalculando %/variação
   useEffect(() => {
-    // Se ainda não há base, não faz nada
-    if (!baseData?.length) {
+    if (!Array.isArray(baseData) || baseData.length === 0) {
       setData([]);
+      // emite para o pai apenas se mudou de fato
+      const emptySig = 'len:0';
+      if (lastEmittedSigRef.current !== emptySig) {
+        onDadosAtualizados?.([]);
+        lastEmittedSigRef.current = emptySig;
+      } else {
+        dlog('onDadosAtualizados SKIPPED (assinatura vazia igual)');
+      }
       return;
     }
 
-    // Monta os campos calculados com os objetivos já recebidos
+    let vendedoresComPDV = 0;
     const enriched = baseData.map((row) => {
       const objetivo = Number(objetivoFinanceiroMap.get(row.codFuncionario) || 0);
-      const percVenda = objetivo > 0 ? (row.faturado / objetivo) * 100 : 0;
-      const variacao = row.faturado - objetivo;
+
+      // Valores originais
+      let faturado = Number(row.faturado || 0);
+      let alocado = Number(row.alocado || 0);
+      let peso = Number(row.pesototalvendido || 0);
+
+      // Soma PDV nessa linha se estiver ativo e se houver PDV para esse vendedor
+      if (usarPDV && pdvMap.has(row.codFuncionario)) {
+        const { valor: pdvValor = 0, peso: pdvPeso = 0 } = pdvMap.get(row.codFuncionario) || {};
+        faturado += pdvValor;
+        alocado += pdvValor;
+        peso += pdvPeso;
+        vendedoresComPDV += 1;
+
+        // LOG por linha (apenas quando somou)
+        dlog(
+          'Somando PDV → codFuncionario:',
+          row.codFuncionario,
+          '| vendedor:',
+          row.colaborador,
+          '| +valor:',
+          pdvValor,
+          '| +peso:',
+          pdvPeso
+        );
+      } else if (usarPDV) {
+        // LOG de ausência de match
+        dlog('Sem PDV p/ codFuncionario:', row.codFuncionario, '| vendedor:', row.colaborador);
+      }
+
+      // Calcula % e variação contra o objetivo individual
+      const percVenda = objetivo > 0 ? (faturado / objetivo) * 100 : 0;
+      const variacao = faturado - objetivo;
 
       return {
         ...row,
-        percVenda, // % Cobertura
-        variacao,  // Variação R$
+        faturado,
+        alocado,
+        pesototalvendido: peso,
+        percVenda,
+        variacao,
       };
     });
 
-    setData(enriched);
-    onDadosAtualizados?.(enriched);
-  }, [baseData, objetivoFinanceiroMap, onDadosAtualizados]);
+    dlog('Resumo enriquecimento → usarPDV:', usarPDV, '| vendedoresComPDV:', vendedoresComPDV, '/', baseData.length);
 
-  // Colunas da tabela
+    setData(enriched);
+
+    // ---- Proteção contra loop: só emite se mudou de verdade ----
+    // Assinatura leve: tamanho + primeiros N registros com campos críticos
+    const sig =
+      'len:' +
+      enriched.length +
+      '|' +
+      enriched
+        .slice(0, 12)
+        .map(
+          (r) =>
+            `${r.codFuncionario ?? 'x'}:${Number(r.faturado || 0).toFixed(2)}:${Number(
+              r.pesototalvendido || 0
+            ).toFixed(3)}`
+        )
+        .join(',');
+
+    if (sig !== lastEmittedSigRef.current) {
+      onDadosAtualizados?.(enriched);
+      lastEmittedSigRef.current = sig;
+    } else {
+      dlog('onDadosAtualizados SKIPPED (assinatura igual)');
+    }
+  }, [baseData, objetivoFinanceiroMap, usarPDV, pdvMap, onDadosAtualizados]);
+
+  // Colunas da tabela (sem mudar header/estilo original)
   const columns = useMemo(
     () => [
       {
@@ -137,11 +257,7 @@ const IndicativosTabelaVendedor = ({
         cell: (info) => {
           const v = Number(info.getValue() || 0);
           const cls =
-            v < 25 ? 'perc-lt25'
-            : v < 50 ? 'perc-lt50'
-            : v < 75 ? 'perc-lt75'
-            : 'perc-gte100'; // 75–99 e >=100
-
+            v < 25 ? 'perc-lt25' : v < 50 ? 'perc-lt50' : v < 75 ? 'perc-lt75' : 'perc-gte100';
           return <span className={`badge ${cls}`}>{v.toFixed(2)}%</span>;
         },
       },
@@ -154,7 +270,6 @@ const IndicativosTabelaVendedor = ({
           return <span className={`badge ${cls}`}>{v.toLocaleString('pt-BR')}</span>;
         },
       },
-
     ],
     []
   );

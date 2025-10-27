@@ -31,7 +31,7 @@ const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, v
   </div>
 );
 
-const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos }) => {
+const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, onPDVResumoChange }) => {
   const [loading, setLoading] = useState(false);
 
   // --- estados exibidos nos cards/gauges ---
@@ -87,6 +87,18 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
   const [rawData, setRawData] = useState(null);
   const [somarArea, setSomarArea] = useState(false); // false: individual, true: soma da área
 
+  // ====== estado da UG e valores PDV por-UG / por-área ======
+  const [ugUsuario, setUgUsuario] = useState(null);
+  const [pdvValorUG, setPdvValorUG] = useState(null);
+  const [pdvPesoUG, setPdvPesoUG] = useState(null);
+  const [pdvValorArea, setPdvValorArea] = useState(null);
+  const [pdvPesoArea, setPdvPesoArea] = useState(null);
+  const [pdvValorAAUG, setPdvValorAAUG] = useState(null);
+  const [pdvValorAAArea, setPdvValorAAArea] = useState(null);
+
+  // ====== PDV atualmente aplicado (UG quando individual, soma quando área) ======
+  const [pdvSelecionadoAtual, setPdvSelecionadoAtual] = useState(0);
+
   // helpers
   const fmtMoeda = (n) => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const fmtNum2  = (n) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -99,14 +111,12 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     return arr.find(x => Number(x?.codcampo) === meuCod) || null;
   };
 
-  // ===== Evolução (Ano Anterior) sensível ao escopo =====
+  // === evolução base (sem PDV)
   const applyEvolucaoFromRaw = (data, isArea, atualOverride) => {
     if (!data) return;
-
     let valorAnoAnterior = 0;
 
     if (isArea) {
-      // tenta vir agregado; fallback: soma por vendedor
       valorAnoAnterior = Number(data?.vendas?.ano_anterior_agregado?.ValorLiquido || 0);
       if (!valorAnoAnterior && Array.isArray(data?.vendas?.vendas_por_vendedor)) {
         valorAnoAnterior = data.vendas.vendas_por_vendedor.reduce(
@@ -120,13 +130,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     }
 
     setValorAnoAnteriorBase(valorAnoAnterior);
-    setEvolucaoValor(
-      Number.isFinite(valorAnoAnterior)
-        ? valorAnoAnterior.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-        : 'R$ 0,00'
-    );
 
-    // valor atual (override) ou derivado do escopo
     let atual = Number(atualOverride ?? 0);
     if (!atual) {
       atual = Number(
@@ -148,7 +152,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     }
   };
 
-  // ========= aplica "escopo individual" =========
   const applyIndividualFromRaw = (data) => {
     if (!data) return;
 
@@ -159,7 +162,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     dlog('applyIndividualFromRaw - minha linha:', linha);
 
     if (m) {
-      // Venda
       setVendaRealizada(fmtMoeda(m.realizado_financeiro));
       setVendaRealizadaBase(m.realizado_financeiro);
       setObjetivoFinanceiro(fmtMoeda(m.objetivo_financeiro));
@@ -168,20 +170,17 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
         `R$ ${Number(m.variacao_financeira || 0) < 0 ? '-' : ''}${Math.abs(Number(m.variacao_financeira || 0)).toFixed(2).replace('.', ',')}`
       );
 
-      // Peso
       setPeso((Number(m.objetivo_peso || 0)).toLocaleString('pt-BR'));
       setPesoRealizado(fmtNum2(m.realizado_peso));
       setPesoRealizadoBase(m.realizado_peso);
       setPesoPercentual(`${Number(m.percentual_peso || 0).toFixed(2)}%`);
       setPesoVariacao(fmtNum2(Number(m.variacao_peso || 0)));
 
-      // Mix
       setObjetivoMix(String(m.objetivo_mix || 0));
       setMixRealizado(String(m.mix_realizado || 0));
       setMixPercentual(`${Number(m.percentual_mix || 0).toFixed(2)}%`);
       setMixVariacao(String(Number(m.variacao_mix || 0)));
     } else {
-      // Fallback: individual sem minha_visao → usa agregados atuais
       const percentual = data.realizado_peso?.percentual || 0;
       const variacao = data.realizado_peso?.variacao || 0;
       const objetivoPeso = data.objetivo?.objetivo_peso || 0;
@@ -211,21 +210,17 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       setMixVariacao(String(data.realizado_mix?.variacao || 0));
     }
 
-    // ==== NOVO: Individual — usa linha do vendedor ====
     const vendaAtual = Number(m?.realizado_financeiro || 0);
     const objFin     = Number(m?.objetivo_financeiro || 0);
 
     const pre = Number(linha?.PreVenda_Valor || 0);
     const ruptura = Number(linha?.Ruptura_TotalValor || 0);
 
-    // NOVO: positivação (realizado) = QtdClientes da linha
     const posReal = Number(linha?.QtdClientes || 0);
-    // objetivo de positivação: preferir minha_visao; fallback: objetivo geral
-    const objPos  = Number(m?.objetivo_positivacao ?? data?.objetivo?.objetivo_positivacao ?? 0);
+    const objPos  = Number(m?.objetivo_positivacao ?? data?.objetoivo?.objetivo_positivacao ?? data?.objetivo?.objetivo_positivacao ?? 0);
 
     dlog('INDIVIDUAL pre:', pre, 'ruptura:', ruptura, 'posReal(QtdClientes):', posReal, 'objPos:', objPos);
 
-    // Alocação (Fat + A Faturar)
     const valorAlocado = vendaAtual + pre;
     setAlocacaoPrevenda(fmtMoeda(pre));
     setAlocacaoRealizada(fmtMoeda(valorAlocado));
@@ -235,25 +230,20 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       (valorAlocado - objFin).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
     );
 
-    // Ruptura (captado)
     setCaptadoValor(fmtMoeda(ruptura));
     setCpercCaptado(`${pct(ruptura, vendaAtual).toFixed(2)}%`);
 
-    // Positivação
     setPositivadoObjetivo((objPos).toLocaleString('pt-BR'));
     setPositivadoRealizado((posReal).toLocaleString('pt-BR'));
     setPositivadoPercentual(`${pct(posReal, objPos).toFixed(2)}%`);
     setPositivadoVariacao((posReal - objPos).toLocaleString('pt-BR'));
 
-    // Evolução (Individual)
     applyEvolucaoFromRaw(data, false);
   };
 
-  // ========= aplica "escopo área" =========
   const applyAreaFromRaw = (data) => {
     if (!data) return;
 
-    // Agregados (área) do payload
     const realizadoFinanceiro = data.realizado_financeiro || {};
     const valorVendaGrupo = Number(realizadoFinanceiro.valor || 0);
     const percentualVendaGrupo = Number(realizadoFinanceiro.percentual_cobertura || 0);
@@ -276,7 +266,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     setPesoPercentual(`${Number(percentual).toFixed(2)}%`);
     setPesoVariacao(fmtNum2(Number(variacao)));
 
-    // Mix – como vem da API (grupo)
     const objetivoMixValor = data.objetivo?.objetivo_mix || 0;
     setObjetivoMix(String(objetivoMixValor));
     const realizadoMix = data.realizado_mix?.realizado || 0;
@@ -286,15 +275,12 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     setMixPercentual(`${Number(percentualMix).toFixed(2)}%`);
     setMixVariacao(String(variacaoMix));
 
-    // ==== NOVO: Área — usa vendas.agregados_area (fallback: somatório da lista) ====
     const agg = data?.vendas?.agregados_area || {};
     const list = data?.vendas?.vendas_por_vendedor || [];
     const soma = (k) => list.reduce((acc, it) => acc + Number(it?.[k] || 0), 0);
 
     const preAgg  = Number((agg.PreVenda_Valor ?? null) !== null ? agg.PreVenda_Valor : soma('PreVenda_Valor'));
     const rupAgg  = Number((agg.Ruptura_TotalValor ?? null) !== null ? agg.Ruptura_TotalValor : soma('Ruptura_TotalValor'));
-
-    // NOVO: positivação (realizado do grupo) = soma de QtdClientes (fallback), se não vier agregados
     const posAgg  = Number(
       (agg.Positivacao_Realizado ?? null) !== null
         ? agg.Positivacao_Realizado
@@ -303,7 +289,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
 
     dlog('AREA preAgg:', preAgg, 'rupAgg:', rupAgg, 'posAgg(QtdClientes soma):', posAgg);
 
-    // Alocação (Fat + A Faturar) – usa objetivo financeiro geral
     const objFin = Number(data?.objetivo?.financeiro || 0);
     const valorAlocado = valorVendaGrupo + preAgg;
     setAlocacaoPrevenda(fmtMoeda(preAgg));
@@ -314,11 +299,9 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       (valorAlocado - objFin).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
     );
 
-    // Ruptura (captado) – percentual sobre venda do grupo
     setCaptadoValor(fmtMoeda(rupAgg));
     setCpercCaptado(`${pct(rupAgg, valorVendaGrupo).toFixed(2)}%`);
 
-    // Positivação – objetivo geral
     const objPos = Number(data?.objetivo?.objetivo_positivacao || 0);
     dlog('AREA objPos (objetivo_positivacao):', objPos);
 
@@ -327,7 +310,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     setPositivadoPercentual(`${pct(posAgg, objPos).toFixed(2)}%`);
     setPositivadoVariacao((posAgg - objPos).toLocaleString('pt-BR'));
 
-    // Evolução (Área)
     applyEvolucaoFromRaw(data, true);
   };
 
@@ -343,7 +325,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
         const { data } = await api.get('/Indicadores/', { params: { de, ate } });
         dlog('payload bruto /Indicadores:', data);
 
-        // notificar objetivos brutos (existente)
         const objetivos = [];
 
         if (Array.isArray(data.objetivo?.detalhamento)) {
@@ -375,10 +356,9 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
 
         if (onObjetivosRecebidos) onObjetivosRecebidos(objetivosUnificados);
 
-        // guardar payload bruto para alternar escopo sem nova request
         setRawData(data);
         setSomarArea(false);
-        applyIndividualFromRaw(data); // Individual padrão
+        applyIndividualFromRaw(data);
       } catch (error) {
         console.error('Erro ao buscar os indicadores:', error);
         setPeso('Erro');
@@ -390,10 +370,39 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     fetchIndicadores();
   }, [periodoSelecionado, onObjetivosRecebidos]);
 
+  // helper para somar PDV (atual/AA) por UG e por área
+  function somarPDV(rows, ugFiltro = null) {
+    const arr = Array.isArray(rows) ? rows : [];
+    let valor = 0;
+    let peso = 0;
+    for (const r of arr) {
+      const ug = (r.UnidGestora ?? r.unidGestora ?? r.unid_gestora ?? null);
+      if (ugFiltro !== null && String(ug) !== String(ugFiltro)) continue;
+      const v = Number(r.Valor ?? r.ValorProdutos ?? r.valor ?? 0);
+      const p = Number(r.Peso ?? r.peso ?? 0);
+      valor += isFinite(v) ? v : 0;
+      peso  += isFinite(p) ? p : 0;
+    }
+    return { valor, peso };
+  }
+
+  // Notifica o pai (Dashboard) qual PDV está efetivamente aplicado (UG x Área)
+  const notifyPDVResumo = (somarAreaAtual, ligado) => {
+    if (!onPDVResumoChange) return;
+    if (!ligado) {
+      onPDVResumoChange(null);
+      return;
+    }
+    const valorSel = somarAreaAtual ? (pdvValorArea ?? 0) : (pdvValorUG ?? 0);
+    const pesoSel  = somarAreaAtual ? (pdvPesoArea ?? 0)  : (pdvPesoUG ?? 0);
+    const label    = somarAreaAtual ? 'Soma da Área' : (ugUsuario ? `UG ${ugUsuario}` : 'UG —');
+    onPDVResumoChange({ valor: valorSel || 0, peso: pesoSel || 0, label });
+  };
+
   // ========= PDV (soma com base) =========
   useEffect(() => {
-    const atualizarValoresPDV = (valorPDV, pesoPDV) => {
-      const novoValor = usarPDV ? vendaRealizadaBase + valorPDV : vendaRealizadaBase;
+    const atualizarValoresPDV = (valorPDV, pesoPDV, valorAASel = null) => {
+      const novoValor = usarPDV ? (vendaRealizadaBase + valorPDV) : vendaRealizadaBase;
 
       setVendaRealizada(novoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 
@@ -416,7 +425,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
         setVendaVariacao(`R$ ${variacaoCorrigida.toFixed(2).replace('.', ',')}`);
       }
 
-      const novoPeso = usarPDV ? pesoRealizadoBase + pesoPDV : pesoRealizadoBase;
+      const novoPeso = usarPDV ? (pesoRealizadoBase + pesoPDV) : pesoRealizadoBase;
       setPesoRealizado(novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
 
       if (usarPDV) {
@@ -434,10 +443,19 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       setPesoPercentual(`${percentualPeso.toFixed(2)}%`);
       setPesoVariacao(variacaoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
 
-      // Atualiza evolução com override do “atual”
+      // Guarda o PDV aplicado (UG/área) para uso no cálculo de evolução
+      setPdvSelecionadoAtual(usarPDV ? Number(valorPDV || 0) : 0);
+
+      // Atualiza evolução com override do “atual” e guarda AA selecionado
       if (rawData) {
+        if (valorAASel != null) {
+          setVendaPDVAnoAnterior(valorAASel);
+        }
         applyEvolucaoFromRaw(rawData, somarArea, novoValor);
       }
+
+      // Notifica o pai (resumo PDV atual)
+      notifyPDVResumo(somarArea, usarPDV);
     };
 
     const fetchPDV = async () => {
@@ -445,16 +463,37 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
       try {
         const { de, ate } = periodoSelecionado || {};
         if (!de || !ate) return;
-        const { data } = await api.get('/indicadores/pdv/', { params: { de, ate } });
 
-        const valorPDV = data.vendas_pdv?.venda_realizada || 0;
-        const pesoPDV = data.vendas_pdv?.peso_realizado || 0;
-        const vendaAnoAnterior = data.vendas_pdv?.venda_realizada_ano_anterior || 0;
+        const res = await api.get('/indicadores/pdv/', { params: { de, ate } });
+        const data = res.data || {};
 
-        setValorPDVBase(valorPDV);
-        setPesoPDVBase(pesoPDV);
-        setVendaPDVAnoAnterior(vendaAnoAnterior);
-        atualizarValoresPDV(valorPDV, pesoPDV);
+        const ug = data.unid_gestora_usuario != null ? String(data.unid_gestora_usuario) : null;
+        setUgUsuario(ug);
+
+        const det  = data.detalhado_por_unid_gestora || [];
+        const detA = data.detalhado_aa_por_unid_gestora || [];
+
+        const { valor: valorUG,  peso: pesoUG }   = ug ? somarPDV(det, ug)  : { valor: 0, peso: 0 };
+        const { valor: valorAll, peso: pesoAll }  = somarPDV(det, null);
+
+        const { valor: valorAAUG }   = ug ? somarPDV(detA, ug)  : { valor: 0, peso: 0 };
+        const { valor: valorAAAll }  = somarPDV(detA, null);
+
+        setPdvValorUG(valorUG);
+        setPdvPesoUG(pesoUG);
+        setPdvValorArea(valorAll);
+        setPdvPesoArea(pesoAll);
+        setPdvValorAAUG(valorAAUG);
+        setPdvValorAAArea(valorAAAll);
+
+        setValorPDVBase(valorAll);
+        setPesoPDVBase(pesoAll);
+
+        const valorSel  = somarArea ? valorAll : valorUG;
+        const pesoSel   = somarArea ? pesoAll  : pesoUG;
+        const valorAASel = somarArea ? valorAAAll : valorAAUG;
+
+        atualizarValoresPDV(valorSel || 0, pesoSel || 0, valorAASel || 0);
       } catch (err) {
         console.error('Erro ao buscar vendas de PDV:', err);
       }
@@ -464,24 +503,56 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
     if (vendaRealizadaBase === null || !periodoSelecionado?.de || !periodoSelecionado?.ate) return;
 
     if (usarPDV) {
-      if (valorPDVBase != null && pesoPDVBase != null) {
-        atualizarValoresPDV(valorPDVBase, pesoPDVBase);
+      if (
+        (somarArea && pdvValorArea != null && pdvPesoArea != null && pdvValorAAArea != null) ||
+        (!somarArea && pdvValorUG != null && pdvPesoUG != null && pdvValorAAUG != null)
+      ) {
+        const valorSel  = somarArea ? pdvValorArea : pdvValorUG;
+        const pesoSel   = somarArea ? pdvPesoArea  : pdvPesoUG;
+        const valorAASel = somarArea ? pdvValorAAArea : pdvValorAAUG;
+        atualizarValoresPDV(valorSel || 0, pesoSel || 0, valorAASel || 0);
       } else {
         fetchPDV();
       }
     } else {
-      atualizarValoresPDV(valorPDVBase || 0, pesoPDVBase || 0);
+      atualizarValoresPDV(0, 0, 0);
+      // PDV desligado -> notifica nulo
+      notifyPDVResumo(somarArea, false);
     }
-  }, [usarPDV, periodoSelecionado, vendaRealizadaBase, valorPDVBase, objetivoFinanceiro, peso, pesoRealizadoBase, pesoPDVBase, rawData, somarArea]);
+  }, [
+    usarPDV,
+    periodoSelecionado,
+    vendaRealizadaBase,
+    objetivoFinanceiro,
+    peso,
+    pesoRealizadoBase,
+    rawData,
+    somarArea,
+    pdvValorUG, pdvPesoUG, pdvValorArea, pdvPesoArea, pdvValorAAUG, pdvValorAAArea
+  ]);
 
-  // Evolução com PDV (opcional)
+  // ===== Evolução (considerando PDV quando ativo) =====
   useEffect(() => {
-    if (vendaRealizadaBase != null && valorAnoAnteriorBase != null && vendaPDVAnoAnterior != null) {
-      const somaAnoAnterior = valorAnoAnteriorBase + vendaPDVAnoAnterior;
-      const percentual = somaAnoAnterior > 0 ? (vendaRealizadaBase / somaAnoAnterior) * 100 - 100 : 0;
-      setEvolucao_venda_vendapdv(`${percentual.toFixed(2)}%`);
-    }
-  }, [vendaRealizadaBase, valorAnoAnteriorBase, vendaPDVAnoAnterior]);
+    if (vendaRealizadaBase == null || valorAnoAnteriorBase == null) return;
+
+    const atualTotal = Number(vendaRealizadaBase || 0) + (usarPDV ? Number(pdvSelecionadoAtual || 0) : 0);
+    const aaTotal    = Number(valorAnoAnteriorBase || 0) + (usarPDV ? Number(vendaPDVAnoAnterior || 0) : 0);
+
+    const perc = aaTotal > 0 ? ((atualTotal - aaTotal) / aaTotal) * 100 : 0;
+    setEvolucao_venda_vendapdv(`${perc.toFixed(2)}%`);
+  }, [
+    vendaRealizadaBase,
+    valorAnoAnteriorBase,
+    usarPDV,
+    pdvSelecionadoAtual,
+    vendaPDVAnoAnterior
+  ]);
+
+  // ===== Exibição do valor "Ano Anterior" no card (somando PDV quando ativo) =====
+  useEffect(() => {
+    const aaDisplay = Number(valorAnoAnteriorBase || 0) + (usarPDV ? Number(vendaPDVAnoAnterior || 0) : 0);
+    setEvolucaoValor(aaDisplay.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+  }, [valorAnoAnteriorBase, vendaPDVAnoAnterior, usarPDV]);
 
   const Gauge = ({ label, percent }) => {
     const val =
@@ -512,10 +583,55 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
   const handleToggleArea = () => {
     const novo = !somarArea;
     setSomarArea(novo);
-    if (novo) {
-      applyAreaFromRaw(rawData);
+
+    if (usarPDV) {
+      const valorSel  = novo ? (pdvValorArea ?? 0) : (pdvValorUG ?? 0);
+      const pesoSel   = novo ? (pdvPesoArea ?? 0)  : (pdvPesoUG ?? 0);
+      const valorAASel = novo ? (pdvValorAAArea ?? 0) : (pdvValorAAUG ?? 0);
+
+      const novoValor = (vendaRealizadaBase ?? 0) + (valorSel ?? 0);
+      setVendaRealizada(novoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+      setVendaPDVFormatada((valorSel ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+      setVendaTotalFormatada(novoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+
+      const objetivoFin = parseFloat((objetivoFinanceiro?.replace(/[^\d,-]/g, '').replace(',', '.') || '0'));
+      const percentualCorrigido = objetivoFin ? (novoValor / objetivoFin) * 100 : 0;
+      const variacaoCorrigida = novoValor - objetivoFin;
+      setVendaPercentual(`${percentualCorrigido.toFixed(2)}%`);
+      setVendaVariacao(
+        variacaoCorrigida < 0
+          ? `R$ -${Math.abs(variacaoCorrigida).toFixed(2).replace('.', ',')}`
+          : `R$ ${variacaoCorrigida.toFixed(2).replace('.', ',')}`
+      );
+
+      const novoPeso = (pesoRealizadoBase ?? 0) + (pesoSel ?? 0);
+      setPesoRealizado(novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+      setPesoPDVFormatado((pesoSel ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+      setPesoTotalFormatado(novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+
+      const objetivoPeso = parseFloat((peso || '0').replace(/[^\d,-]/g, '').replace(',', '.'));
+      const percentualPeso = objetivoPeso ? (novoPeso / objetivoPeso) * 100 : 0;
+      const variacaoPeso = novoPeso - objetivoPeso;
+      setPesoPercentual(`${percentualPeso.toFixed(2)}%`);
+      setPesoVariacao(variacaoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+
+      setPdvSelecionadoAtual(usarPDV ? Number(valorSel || 0) : 0);
+      setVendaPDVAnoAnterior(valorAASel ?? 0);
+
+      if (rawData) {
+        applyEvolucaoFromRaw(rawData, novo, novoValor);
+      }
+
+      // notifica pai após alternância
+      notifyPDVResumo(novo, usarPDV);
     } else {
-      applyIndividualFromRaw(rawData);
+      if (novo) {
+        applyAreaFromRaw(rawData);
+      } else {
+        applyIndividualFromRaw(rawData);
+      }
+      // PDV desligado: também notifica nulo
+      notifyPDVResumo(novo, false);
     }
   };
 
@@ -534,7 +650,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos })
         <button onClick={() => setModo('graficos')} className={modo === 'graficos' ? 'ativo-graficos' : ''}>
           📊 Graficos
         </button>
-        {/* NOVO: alternância de escopo */}
         <button
           onClick={handleToggleArea}
           className={`btn-scope ${somarArea ? 'ativo-area' : ''}`}

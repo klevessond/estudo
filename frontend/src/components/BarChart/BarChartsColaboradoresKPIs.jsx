@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   LabelList,
+  Cell,
 } from 'recharts';
 import './BarChartsColaboradoresKPIs.css';
 
@@ -68,16 +69,12 @@ const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [] }) => {
     return (dados || []).reduce(
       (acc, v) => {
         const obj = objetivosMap.get(String(v.codFuncionario)) || {};
-        // financeiro
         acc.finReal += Number(v.faturado || 0);
         acc.finObj += Number(obj.objetivo_financeiro || 0);
-        // positivação
         acc.posReal += Number(v.qtdClientes || 0);
         acc.posObj += Number(obj.objetivo_positivacao || 0);
-        // peso
         acc.pesoReal += Number(v.pesototalvendido || 0);
         acc.pesoObj += Number(obj.objetivo_peso || 0);
-        // mix
         acc.mixReal += Number(v.mix || 0);
         acc.mixObj += Number(obj.objetivo_mix || 0);
         return acc;
@@ -170,7 +167,6 @@ const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [] }) => {
         </div>
       </div>
 
-      {/* Título centralizado com destaque no percentual total */}
       <div className="kpis-title">
         {tituloBase}• Total atingido:{' '}
         <span className="kpis-title__highlight">{totalPct.toFixed(2)}%</span>
@@ -186,25 +182,36 @@ const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [] }) => {
               formatter={(value) => `${Number(value).toFixed(2)}%`}
               contentStyle={{ borderRadius: 10, boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}
             />
-              <Bar dataKey="Percentual" fill="var(--kpi-blue)" radius={[6, 6, 0, 0]}>
-                <LabelList dataKey="Percentual" content={renderBarLabel} />
-              </Bar>
 
-              {/* Agora as linhas ficam NA FRENTE porque vêm depois no DOM */}
-              <ReferenceLine
-                y={mediaPct}
-                stroke="var(--kpi-orange)"
-                strokeDasharray="6 2"
-                strokeWidth={2}
-                label={{ value: `Média ${mediaPct.toFixed(1)}%`, position: 'center', fill: 'var(--danger, red)' }}
-              />
-              <ReferenceLine
-                y={100}
-                stroke="var(--kpi-green)"
-                strokeDasharray="3 3"
-                strokeWidth={2}
-                label="Meta 100%"
-              />
+            <Bar dataKey="Percentual" fill="var(--kpi-blue)" radius={[6, 6, 0, 0]}>
+              <LabelList dataKey="Percentual" content={renderBarLabel} />
+              {dataset.map((row, i) => (
+                <Cell
+                  key={`cell-${i}`}
+                  fill={row.Percentual < mediaPct ? 'var(--kpi-red, #ef4444)' : 'var(--kpi-blue)'}
+                />
+              ))}
+            </Bar>
+
+            <ReferenceLine
+              y={mediaPct}
+              stroke="var(--kpi-orange)"
+              strokeDasharray="6 2"
+              strokeWidth={2}
+              label={{
+                value: `Média ${mediaPct.toFixed(1)}%`,
+                position: 'right',
+                fill: 'red',
+                fontWeight: 700,
+              }}
+            />
+            <ReferenceLine
+              y={100}
+              stroke="var(--kpi-green)"
+              strokeDasharray="3 3"
+              strokeWidth={2}
+              label="Meta 100%"
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -215,6 +222,8 @@ const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [] }) => {
         <span className="dot dot-green" /> Linha de meta (100%)
         <span className="spacer" />
         <span className="dot dot-orange" /> Média da equipe
+        <span className="spacer" />
+        <span className="dot dot-red" /> Abaixo da média
       </div>
     </div>
   );
