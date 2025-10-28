@@ -81,7 +81,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
   const [captadoValor, setCaptadoValor] = useState(null);
   const [percCaptado, setCpercCaptado] = useState(null);
 
-  // NOVO: base numérica do captado para poder projetar quando PDV OFF
+  // base numérica do captado (para projeção quando PDV OFF)
   const [captadoBase, setCaptadoBase] = useState(0);
   const [captadoProjTotalFmt, setCaptadoProjTotalFmt] = useState(null);
   const [captadoProjPercentFmt, setCaptadoProjPercentFmt] = useState(null);
@@ -238,7 +238,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     // Captado base + exibido
     setCaptadoBase(ruptura);
     setCaptadoValor(fmtMoeda(ruptura));
-    // % captado (comportamento atual – será sobrescrito na projeção quando PDV OFF)
     setCpercCaptado(`${pct(ruptura, vendaAtual).toFixed(2)}%`);
 
     setPositivadoObjetivo((objPos).toLocaleString('pt-BR'));
@@ -310,7 +309,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     // Captado base + exibido (área)
     setCaptadoBase(rupAgg);
     setCaptadoValor(fmtMoeda(rupAgg));
-    // % captado (comportamento atual – será sobrescrito na projeção quando PDV OFF)
     setCpercCaptado(`${pct(rupAgg, valorVendaGrupo).toFixed(2)}%`);
 
     const objPos = Number(data?.objetivo?.objetivo_positivacao || 0);
@@ -568,15 +566,12 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
   // ===== Projeção de CAPTADO (apenas quando PDV estiver DESLIGADO) =====
   useEffect(() => {
     if (usarPDV) {
-      // limpamos a projeção quando PDV está ON
       setCaptadoProjTotalFmt(null);
       setCaptadoProjPercentFmt(null);
       return;
     }
     const vendaBase = Number(vendaRealizadaBase || 0);
     const captadoNum = Number(captadoBase || 0);
-
-    // objetivoFinanceiro é string "R$ ..." -> parse numérico
     const objetivoFinNum = parseFloat(
       (objetivoFinanceiro?.replace(/[^\d,-]/g, '').replace(',', '.') || '0')
     );
@@ -709,11 +704,27 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
       ) : (
         <div className="indicativos-container">
           <div className="indicativo-stack">
-            <Card title="Objetivo (R$)" value={objetivoFinanceiro ?? '...'} className="card-objetivo" />
+            {/* ✅ Card unificado: Objetivo + Evolução */}
             <Card
-              title="Evo % vs Ano Ant. (R$)"
-              value={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'}
-              subtitle={`Ano Anterior: ${evolucaoValor ?? '--'}`}
+              title="Objetivo & Evolução"
+              value={objetivoFinanceiro ?? '...'}
+              subtitle="Objetivo Financeiro"
+              title2={`Ano Anterior: ${evolucaoValor ?? '--'}`}
+              // mostramos o percentual de evolução no campo "percentage"
+              percentage={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'}
+              subtitle2="Evo % vs Ano Ant."
+              className="card-objetivo"
+            />
+            {/* 🧪 Card de evolução reservado (vazio para futuras implementações) */}
+            <Card
+              title="Evolução (reservado)"
+              value=""
+              subtitle=""
+              value2=""
+              title2=""
+              percentage=""
+              subtitle2=""
+              variation=""
               className="card-evolucao"
             />
           </div>
@@ -754,7 +765,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
             title="Captado"
             value={captadoValor ?? '...'}
             subtitle="Valor Captado"
-            /* quando PDV OFF mostramos projeção (venda + captado) e % potencial */
             title2={!usarPDV ? 'Se vender captado' : undefined}
             value2={!usarPDV ? (captadoProjTotalFmt ?? '--') : undefined}
             percentage={!usarPDV ? (captadoProjPercentFmt ?? '0%') : (percCaptado ?? '0%')}

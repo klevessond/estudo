@@ -179,6 +179,8 @@ const IndicativosTabelaVendedor = ({
 
       return {
         ...row,
+        // ✅ incluímos o objetivo para renderizar/ordenar
+        objetivoFinanceiro: objetivo,
         faturado,
         alocado,
         pesototalvendido: peso,
@@ -221,7 +223,12 @@ const IndicativosTabelaVendedor = ({
       {
         accessorKey: 'colaborador',
         header: 'Colaborador',
-        cell: (info) => info.getValue(),
+        // Exibe apenas o primeiro nome
+        cell: (info) => {
+          const full = String(info.getValue() ?? '').trim();
+          const first = full.split(/\s+/)[0] || '';
+          return first || full;
+        },
       },
       {
         accessorKey: 'faturado',
@@ -241,6 +248,17 @@ const IndicativosTabelaVendedor = ({
         accessorKey: 'alocado',
         header: 'Alocado R$',
         cell: (info) => Number(info.getValue() || 0).toLocaleString('pt-BR'),
+      },
+      // ✅ NOVA COLUNA: Objetivo R$
+      {
+        accessorKey: 'objetivoFinanceiro',
+        header: 'Objetivo R$',
+        cell: (info) =>
+          Number(info.getValue() || 0).toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+          }),
+        sortingFn: 'auto',
       },
       {
         accessorKey: 'mix',
@@ -315,7 +333,7 @@ const IndicativosTabelaVendedor = ({
           borderRadius: '8px',
         }}
       >
-        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '920px' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '980px' }}>
           <thead style={{ background: '#0074c2', color: '#fff' }}>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
