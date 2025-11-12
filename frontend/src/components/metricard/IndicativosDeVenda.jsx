@@ -289,8 +289,8 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     const preAgg  = Number((agg.PreVenda_Valor ?? null) !== null ? agg.PreVenda_Valor : soma('PreVenda_Valor'));
     const rupAgg  = Number((agg.Ruptura_TotalValor ?? null) !== null ? agg.Ruptura_TotalValor : soma('Ruptura_TotalValor'));
     const posAgg  = Number(
-      (agg.Positivacao_Realizado ?? null) !== null
-        ? agg.Positivacao_Realizado
+      (agg.QtdClientes ?? null) !== null
+        ? agg.QtdClientes
         : soma('QtdClientes')
     );
 
@@ -709,24 +709,20 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
               title="Objetivo & Evolução"
               value={objetivoFinanceiro ?? '...'}
               subtitle="Objetivo Financeiro"
-              title2={`Ano Anterior: ${evolucaoValor ?? '--'}`}
+               title2={
+                  <>
+                    Vendas Ano Anterior:
+                    <br />
+                    {evolucaoValor ?? '--'}
+                  </>
+                }
               // mostramos o percentual de evolução no campo "percentage"
               percentage={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'}
               subtitle2="Evo % vs Ano Ant."
               className="card-objetivo"
             />
             {/* 🧪 Card de evolução reservado (vazio para futuras implementações) */}
-            <Card
-              title="Evolução (reservado)"
-              value=""
-              subtitle=""
-              value2=""
-              title2=""
-              percentage=""
-              subtitle2=""
-              variation=""
-              className="card-evolucao"
-            />
+
           </div>
 
           <Card
@@ -762,6 +758,18 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
           />
 
           <Card
+              title="Evolução (reservado)"
+              value=""
+              subtitle=""
+              value2=""
+              title2=""
+              percentage=""
+              subtitle2=""
+              variation=""
+              className="card-evolucao"
+          />
+
+          <Card
             title="Captado"
             value={captadoValor ?? '...'}
             subtitle="Valor Captado"
@@ -772,6 +780,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
             variation="0"
             className="card-captar"
           />
+          
 
           <Card
             title="Peso"

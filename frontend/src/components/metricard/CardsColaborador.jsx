@@ -1,3 +1,4 @@
+// CardsColaborador.jsx
 import React from 'react';
 import './CardsColaborador.css';
 import ResumoSegmentoPies from '../Piechart/ResumoSegmentoPies';
@@ -35,25 +36,44 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
     return 'progress-low';
   };
 
-  // ===== Gauge reutilizável com valor central e legenda =====
+  // === Gauge com o gradiente de cores original, mas sem números ===
   const Gauge = ({ label, valuePercent }) => {
     const val = Number.isFinite(valuePercent) ? valuePercent : 0;
 
     return (
-      <div>
-        <h4>
-          {label} <small style={{ opacity: 0.7 }}>({val.toFixed(2)}%)</small>
-        </h4>
-        <ReactSpeedometer
-          maxValue={100}
-          value={val}
-          segments={5}
-          height={160}
-          currentValueText="${value}%"
-          valueFormat=".2f"
-          needleTransitionDuration={500}
-          needleTransition="easeElastic"
-        />
+      <div style={{ textAlign: 'center' }}>
+        <h4 style={{ marginBottom: '0.5rem' }}>{label}</h4>
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+          <ReactSpeedometer
+            maxValue={100}
+            value={val}
+            segments={5} // mantém o degradê original
+            height={160}
+            width={250}
+            ringWidth={25}
+            segmentColors={['#F44336', '#FF9800', '#FFEB3B', '#8BC34A', '#4CAF50']}
+            needleColor="#1E88E5"
+            textColor="transparent" // esconde os números (20, 40, etc.)
+            currentValueText="" // remove texto padrão
+            customSegmentLabels={[]} // remove labels
+            needleTransitionDuration={500}
+            needleTransition="easeElastic"
+          />
+          {/* Valor exato centralizado */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -40%)',
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+              color: '#1E88E5',
+            }}
+          >
+            {val.toFixed(1)}%
+          </div>
+        </div>
       </div>
     );
   };
@@ -93,13 +113,12 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
       {modo === 'graficos' ? (
         <div className="dashboard-graficos" style={{ marginTop: '1rem' }}>
           <h3>Velocímetros de Meta</h3>
-          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-            <Gauge label="Faturado"    valuePercent={parseFloat(percentualFinanceiro.toFixed(2))} />
-            <Gauge label="Peso"        valuePercent={parseFloat(porcentagemPeso.toFixed(2))} />
+          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Gauge label="Faturado" valuePercent={parseFloat(percentualFinanceiro.toFixed(2))} />
+            <Gauge label="Peso" valuePercent={parseFloat(porcentagemPeso.toFixed(2))} />
             <Gauge label="Positivação" valuePercent={parseFloat(porcentagemPositivacao.toFixed(2))} />
-            <Gauge label="Mix"         valuePercent={parseFloat(porcentagemMix.toFixed(2))} />
+            <Gauge label="Mix" valuePercent={parseFloat(porcentagemMix.toFixed(2))} />
 
-            {/* 🆕 Pizzas por Segmento (Clientes e Positivações) */}
             <div style={{ marginTop: '1.5rem', flexBasis: '100%' }}>
               <h3>Composição por Segmento</h3>
               <ResumoSegmentoPies
@@ -111,7 +130,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
         </div>
       ) : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-          {/* Card Faturado */}
+          {/* Cards de indicadores — mantém o estilo original */}
           <div className="card" style={{ background: '#eafaf1' }}>
             <div className="card-title">Faturado:</div>
             <div>R$ {faturado.toLocaleString('pt-BR')}</div>
@@ -129,25 +148,21 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
             )}
           </div>
 
-          {/* Card A Faturar */}
           <div className="card" style={{ background: '#eaf2fa' }}>
             <div className="card-title">A Faturar:</div>
             R$ {colaborador.aFaturar?.toLocaleString('pt-BR')}
           </div>
 
-          {/* Card Alocado */}
           <div className="card" style={{ background: '#f9f0e6' }}>
             <div className="card-title">Alocado:</div>
             R$ {colaborador.alocado?.toLocaleString('pt-BR')}
           </div>
 
-          {/* Card Variação */}
           <div className="card" style={{ background: '#f1faff' }}>
             <div className="card-title">Variação:</div>
             R$ {variacaoFinanceira.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </div>
 
-          {/* Card Positivação */}
           <div className="card" style={{ background: '#fff0f3' }}>
             <div className="card-title">Positivação:</div>
             <div>{qtdClientes} / {obrotaTotal.toLocaleString('pt-BR')}</div>
@@ -161,7 +176,6 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
             <div>Progresso: {porcentagemPositivacao.toFixed(1)}%</div>
           </div>
 
-          {/* Card Peso */}
           <div className="card" style={{ background: '#eafae1' }}>
             <div className="card-title">Peso Vendido:</div>
             {pesototalvendido.toLocaleString('pt-BR')} kg
@@ -175,7 +189,6 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
             <div>Progresso: {porcentagemPeso.toFixed(1)}%</div>
           </div>
 
-          {/* Card Mix */}
           <div className="card" style={{ background: '#f3e8ff' }}>
             <div className="card-title">Mix de Produtos:</div>
             <div>{mixRealizado} / {objetivoMix} itens</div>

@@ -93,6 +93,7 @@ const IndicativosTabelaVendedor = ({
       try {
         const url = `/vendas-por-vendedor/?de=${periodoSelecionado.de}&ate=${periodoSelecionado.ate}`;
         const { data: json } = await api.get(url);
+        dlog('valor recebido de vendas-por-vendedor:', json);
 
         const rows = Array.isArray(json?.resultado?.vendas_por_vendedor)
           ? json.resultado.vendas_por_vendedor
