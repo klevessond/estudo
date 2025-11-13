@@ -301,6 +301,60 @@ class IndicadoresView(APIView):
             "PesoTotal": sum(_num(x.get("Ano_anterior_PesoTotal")) for x in lista),
             "Mix": sum(_num(x.get("Ano_anterior_Mix")) for x in lista),
         }
+        
+        print(f"DEBUG VENDA DO ANO ANTERIOR ATE HOJE {ano_anterior_agregado}")
+
+        # === NOVO: VENDAS DO MÊS COMPLETO DO ANO ANTERIOR ===
+        aa_mes_ano = de_dt.year - 1
+        aa_mes_mes = de_dt.month
+        aa_mes_ini = date(aa_mes_ano, aa_mes_mes, 1)
+        aa_mes_last_day = last_day_of_month(aa_mes_ano, aa_mes_mes)
+        aa_mes_fim = date(aa_mes_ano, aa_mes_mes, aa_mes_last_day)
+
+        res_aa_mes = buscar_vendas_por_vendedor(
+            aa_mes_ini.strftime("%Y-%m-%d"),
+            aa_mes_fim.strftime("%Y-%m-%d"),
+        )
+        lista_aa_mes = res_aa_mes.get("vendas_por_vendedor", []) or []
+
+        # aplica o MESMO filtro de escopo de vendedores
+        if vendedores_set:
+            lista_aa_mes = [
+                it for it in lista_aa_mes
+                if _to_int(it.get("codcampo")) in vendedores_set
+            ]
+
+        # índice por vendedor do MÊS COMPLETO do ANO ANTERIOR
+        aa_mes_by_cod = {}
+        for it in lista_aa_mes:
+            cod = _to_int(it.get("codcampo"))
+            if cod is None:
+                continue
+            aa_mes_by_cod[cod] = {
+                "Ano_anterior_mes_QtdClientes": _num(it.get("QtdClientes")),
+                "Ano_anterior_mes_ValorLiquido": _num(it.get("ValorLiquido")),
+                "Ano_anterior_mes_PesoTotal": _num(it.get("PesoTotal")),
+                "Ano_anterior_mes_Mix": _num(it.get("Mix")),
+            }
+
+        # injeta também os campos do MÊS CHEIO em cada item de lista (ano atual)
+        for it in lista:
+            cod = _to_int(it.get("codcampo"))
+            if cod is None:
+                continue
+            aa_mes = aa_mes_by_cod.get(cod, {})
+            it.update(aa_mes)
+
+        # agregado do MÊS CHEIO do ano anterior (sobre a MESMA amostra de vendedores da lista)
+        ano_anterior_agregado_mes = {
+            "QtdClientes":   sum(_num(x.get("Ano_anterior_mes_QtdClientes"))   for x in lista),
+            "ValorLiquido":  sum(_num(x.get("Ano_anterior_mes_ValorLiquido"))  for x in lista),
+            "PesoTotal":     sum(_num(x.get("Ano_anterior_mes_PesoTotal"))     for x in lista),
+            "Mix":           sum(_num(x.get("Ano_anterior_mes_Mix"))           for x in lista),
+        }
+        print(f"DEBUG VENDA DO ANO ANTERIOR MES COMPLETO {ano_anterior_agregado_mes}")
+
+
 
         #  POSITIVAÇÃO (área)
         positivacao = buscar_positivacao_por_rota(data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores)
@@ -447,6 +501,7 @@ class IndicadoresView(APIView):
         # ====== Payload final de vendas / agregados ======
         vendido["vendas_por_vendedor"]   = lista
         vendido["ano_anterior_agregado"] = ano_anterior_agregado
+        vendido["ano_anterior_agregado_mes"] = ano_anterior_agregado_mes
         vendido["agregados_area"] = {
             "PreVenda_Valor": pre_venda_agregado,
             "Ruptura_TotalValor": ruptura_agregado,
