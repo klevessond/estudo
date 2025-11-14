@@ -8,8 +8,8 @@ const RegisterObjetivosVendedores = () => {
   const [vendedores, setVendedores] = useState([]);
   const [objetivosFinanceiros, setObjetivosFinanceiros] = useState({});
   const [objetivosMix, setObjetivosMix] = useState({});
-  const [objetivosPeso, setObjetivosPeso] = useState({});             // 🆕
-  const [objetivosPos, setObjetivosPos] = useState({});               // 🆕
+  const [objetivosPeso, setObjetivosPeso] = useState({});
+  const [objetivosPos, setObjetivosPos] = useState({});
   const [mesReferencia, setMesReferencia] = useState('');
   const navigate = useNavigate();
 
@@ -33,19 +33,19 @@ const RegisterObjetivosVendedores = () => {
 
         const objFin = {};
         const objMix = {};
-        const objPeso = {}; // 🆕
-        const objPos  = {}; // 🆕
+        const objPeso = {};
+        const objPos  = {};
         lista.forEach((v) => {
           const e = existentes.find((x) => Number(x.vendedor_id) === v.CodFuncionario);
-          objFin[v.CodFuncionario]  = e ? e.objetivo_financeiro      : '';
-          objMix[v.CodFuncionario]  = e ? e.objetivo_mix             : '';
-          objPeso[v.CodFuncionario] = e ? e.objetivo_peso            : '';   // 🆕
-          objPos[v.CodFuncionario]  = e ? e.objetivo_positivacao     : '';   // 🆕
+          objFin[v.CodFuncionario]  = e ? e.objetivo_financeiro  : '';
+          objMix[v.CodFuncionario]  = e ? e.objetivo_mix         : '';
+          objPeso[v.CodFuncionario] = e ? e.objetivo_peso        : '';
+          objPos[v.CodFuncionario]  = e ? e.objetivo_positivacao : '';
         });
         setObjetivosFinanceiros(objFin);
         setObjetivosMix(objMix);
-        setObjetivosPeso(objPeso);   // 🆕
-        setObjetivosPos(objPos);     // 🆕
+        setObjetivosPeso(objPeso);
+        setObjetivosPos(objPos);
       } catch (err) {
         console.error('Erro ao buscar vendedores/objetivos:', err);
         setVendedores([]);
@@ -53,10 +53,17 @@ const RegisterObjetivosVendedores = () => {
     })();
   }, []);
 
-  const handleFinanceiroChange = (id, value) => setObjetivosFinanceiros((p) => ({ ...p, [id]: value }));
-  const handleMixChange        = (id, value) => setObjetivosMix((p) => ({ ...p, [id]: value }));
-  const handlePesoChange       = (id, value) => setObjetivosPeso((p) => ({ ...p, [id]: value }));        // 🆕
-  const handlePosChange        = (id, value) => setObjetivosPos((p) => ({ ...p, [id]: value }));         // 🆕
+  const handleFinanceiroChange = (id, value) =>
+    setObjetivosFinanceiros((p) => ({ ...p, [id]: value }));
+
+  const handleMixChange = (id, value) =>
+    setObjetivosMix((p) => ({ ...p, [id]: value }));
+
+  const handlePesoChange = (id, value) =>
+    setObjetivosPeso((p) => ({ ...p, [id]: value }));
+
+  const handlePosChange = (id, value) =>
+    setObjetivosPos((p) => ({ ...p, [id]: value }));
 
   const handleSubmit = async () => {
     const dataFormatada = `${mesReferencia}-01`;
@@ -67,8 +74,8 @@ const RegisterObjetivosVendedores = () => {
         nome_vendedor: v.Nome,
         objetivo_financeiro: parseFloat(objetivosFinanceiros[v.CodFuncionario]) || 0,
         objetivo_mix: parseFloat(objetivosMix[v.CodFuncionario]) || 0,
-        objetivo_peso: parseFloat(objetivosPeso[v.CodFuncionario]) || 0,         // 🆕 envia kg
-        objetivo_positivacao: parseInt(objetivosPos[v.CodFuncionario]) || 0,     // 🆕 envia clientes
+        objetivo_peso: parseFloat(objetivosPeso[v.CodFuncionario]) || 0,
+        objetivo_positivacao: parseInt(objetivosPos[v.CodFuncionario]) || 0,
       })),
     };
 
@@ -86,10 +93,20 @@ const RegisterObjetivosVendedores = () => {
     }
   };
 
-  const totalFinanceiro = Object.values(objetivosFinanceiros).reduce((acc, v) => acc + (parseFloat(v) || 0), 0).toFixed(2);
-  const totalMix        = Object.values(objetivosMix).reduce((acc, v) => acc + (parseFloat(v) || 0), 0).toFixed(2);
-  const totalPeso       = Object.values(objetivosPeso).reduce((acc, v) => acc + (parseFloat(v) || 0), 0).toFixed(2);   // 🆕
-  const totalPos        = Object.values(objetivosPos).reduce((acc, v) => acc + (parseInt(v) || 0), 0);                  // 🆕
+  const totalFinanceiro = Object.values(objetivosFinanceiros)
+    .reduce((acc, v) => acc + (parseFloat(v) || 0), 0)
+    .toFixed(2);
+
+  const totalPeso = Object.values(objetivosPeso)
+    .reduce((acc, v) => acc + (parseFloat(v) || 0), 0)
+    .toFixed(2);
+
+  const totalMix = Object.values(objetivosMix)
+    .reduce((acc, v) => acc + (parseFloat(v) || 0), 0)
+    .toFixed(2);
+
+  const totalPos = Object.values(objetivosPos)
+    .reduce((acc, v) => acc + (parseInt(v) || 0), 0);
 
   return (
     <div className="register-container">
@@ -97,7 +114,11 @@ const RegisterObjetivosVendedores = () => {
 
       <div className="register-card register-form">
         <label>Mês de Referência:</label>
-        <input type="month" value={mesReferencia} onChange={(e) => setMesReferencia(e.target.value)} />
+        <input
+          type="month"
+          value={mesReferencia}
+          onChange={(e) => setMesReferencia(e.target.value)}
+        />
       </div>
 
       <div className="register-card">
@@ -106,43 +127,61 @@ const RegisterObjetivosVendedores = () => {
             <tr>
               <th>Vendedor</th>
               <th>Objetivo Financeiro (R$)</th>
+              <th>Objetivo Peso (kg)</th>
               <th>Objetivo Mix</th>
-              <th>Objetivo Peso (kg)</th>           {/* 🆕 */}
-              <th>Objetivo Positivação (clientes)</th> {/* 🆕 */}
+              <th>Objetivo Positivação (clientes)</th>
             </tr>
           </thead>
           <tbody>
             {vendedores.map((v) => (
               <tr key={v.CodFuncionario}>
                 <td>{v.Nome}</td>
+
+                {/* Financeiro */}
                 <td>
                   <input
                     type="number"
                     value={objetivosFinanceiros[v.CodFuncionario] || ''}
-                    onChange={(e) => handleFinanceiroChange(v.CodFuncionario, e.target.value)}
+                    onChange={(e) =>
+                      handleFinanceiroChange(v.CodFuncionario, e.target.value)
+                    }
+                    placeholder="financeiro"
                   />
                 </td>
-                <td>
-                  <input
-                    type="number"
-                    value={objetivosMix[v.CodFuncionario] || ''}
-                    onChange={(e) => handleMixChange(v.CodFuncionario, e.target.value)}
-                  />
-                </td>
+
+                {/* Peso */}
                 <td>
                   <input
                     type="number"
                     step="0.01"
                     value={objetivosPeso[v.CodFuncionario] || ''}
-                    onChange={(e) => handlePesoChange(v.CodFuncionario, e.target.value)}
+                    onChange={(e) =>
+                      handlePesoChange(v.CodFuncionario, e.target.value)
+                    }
                     placeholder="kg"
                   />
                 </td>
+
+                {/* Mix */}
+                <td>
+                  <input
+                    type="number"
+                    value={objetivosMix[v.CodFuncionario] || ''}
+                    onChange={(e) =>
+                      handleMixChange(v.CodFuncionario, e.target.value)
+                    }
+                    placeholder="mix"
+                  />
+                </td>
+
+                {/* Positivação */}
                 <td>
                   <input
                     type="number"
                     value={objetivosPos[v.CodFuncionario] || ''}
-                    onChange={(e) => handlePosChange(v.CodFuncionario, e.target.value)}
+                    onChange={(e) =>
+                      handlePosChange(v.CodFuncionario, e.target.value)
+                    }
                     placeholder="clientes"
                   />
                 </td>
@@ -151,11 +190,21 @@ const RegisterObjetivosVendedores = () => {
 
             {/* totalização */}
             <tr className="register-total-row">
-              <td><strong>Total Empresa</strong></td>
-              <td><strong>{totalFinanceiro}</strong></td>
-              <td><strong>{totalMix}</strong></td>
-              <td><strong>{totalPeso}</strong></td>      {/* 🆕 */}
-              <td><strong>{totalPos}</strong></td>       {/* 🆕 */}
+              <td>
+                <strong>Total Empresa</strong>
+              </td>
+              <td>
+                <strong>{totalFinanceiro}</strong>
+              </td>
+              <td>
+                <strong>{totalPeso}</strong>
+              </td>
+              <td>
+                <strong>{totalMix}</strong>
+              </td>
+              <td>
+                <strong>{totalPos}</strong>
+              </td>
             </tr>
           </tbody>
         </table>

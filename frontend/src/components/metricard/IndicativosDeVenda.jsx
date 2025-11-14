@@ -6,7 +6,73 @@ import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 
 const dlog = (...args) => console.log('[IndicativosDeVenda]', ...args);
 
-const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, variation, icon, className }) => (
+/* ========= HELPERS GERAIS (FORA DO COMPONENTE) ========= */
+
+const fmtMoeda = (n) =>
+  Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const fmtNum2 = (n) =>
+  Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+const pct = (num, den) => (Number(den) ? (Number(num) / Number(den)) * 100 : 0);
+
+const getMinhaLinha = (data) => {
+  const meuCod = Number(data?.minha_visao?.cod_funcionario || 0);
+  if (!meuCod) return null;
+  const arr = data?.vendas?.vendas_por_vendedor || [];
+  return arr.find((x) => Number(x?.codcampo) === meuCod) || null;
+};
+
+// 🔍 helper só para exibir o texto do "Vendas Ano Anterior" no card
+const getValorAnoAnteriorTexto = (
+  rawData,
+  somarArea,
+  valorAnoAnteriorMesCheioBase,
+  valorAnoAnteriorBase
+) => {
+  if (!rawData) return '--';
+
+  // 👥 SOMA DA MINHA ÁREA (ON) -> usa o agregado de mês cheio do ano anterior
+  if (somarArea) {
+    const baseMesArea =
+      Number(valorAnoAnteriorMesCheioBase || 0) ||
+      Number(rawData?.vendas?.ano_anterior_agregado_mes?.ValorLiquido || 0);
+
+    if (!baseMesArea) return '--';
+    return fmtMoeda(baseMesArea);
+  }
+
+  // 👤 INDIVIDUAL (ON) -> usa o mês cheio do vendedor (codcampo), se existir
+  const linha = getMinhaLinha(rawData);
+  const vendMes = Number(linha?.Ano_anterior_mes_ValorLiquido || 0);
+
+  if (vendMes) {
+    return fmtMoeda(vendMes);
+  }
+
+  // fallback: se não tiver mês cheio, mostra o "até hoje" que já usamos na evolução
+  const base = Number(valorAnoAnteriorBase || 0);
+  if (base) {
+    return fmtMoeda(base);
+  }
+
+  return '--';
+};
+
+/* ========= COMPONENTES DE APRESENTAÇÃO ========= */
+
+const Card = ({
+  title,
+  title2,
+  value,
+  value2,
+  subtitle,
+  subtitle2,
+  percentage,
+  variation,
+  icon,
+  className,
+}) => (
   <div className={`indicativo-card ${className || ''}`}>
     <div className="card-header">
       <h2>{title}</h2>
@@ -31,7 +97,39 @@ const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, v
   </div>
 );
 
-const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, onPDVResumoChange }) => {
+const Gauge = ({ label, percent }) => {
+  const val =
+    typeof percent === 'number'
+      ? percent
+      : parseFloat(String(percent || '0').replace('%', '').replace(',', '.')) || 0;
+
+  return (
+    <div>
+      <h4>
+        {label} <small style={{ opacity: 0.7 }}>({val.toFixed(2)}%)</small>
+      </h4>
+      <ReactSpeedometer
+        maxValue={100}
+        value={val}
+        segments={5}
+        height={160}
+        currentValueText="${value}%"
+        valueFormat=".2f"
+        needleTransitionDuration={500}
+        needleTransition="easeElastic"
+      />
+    </div>
+  );
+};
+
+/* ========= COMPONENTE PRINCIPAL ========= */
+
+const IndicadoresCards = ({
+  periodoSelecionado,
+  usarPDV,
+  onObjetivosRecebidos,
+  onPDVResumoChange,
+}) => {
   const [loading, setLoading] = useState(false);
 
   // --- estados exibidos nos cards/gauges ---
@@ -51,6 +149,8 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
 
   const [evolucaoAnoAnterior, setEvolucaoAnoAnterior] = useState(null);
   const [evolucaoValor, setEvolucaoValor] = useState(null);
+  const [valorAnoAnteriorMesCheio, setValorAnoAnteriorMesCheio] = useState(null);
+  const [valorAnoAnteriorMesCheioBase, setValorAnoAnteriorMesCheioBase] = useState(null);
 
   const [mixRealizado, setMixRealizado] = useState(null);
   const [mixPercentual, setMixPercentual] = useState(null);
@@ -81,18 +181,15 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
   const [captadoValor, setCaptadoValor] = useState(null);
   const [percCaptado, setCpercCaptado] = useState(null);
 
-  // base numérica do captado (para projeção quando PDV OFF)
   const [captadoBase, setCaptadoBase] = useState(0);
   const [captadoProjTotalFmt, setCaptadoProjTotalFmt] = useState(null);
   const [captadoProjPercentFmt, setCaptadoProjPercentFmt] = useState(null);
 
   const [modo, setModo] = useState('indicadores');
 
-  // ====== cache do payload bruto + toggle do escopo ======
   const [rawData, setRawData] = useState(null);
   const [somarArea, setSomarArea] = useState(false); // false: individual, true: soma da área
 
-  // ====== estado da UG e valores PDV por-UG / por-área ======
   const [ugUsuario, setUgUsuario] = useState(null);
   const [pdvValorUG, setPdvValorUG] = useState(null);
   const [pdvPesoUG, setPdvPesoUG] = useState(null);
@@ -101,20 +198,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
   const [pdvValorAAUG, setPdvValorAAUG] = useState(null);
   const [pdvValorAAArea, setPdvValorAAArea] = useState(null);
 
-  // ====== PDV atualmente aplicado (UG quando individual, soma quando área) ======
   const [pdvSelecionadoAtual, setPdvSelecionadoAtual] = useState(0);
-
-  // helpers
-  const fmtMoeda = (n) => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const fmtNum2  = (n) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-  const pct = (num, den) => (Number(den) ? (Number(num) / Number(den)) * 100 : 0);
-
-  const getMinhaLinha = (data) => {
-    const meuCod = Number(data?.minha_visao?.cod_funcionario || 0);
-    if (!meuCod) return null;
-    const arr = data?.vendas?.vendas_por_vendedor || [];
-    return arr.find(x => Number(x?.codcampo) === meuCod) || null;
-  };
 
   // === evolução base (sem PDV)
   const applyEvolucaoFromRaw = (data, isArea, atualOverride) => {
@@ -131,7 +215,9 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
       }
     } else {
       const linha = getMinhaLinha(data);
-      valorAnoAnterior = Number(linha?.Ano_anterior_ValorLiquido || 0) || Number(data?.evolucao?.valor_ano_anterior || 0);
+      valorAnoAnterior =
+        Number(linha?.Ano_anterior_ValorLiquido || 0) ||
+        Number(data?.evolucao?.valor_ano_anterior || 0);
     }
 
     setValorAnoAnteriorBase(valorAnoAnterior);
@@ -140,8 +226,8 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     if (!atual) {
       atual = Number(
         isArea
-          ? (data?.realizado_financeiro?.valor || 0)
-          : (data?.minha_visao?.realizado_financeiro || 0)
+          ? data?.realizado_financeiro?.valor || 0
+          : data?.minha_visao?.realizado_financeiro || 0
       );
       if (!isArea && !atual) {
         atual = Number(data?.realizado_financeiro?.valor || 0);
@@ -172,10 +258,14 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
       setObjetivoFinanceiro(fmtMoeda(m.objetivo_financeiro));
       setVendaPercentual(`${Number(m.percentual_cobertura || 0).toFixed(2)}%`);
       setVendaVariacao(
-        `R$ ${Number(m.variacao_financeira || 0) < 0 ? '-' : ''}${Math.abs(Number(m.variacao_financeira || 0)).toFixed(2).replace('.', ',')}`
+        `R$ ${
+          Number(m.variacao_financeira || 0) < 0 ? '-' : ''
+        }${Math.abs(Number(m.variacao_financeira || 0))
+          .toFixed(2)
+          .replace('.', ',')}`
       );
 
-      setPeso((Number(m.objetivo_peso || 0)).toLocaleString('pt-BR'));
+      setPeso(Number(m.objetivo_peso || 0).toLocaleString('pt-BR'));
       setPesoRealizado(fmtNum2(m.realizado_peso));
       setPesoRealizadoBase(m.realizado_peso);
       setPesoPercentual(`${Number(m.percentual_peso || 0).toFixed(2)}%`);
@@ -189,7 +279,9 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
       const percentual = data.realizado_peso?.percentual || 0;
       const variacao = data.realizado_peso?.variacao || 0;
       const objetivoPeso = data.objetivo?.objetivo_peso || 0;
-      const realizadoPeso = Number((data.realizado_peso?.realizado ?? data.vendas?.peso_realizado ?? 0));
+      const realizadoPeso = Number(
+        data.realizado_peso?.realizado ?? data.vendas?.peso_realizado ?? 0
+      );
 
       setPesoRealizado(fmtNum2(realizadoPeso));
       setPeso(objetivoPeso.toLocaleString('pt-BR'));
@@ -203,7 +295,9 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
 
       setVendaRealizada(fmtMoeda(valorVenda));
       setVendaPercentual(`${percentualVenda.toFixed(2)}%`);
-      setVendaVariacao(`${variacaoVenda < 0 ? '-' : ''}${fmtMoeda(Math.abs(variacaoVenda))}`);
+      setVendaVariacao(
+        `${variacaoVenda < 0 ? '-' : ''}${fmtMoeda(Math.abs(variacaoVenda))}`
+      );
       setObjetivoFinanceiro(fmtMoeda(data.objetivo?.financeiro || 0));
 
       setVendaRealizadaBase(valorVenda);
@@ -211,20 +305,36 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
 
       setObjetivoMix(String(data.objetivo?.objetivo_mix || 0));
       setMixRealizado(String(data.realizado_mix?.realizado || 0));
-      setMixPercentual(`${Number(data.realizado_mix?.percentual || 0).toFixed(2)}%`);
+      setMixPercentual(
+        `${Number(data.realizado_mix?.percentual || 0).toFixed(2)}%`
+      );
       setMixVariacao(String(data.realizado_mix?.variacao || 0));
     }
 
     const vendaAtual = Number(m?.realizado_financeiro || 0);
-    const objFin     = Number(m?.objetivo_financeiro || 0);
+    const objFin = Number(m?.objetivo_financeiro || 0);
 
     const pre = Number(linha?.PreVenda_Valor || 0);
     const ruptura = Number(linha?.Ruptura_TotalValor || 0);
 
     const posReal = Number(linha?.QtdClientes || 0);
-    const objPos  = Number(m?.objetivo_positivacao ?? data?.objetoivo?.objetivo_positivacao ?? data?.objetivo?.objetivo_positivacao ?? 0);
+    const objPos = Number(
+      m?.objetivo_positivacao ??
+        data?.objetoivo?.objetivo_positivacao ??
+        data?.objetivo?.objetivo_positivacao ??
+        0
+    );
 
-    dlog('INDIVIDUAL pre:', pre, 'ruptura:', ruptura, 'posReal(QtdClientes):', posReal, 'objPos:', objPos);
+    dlog(
+      'INDIVIDUAL pre:',
+      pre,
+      'ruptura:',
+      ruptura,
+      'posReal(QtdClientes):',
+      posReal,
+      'objPos:',
+      objPos
+    );
 
     const valorAlocado = vendaAtual + pre;
     setAlocacaoPrevenda(fmtMoeda(pre));
@@ -240,8 +350,8 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     setCaptadoValor(fmtMoeda(ruptura));
     setCpercCaptado(`${pct(ruptura, vendaAtual).toFixed(2)}%`);
 
-    setPositivadoObjetivo((objPos).toLocaleString('pt-BR'));
-    setPositivadoRealizado((posReal).toLocaleString('pt-BR'));
+    setPositivadoObjetivo(objPos.toLocaleString('pt-BR'));
+    setPositivadoRealizado(posReal.toLocaleString('pt-BR'));
     setPositivadoPercentual(`${pct(posReal, objPos).toFixed(2)}%`);
     setPositivadoVariacao((posReal - objPos).toLocaleString('pt-BR'));
 
@@ -253,16 +363,24 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
 
     const realizadoFinanceiro = data.realizado_financeiro || {};
     const valorVendaGrupo = Number(realizadoFinanceiro.valor || 0);
-    const percentualVendaGrupo = Number(realizadoFinanceiro.percentual_cobertura || 0);
+    const percentualVendaGrupo = Number(
+      realizadoFinanceiro.percentual_cobertura || 0
+    );
     const variacaoVendaGrupo = Number(realizadoFinanceiro.variacao || 0);
 
     setVendaRealizada(fmtMoeda(valorVendaGrupo));
     setVendaRealizadaBase(valorVendaGrupo);
     setVendaPercentual(`${percentualVendaGrupo.toFixed(2)}%`);
-    setVendaVariacao(`${variacaoVendaGrupo < 0 ? '-' : ''}${fmtMoeda(Math.abs(variacaoVendaGrupo))}`);
+    setVendaVariacao(
+      `${variacaoVendaGrupo < 0 ? '-' : ''}${fmtMoeda(
+        Math.abs(variacaoVendaGrupo)
+      )}`
+    );
     setObjetivoFinanceiro(fmtMoeda(Number(data.objetivo?.financeiro || 0)));
 
-    const realizadoPesoGrupo = Number((data.realizado_peso?.realizado ?? data.vendas?.peso_realizado ?? 0));
+    const realizadoPesoGrupo = Number(
+      data.realizado_peso?.realizado ?? data.vendas?.peso_realizado ?? 0
+    );
     const percentual = data.realizado_peso?.percentual || 0;
     const variacao = data.realizado_peso?.variacao || 0;
     const objetivoPeso = Number(data.objetivo?.objetivo_peso || 0);
@@ -286,12 +404,18 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     const list = data?.vendas?.vendas_por_vendedor || [];
     const soma = (k) => list.reduce((acc, it) => acc + Number(it?.[k] || 0), 0);
 
-    const preAgg  = Number((agg.PreVenda_Valor ?? null) !== null ? agg.PreVenda_Valor : soma('PreVenda_Valor'));
-    const rupAgg  = Number((agg.Ruptura_TotalValor ?? null) !== null ? agg.Ruptura_TotalValor : soma('Ruptura_TotalValor'));
-    const posAgg  = Number(
-      (agg.QtdClientes ?? null) !== null
-        ? agg.QtdClientes
-        : soma('QtdClientes')
+    const preAgg = Number(
+      (agg.PreVenda_Valor ?? null) !== null
+        ? agg.PreVenda_Valor
+        : soma('PreVenda_Valor')
+    );
+    const rupAgg = Number(
+      (agg.Ruptura_TotalValor ?? null) !== null
+        ? agg.Ruptura_TotalValor
+        : soma('Ruptura_TotalValor')
+    );
+    const posAgg = Number(
+      (agg.QtdClientes ?? null) !== null ? agg.QtdClientes : soma('QtdClientes')
     );
 
     dlog('AREA preAgg:', preAgg, 'rupAgg:', rupAgg, 'posAgg(QtdClientes soma):', posAgg);
@@ -314,8 +438,8 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     const objPos = Number(data?.objetivo?.objetivo_positivacao || 0);
     dlog('AREA objPos (objetivo_positivacao):', objPos);
 
-    setPositivadoObjetivo((objPos).toLocaleString('pt-BR'));
-    setPositivadoRealizado((posAgg).toLocaleString('pt-BR'));
+    setPositivadoObjetivo(objPos.toLocaleString('pt-BR'));
+    setPositivadoRealizado(posAgg.toLocaleString('pt-BR'));
     setPositivadoPercentual(`${pct(posAgg, objPos).toFixed(2)}%`);
     setPositivadoVariacao((posAgg - objPos).toLocaleString('pt-BR'));
 
@@ -337,7 +461,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
         const objetivos = [];
 
         if (Array.isArray(data.objetivo?.detalhamento)) {
-          const detalhamento = data.objetivo.detalhamento.map(item => ({
+          const detalhamento = data.objetivo.detalhamento.map((item) => ({
             codFuncionario: Number(item.CodFuncionario),
             nomeFuncionario: item.Funcionario,
           }));
@@ -345,7 +469,7 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
         }
 
         if (Array.isArray(data.objetivos_vendedores)) {
-          const vendedores = data.objetivos_vendedores.map(item => ({
+          const vendedores = data.objetivos_vendedores.map((item) => ({
             codFuncionario: Number(item.vendedor_id),
             objetivo_financeiro: item.objetivo_financeiro || 0,
             objetivo_mix: item.objetivo_mix || 0,
@@ -357,7 +481,9 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
         }
 
         const objetivosUnificados = objetivos.reduce((acc, curr) => {
-          const existente = acc.find(o => o.codFuncionario === curr.codFuncionario);
+          const existente = acc.find(
+            (o) => o.codFuncionario === curr.codFuncionario
+          );
           if (!existente) acc.push(curr);
           else Object.assign(existente, { ...existente, ...curr });
           return acc;
@@ -367,6 +493,20 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
 
         setRawData(data);
         setSomarArea(false);
+
+        const mesCheioNum = Number(
+          data?.vendas?.ano_anterior_agregado_mes?.ValorLiquido || 0
+        );
+        setValorAnoAnteriorMesCheioBase(mesCheioNum || 0);
+        setValorAnoAnteriorMesCheio(
+          mesCheioNum
+            ? mesCheioNum.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+              })
+            : null
+        );
+
         applyIndividualFromRaw(data);
       } catch (error) {
         console.error('Erro ao buscar os indicadores:', error);
@@ -385,77 +525,113 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     let valor = 0;
     let peso = 0;
     for (const r of arr) {
-      const ug = (r.UnidGestora ?? r.unidGestora ?? r.unid_gestora ?? null);
+      const ug = r.UnidGestora ?? r.unidGestora ?? r.unid_gestora ?? null;
       if (ugFiltro !== null && String(ug) !== String(ugFiltro)) continue;
       const v = Number(r.Valor ?? r.ValorProdutos ?? r.valor ?? 0);
       const p = Number(r.Peso ?? r.peso ?? 0);
       valor += isFinite(v) ? v : 0;
-      peso  += isFinite(p) ? p : 0;
+      peso += isFinite(p) ? p : 0;
     }
     return { valor, peso };
   }
 
-  // Notifica o pai (Dashboard) qual PDV está efetivamente aplicado (UG x Área)
   const notifyPDVResumo = (somarAreaAtual, ligado) => {
     if (!onPDVResumoChange) return;
     if (!ligado) {
       onPDVResumoChange(null);
       return;
     }
-    const valorSel = somarAreaAtual ? (pdvValorArea ?? 0) : (pdvValorUG ?? 0);
-    const pesoSel  = somarAreaAtual ? (pdvPesoArea ?? 0)  : (pdvPesoUG ?? 0);
-    const label    = somarAreaAtual ? 'Soma da Área' : (ugUsuario ? `UG ${ugUsuario}` : 'UG —');
+    const valorSel = somarAreaAtual ? pdvValorArea ?? 0 : pdvValorUG ?? 0;
+    const pesoSel = somarAreaAtual ? pdvPesoArea ?? 0 : pdvPesoUG ?? 0;
+    const label = somarAreaAtual
+      ? 'Soma da Área'
+      : ugUsuario
+      ? `UG ${ugUsuario}`
+      : 'UG —';
     onPDVResumoChange({ valor: valorSel || 0, peso: pesoSel || 0, label });
   };
 
   // ========= PDV (soma com base) =========
   useEffect(() => {
     const atualizarValoresPDV = (valorPDV, pesoPDV, valorAASel = null) => {
-      const novoValor = usarPDV ? (vendaRealizadaBase + valorPDV) : vendaRealizadaBase;
+      const novoValor = usarPDV ? vendaRealizadaBase + valorPDV : vendaRealizadaBase;
 
-      setVendaRealizada(novoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+      setVendaRealizada(
+        novoValor.toLocaleString('pt-BR', {
+          style: 'currency',
+          currency: 'BRL',
+        })
+      );
 
       if (usarPDV) {
-        setVendaPDVFormatada(valorPDV.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-        setVendaTotalFormatada(novoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        setVendaPDVFormatada(
+          valorPDV.toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+          })
+        );
+        setVendaTotalFormatada(
+          novoValor.toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+          })
+        );
       } else {
         setVendaPDVFormatada(null);
         setVendaTotalFormatada(null);
       }
 
-      const objetivoFin = parseFloat((objetivoFinanceiro?.replace(/[^\d,-]/g, '').replace(',', '.') || '0'));
+      const objetivoFin = parseFloat(
+        (objetivoFinanceiro
+          ?.replace(/[^\d,-]/g, '')
+          .replace(',', '.') || '0')
+      );
       const percentualCorrigido = objetivoFin ? (novoValor / objetivoFin) * 100 : 0;
       const variacaoCorrigida = novoValor - objetivoFin;
 
       setVendaPercentual(`${percentualCorrigido.toFixed(2)}%`);
       if (variacaoCorrigida < 0) {
-        setVendaVariacao(`R$ -${Math.abs(variacaoCorrigida).toFixed(2).replace('.', ',')}`);
+        setVendaVariacao(
+          `R$ -${Math.abs(variacaoCorrigida)
+            .toFixed(2)
+            .replace('.', ',')}`
+        );
       } else {
-        setVendaVariacao(`R$ ${variacaoCorrigida.toFixed(2).replace('.', ',')}`);
+        setVendaVariacao(
+          `R$ ${variacaoCorrigida.toFixed(2).replace('.', ',')}`
+        );
       }
 
-      const novoPeso = usarPDV ? (pesoRealizadoBase + pesoPDV) : pesoRealizadoBase;
-      setPesoRealizado(novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+      const novoPeso = usarPDV ? pesoRealizadoBase + pesoPDV : pesoRealizadoBase;
+      setPesoRealizado(
+        novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+      );
 
       if (usarPDV) {
-        setPesoPDVFormatado(pesoPDV.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-        setPesoTotalFormatado(novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+        setPesoPDVFormatado(
+          pesoPDV.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+        );
+        setPesoTotalFormatado(
+          novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+        );
       } else {
         setPesoPDVFormatado(null);
         setPesoTotalFormatado(null);
       }
 
-      const objetivoPeso = parseFloat((peso || '0').replace(/[^\d,-]/g, '').replace(',', '.'));
+      const objetivoPeso = parseFloat(
+        (peso || '0').replace(/[^\d,-]/g, '').replace(',', '.')
+      );
       const percentualPeso = objetivoPeso ? (novoPeso / objetivoPeso) * 100 : 0;
       const variacaoPeso = novoPeso - objetivoPeso;
 
       setPesoPercentual(`${percentualPeso.toFixed(2)}%`);
-      setPesoVariacao(variacaoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+      setPesoVariacao(
+        variacaoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+      );
 
-      // Guarda o PDV aplicado (UG/área) para uso no cálculo de evolução
       setPdvSelecionadoAtual(usarPDV ? Number(valorPDV || 0) : 0);
 
-      // Atualiza evolução com override do “atual” e guarda AA selecionado
       if (rawData) {
         if (valorAASel != null) {
           setVendaPDVAnoAnterior(valorAASel);
@@ -463,7 +639,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
         applyEvolucaoFromRaw(rawData, somarArea, novoValor);
       }
 
-      // Notifica o pai (resumo PDV atual)
       notifyPDVResumo(somarArea, usarPDV);
     };
 
@@ -476,17 +651,24 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
         const res = await api.get('/indicadores/pdv/', { params: { de, ate } });
         const data = res.data || {};
 
-        const ug = data.unid_gestora_usuario != null ? String(data.unid_gestora_usuario) : null;
+        const ug =
+          data.unid_gestora_usuario != null
+            ? String(data.unid_gestora_usuario)
+            : null;
         setUgUsuario(ug);
 
-        const det  = data.detalhado_por_unid_gestora || [];
+        const det = data.detalhado_por_unid_gestora || [];
         const detA = data.detalhado_aa_por_unid_gestora || [];
 
-        const { valor: valorUG,  peso: pesoUG }   = ug ? somarPDV(det, ug)  : { valor: 0, peso: 0 };
-        const { valor: valorAll, peso: pesoAll }  = somarPDV(det, null);
+        const { valor: valorUG, peso: pesoUG } = ug
+          ? somarPDV(det, ug)
+          : { valor: 0, peso: 0 };
+        const { valor: valorAll, peso: pesoAll } = somarPDV(det, null);
 
-        const { valor: valorAAUG }   = ug ? somarPDV(detA, ug)  : { valor: 0, peso: 0 };
-        const { valor: valorAAAll }  = somarPDV(detA, null);
+        const { valor: valorAAUG } = ug
+          ? somarPDV(detA, ug)
+          : { valor: 0, peso: 0 };
+        const { valor: valorAAAll } = somarPDV(detA, null);
 
         setPdvValorUG(valorUG);
         setPdvPesoUG(pesoUG);
@@ -498,8 +680,8 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
         setValorPDVBase(valorAll);
         setPesoPDVBase(pesoAll);
 
-        const valorSel  = somarArea ? valorAll : valorUG;
-        const pesoSel   = somarArea ? pesoAll  : pesoUG;
+        const valorSel = somarArea ? valorAll : valorUG;
+        const pesoSel = somarArea ? pesoAll : pesoUG;
         const valorAASel = somarArea ? valorAAAll : valorAAUG;
 
         atualizarValoresPDV(valorSel || 0, pesoSel || 0, valorAASel || 0);
@@ -509,15 +691,26 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
       setLoading(false);
     };
 
-    if (vendaRealizadaBase === null || !periodoSelecionado?.de || !periodoSelecionado?.ate) return;
+    if (
+      vendaRealizadaBase === null ||
+      !periodoSelecionado?.de ||
+      !periodoSelecionado?.ate
+    )
+      return;
 
     if (usarPDV) {
       if (
-        (somarArea && pdvValorArea != null && pdvPesoArea != null && pdvValorAAArea != null) ||
-        (!somarArea && pdvValorUG != null && pdvPesoUG != null && pdvValorAAUG != null)
+        (somarArea &&
+          pdvValorArea != null &&
+          pdvPesoArea != null &&
+          pdvValorAAArea != null) ||
+        (!somarArea &&
+          pdvValorUG != null &&
+          pdvPesoUG != null &&
+          pdvValorAAUG != null)
       ) {
-        const valorSel  = somarArea ? pdvValorArea : pdvValorUG;
-        const pesoSel   = somarArea ? pdvPesoArea  : pdvPesoUG;
+        const valorSel = somarArea ? pdvValorArea : pdvValorUG;
+        const pesoSel = somarArea ? pdvPesoArea : pdvPesoUG;
         const valorAASel = somarArea ? pdvValorAAArea : pdvValorAAUG;
         atualizarValoresPDV(valorSel || 0, pesoSel || 0, valorAASel || 0);
       } else {
@@ -525,7 +718,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
       }
     } else {
       atualizarValoresPDV(0, 0, 0);
-      // PDV desligado -> notifica nulo
       notifyPDVResumo(somarArea, false);
     }
   }, [
@@ -537,15 +729,24 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     pesoRealizadoBase,
     rawData,
     somarArea,
-    pdvValorUG, pdvPesoUG, pdvValorArea, pdvPesoArea, pdvValorAAUG, pdvValorAAArea
+    pdvValorUG,
+    pdvPesoUG,
+    pdvValorArea,
+    pdvPesoArea,
+    pdvValorAAUG,
+    pdvValorAAArea,
   ]);
 
   // ===== Evolução (considerando PDV quando ativo) =====
   useEffect(() => {
     if (vendaRealizadaBase == null || valorAnoAnteriorBase == null) return;
 
-    const atualTotal = Number(vendaRealizadaBase || 0) + (usarPDV ? Number(pdvSelecionadoAtual || 0) : 0);
-    const aaTotal    = Number(valorAnoAnteriorBase || 0) + (usarPDV ? Number(vendaPDVAnoAnterior || 0) : 0);
+    const atualTotal =
+      Number(vendaRealizadaBase || 0) +
+      (usarPDV ? Number(pdvSelecionadoAtual || 0) : 0);
+    const aaTotal =
+      Number(valorAnoAnteriorBase || 0) +
+      (usarPDV ? Number(vendaPDVAnoAnterior || 0) : 0);
 
     const perc = aaTotal > 0 ? ((atualTotal - aaTotal) / aaTotal) * 100 : 0;
     setEvolucao_venda_vendapdv(`${perc.toFixed(2)}%`);
@@ -554,13 +755,20 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     valorAnoAnteriorBase,
     usarPDV,
     pdvSelecionadoAtual,
-    vendaPDVAnoAnterior
+    vendaPDVAnoAnterior,
   ]);
 
   // ===== Exibição do valor "Ano Anterior" no card (somando PDV quando ativo) =====
   useEffect(() => {
-    const aaDisplay = Number(valorAnoAnteriorBase || 0) + (usarPDV ? Number(vendaPDVAnoAnterior || 0) : 0);
-    setEvolucaoValor(aaDisplay.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+    const aaDisplay =
+      Number(valorAnoAnteriorBase || 0) +
+      (usarPDV ? Number(vendaPDVAnoAnterior || 0) : 0);
+    setEvolucaoValor(
+      aaDisplay.toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      })
+    );
   }, [valorAnoAnteriorBase, vendaPDVAnoAnterior, usarPDV]);
 
   // ===== Projeção de CAPTADO (apenas quando PDV estiver DESLIGADO) =====
@@ -573,11 +781,13 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     const vendaBase = Number(vendaRealizadaBase || 0);
     const captadoNum = Number(captadoBase || 0);
     const objetivoFinNum = parseFloat(
-      (objetivoFinanceiro?.replace(/[^\d,-]/g, '').replace(',', '.') || '0')
+      (objetivoFinanceiro
+        ?.replace(/[^\d,-]/g, '')
+        .replace(',', '.') || '0')
     );
 
-    const totalProj = vendaBase + captadoNum; // venda + captado
-    const percProj  = objetivoFinNum ? (totalProj / objetivoFinNum) * 100 : 0;
+    const totalProj = vendaBase + captadoNum;
+    const percProj = objetivoFinNum ? (totalProj / objetivoFinNum) * 100 : 0;
 
     setCaptadoProjTotalFmt(
       totalProj.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -585,66 +795,72 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
     setCaptadoProjPercentFmt(`${percProj.toFixed(2)}%`);
   }, [usarPDV, vendaRealizadaBase, captadoBase, objetivoFinanceiro]);
 
-  const Gauge = ({ label, percent }) => {
-    const val =
-      typeof percent === 'number'
-        ? percent
-        : parseFloat(String(percent || '0').replace('%', '').replace(',', '.')) || 0;
-
-    return (
-      <div>
-        <h4>
-          {label} <small style={{ opacity: 0.7 }}>({val.toFixed(2)}%)</small>
-        </h4>
-        <ReactSpeedometer
-          maxValue={100}
-          value={val}
-          segments={5}
-          height={160}
-          currentValueText="${value}%"
-          valueFormat=".2f"
-          needleTransitionDuration={500}
-          needleTransition="easeElastic"
-        />
-      </div>
-    );
-  };
-
   // ====== alternância de escopo ======
   const handleToggleArea = () => {
     const novo = !somarArea;
     setSomarArea(novo);
 
     if (usarPDV) {
-      const valorSel  = novo ? (pdvValorArea ?? 0) : (pdvValorUG ?? 0);
-      const pesoSel   = novo ? (pdvPesoArea ?? 0)  : (pdvPesoUG ?? 0);
-      const valorAASel = novo ? (pdvValorAAArea ?? 0) : (pdvValorAAUG ?? 0);
+      const valorSel = novo ? pdvValorArea ?? 0 : pdvValorUG ?? 0;
+      const pesoSel = novo ? pdvPesoArea ?? 0 : pdvPesoUG ?? 0;
+      const valorAASel = novo ? pdvValorAAArea ?? 0 : pdvValorAAUG ?? 0;
 
       const novoValor = (vendaRealizadaBase ?? 0) + (valorSel ?? 0);
-      setVendaRealizada(novoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-      setVendaPDVFormatada((valorSel ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-      setVendaTotalFormatada(novoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+      setVendaRealizada(
+        novoValor.toLocaleString('pt-BR', {
+          style: 'currency',
+          currency: 'BRL',
+        })
+      );
+      setVendaPDVFormatada(
+        (valorSel ?? 0).toLocaleString('pt-BR', {
+          style: 'currency',
+          currency: 'BRL',
+        })
+      );
+      setVendaTotalFormatada(
+        novoValor.toLocaleString('pt-BR', {
+          style: 'currency',
+          currency: 'BRL',
+        })
+      );
 
-      const objetivoFin = parseFloat((objetivoFinanceiro?.replace(/[^\d,-]/g, '').replace(',', '.') || '0'));
+      const objetivoFin = parseFloat(
+        (objetivoFinanceiro
+          ?.replace(/[^\d,-]/g, '')
+          .replace(',', '.') || '0')
+      );
       const percentualCorrigido = objetivoFin ? (novoValor / objetivoFin) * 100 : 0;
       const variacaoCorrigida = novoValor - objetivoFin;
       setVendaPercentual(`${percentualCorrigido.toFixed(2)}%`);
       setVendaVariacao(
         variacaoCorrigida < 0
-          ? `R$ -${Math.abs(variacaoCorrigida).toFixed(2).replace('.', ',')}`
+          ? `R$ -${Math.abs(variacaoCorrigida)
+              .toFixed(2)
+              .replace('.', ',')}`
           : `R$ ${variacaoCorrigida.toFixed(2).replace('.', ',')}`
       );
 
       const novoPeso = (pesoRealizadoBase ?? 0) + (pesoSel ?? 0);
-      setPesoRealizado(novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-      setPesoPDVFormatado((pesoSel ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-      setPesoTotalFormatado(novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+      setPesoRealizado(
+        novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+      );
+      setPesoPDVFormatado(
+        (pesoSel ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+      );
+      setPesoTotalFormatado(
+        novoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+      );
 
-      const objetivoPeso = parseFloat((peso || '0').replace(/[^\d,-]/g, '').replace(',', '.'));
-      const percentualPeso = objetivoPeso ? (novoPeso / objetivoPeso) * 100 : 0;
+      const objetivoPeso = parseFloat(
+        (peso || '0').replace(/[^\d,-]/g, '').replace(',', '.')
+      );
+      const percentualPeso = objetivoPeso ? (novoValor / objetivoPeso) * 100 : 0;
       const variacaoPeso = novoPeso - objetivoPeso;
       setPesoPercentual(`${percentualPeso.toFixed(2)}%`);
-      setPesoVariacao(variacaoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+      setPesoVariacao(
+        variacaoPeso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+      );
 
       setPdvSelecionadoAtual(usarPDV ? Number(valorSel || 0) : 0);
       setVendaPDVAnoAnterior(valorAASel ?? 0);
@@ -653,7 +869,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
         applyEvolucaoFromRaw(rawData, novo, novoValor);
       }
 
-      // notifica pai após alternância
       notifyPDVResumo(novo, usarPDV);
     } else {
       if (novo) {
@@ -661,7 +876,6 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
       } else {
         applyIndividualFromRaw(rawData);
       }
-      // PDV desligado: também notifica nulo
       notifyPDVResumo(novo, false);
     }
   };
@@ -675,10 +889,16 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
       )}
 
       <div className="modo-toggle">
-        <button onClick={() => setModo('indicadores')} className={modo === 'indicadores' ? 'ativo-indicadores' : ''}>
+        <button
+          onClick={() => setModo('indicadores')}
+          className={modo === 'indicadores' ? 'ativo-indicadores' : ''}
+        >
           🎯 Indicadores
         </button>
-        <button onClick={() => setModo('graficos')} className={modo === 'graficos' ? 'ativo-graficos' : ''}>
+        <button
+          onClick={() => setModo('graficos')}
+          className={modo === 'graficos' ? 'ativo-graficos' : ''}
+        >
           📊 Graficos
         </button>
         <button
@@ -695,42 +915,46 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
         <div className="dashboard-graficos">
           <h2>Velocímetros de Meta</h2>
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-            <Gauge label="Venda"       percent={vendaPercentual} />
-            <Gauge label="Peso"        percent={pesoPercentual} />
+            <Gauge label="Venda" percent={vendaPercentual} />
+            <Gauge label="Peso" percent={pesoPercentual} />
             <Gauge label="Positivação" percent={positivadoPercentual} />
-            <Gauge label="Mix"         percent={mixPercentual} />
+            <Gauge label="Mix" percent={mixPercentual} />
           </div>
         </div>
       ) : (
         <div className="indicativos-container">
-          <div className="indicativo-stack">
-            {/* ✅ Card unificado: Objetivo + Evolução */}
-            <Card
-              title="Objetivo & Evolução"
-              value={objetivoFinanceiro ?? '...'}
-              subtitle="Objetivo Financeiro"
-               title2={
-                  <>
-                    Vendas Ano Anterior:
-                    <br />
-                    {evolucaoValor ?? '--'}
-                  </>
-                }
-              // mostramos o percentual de evolução no campo "percentage"
-              percentage={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'}
-              subtitle2="Evo % vs Ano Ant."
-              className="card-objetivo"
-            />
-            {/* 🧪 Card de evolução reservado (vazio para futuras implementações) */}
-
-          </div>
+          <Card
+            title="Objetivo & Evolução"
+            value={objetivoFinanceiro ?? '...'}
+            subtitle="Objetivo Financeiro"
+            title2={
+              <>
+                Vendas Ano Anterior:
+                <br />
+                {getValorAnoAnteriorTexto(
+                  rawData,
+                  somarArea,
+                  valorAnoAnteriorMesCheioBase,
+                  valorAnoAnteriorBase
+                )}
+              </>
+            }
+            percentage={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'}
+            subtitle2="Evo % vs Ano Ant."
+            className="card-objetivo"
+          />
 
           <Card
             title="Venda Realizada"
             value={
               usarPDV ? (
                 <>
-                  <div>{vendaRealizadaBase?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                  <div>
+                    {vendaRealizadaBase?.toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                    })}
+                  </div>
                   <div>PDV: {vendaPDVFormatada}</div>
                   <div>Total: {vendaTotalFormatada}</div>
                 </>
@@ -758,15 +982,15 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
           />
 
           <Card
-              title="Evolução (reservado)"
-              value=""
-              subtitle=""
-              value2=""
-              title2=""
-              percentage=""
-              subtitle2=""
-              variation=""
-              className="card-evolucao"
+            title="Evolução (reservado)"
+            value=""
+            subtitle=""
+            value2=""
+            title2=""
+            percentage=""
+            subtitle2=""
+            variation=""
+            className="card-evolucao"
           />
 
           <Card
@@ -774,13 +998,14 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
             value={captadoValor ?? '...'}
             subtitle="Valor Captado"
             title2={!usarPDV ? 'Se vender captado' : undefined}
-            value2={!usarPDV ? (captadoProjTotalFmt ?? '--') : undefined}
-            percentage={!usarPDV ? (captadoProjPercentFmt ?? '0%') : (percCaptado ?? '0%')}
+            value2={!usarPDV ? captadoProjTotalFmt ?? '--' : undefined}
+            percentage={
+              !usarPDV ? captadoProjPercentFmt ?? '0%' : percCaptado ?? '0%'
+            }
             subtitle2={!usarPDV ? ' Cobertura potencial' : ' Cobertura'}
             variation="0"
             className="card-captar"
           />
-          
 
           <Card
             title="Peso"
@@ -790,7 +1015,11 @@ const IndicadoresCards = ({ periodoSelecionado, usarPDV, onObjetivosRecebidos, o
             value2={
               usarPDV ? (
                 <>
-                  <div>{pesoRealizadoBase?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                  <div>
+                    {pesoRealizadoBase?.toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                    })}
+                  </div>
                   <div>PDV: {pesoPDVFormatado}</div>
                   <div>Total: {pesoTotalFormatado}</div>
                 </>
