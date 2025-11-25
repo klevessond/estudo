@@ -35,9 +35,6 @@ logger = logging.getLogger(__name__)
 
 
 
-
-
-
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
 from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor,buscar_resumo_segmento_area_venda
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora
@@ -154,6 +151,21 @@ class IndicadoresView(APIView):
 
         # 1) Rotas / vendedores conforme papel
         rotas_info = buscar_rotas_usuario(ctx)  # -> {'rotas': None|[...], 'detalhado': [...], 'vendedores': [...]}
+        logger.info(
+            "[IndicadoresView] escopo rotas: eh_supervisor=%s eh_vendedor=%s eh_admin=%s "
+            "rotas=%s vendedores=%s e_gerente=%s qtd_detalhado=%s amostra_detalhado=%s",
+            getattr(ctx, "is_supervisor", False),
+            getattr(ctx, "is_vendedor", False),
+            getattr(ctx, "is_admin", False),
+            rotas_info.get("rotas"),
+            rotas_info.get("vendedores"),
+            rotas_info.get("e_gerente"),
+            len(rotas_info.get("detalhado") or []),
+            (rotas_info.get("detalhado") or [])[:3],  # só uma amostra pra não floodar o log
+            
+        )
+
+        
         rotas_codigos = rotas_info.get("rotas") if rotas_info else None
 
         # 🔧 Se for VENDEDOR, usar a lista da MESMA SUPERVISÃO
@@ -163,11 +175,25 @@ class IndicadoresView(APIView):
             except Exception:
                 vendedores = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else None
         else:
-            # supervisor/admin mantém a lista vinda de rotas (ou None = sem filtro)
+            # supervisor/admin: usa o escopo calculado no serviço
             vendedores = rotas_info.get("vendedores") if rotas_info else None
 
-        logger.debug(f"[IndicadoresView] vendedores considerados para escopo: {vendedores}")
+        # 🔧 Se for SUPERVISOR-GERENTE, montamos também grupos por área de supervisão
+        grupos_supervisao = None
+        if getattr(ctx, "is_supervisor", False) and rotas_info.get("e_gerente"):
+            grupos_supervisao = rotas_info.get("areas_supervisao")
+            logger.info(
+                "[IndicadoresView] supervisor-gerente detectado: cod_func=%s qtd_areas=%s grupos=%s",
+                ctx.cod_funcionario,
+                len(grupos_supervisao or []),
+                grupos_supervisao,
+            )
 
+        logger.debug(
+            "[IndicadoresView] vendedores considerados para escopo: %s (e_gerente=%s)",
+            vendedores,
+            rotas_info.get("e_gerente"),
+        )
         #  OBJETIVOS — tudo do SQLite agora
         objetivo_mensal_data = get_objetivo_mensal_serializado(
             request.user, data_inicio, cod_vendedores=vendedores
@@ -547,8 +573,13 @@ class IndicadoresView(APIView):
                 "total_valor": ruptura_total,
                 "percentual_captado": percentual_captado
             },
-            # ===== NOVO: KPIs do vendedor logado =====
+            #  KPIs do vendedor logado =====
             "minha_visao": minha_visao,
+            #: escopo por área de supervisão (para gerente) =====
+            "escopo_rotas": {
+                "e_gerente": rotas_info.get("e_gerente", False),
+                "areas_supervisao": grupos_supervisao,  # pode ser None se não for gerente
+            },
         })
 
 
