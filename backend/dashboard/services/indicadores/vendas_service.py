@@ -659,7 +659,7 @@ def buscar_pre_venda(data_inicio: str | date, data_fim: str | date, cod_vendedor
     return {"pre_venda_valor": pre_venda_valor, "detalhado": dados}
 
 
-def buscar_vendas_por_vendedor(data_inicio: str | date, data_fim: str | date, rotas: Optional[Iterable[int]] = None) -> Dict[str, Any]:
+def buscar_vendas_por_vendedor(data_inicio: str | date, data_fim: str | date, rotas: Optional[Iterable[int]] = None,cod_vendedores: Optional[Iterable[int]] = None,) -> Dict[str, Any]:
     p1, p2 = _dt_bounds(data_inicio, data_fim)
     sql = f"""
         DECLARE @P1 datetime2 = '{p1:%Y-%m-%d %H:%M:%S}';

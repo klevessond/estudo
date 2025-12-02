@@ -188,6 +188,7 @@ class IndicadoresView(APIView):
                 len(grupos_supervisao or []),
                 grupos_supervisao,
             )
+            
 
         logger.debug(
             "[IndicadoresView] vendedores considerados para escopo: %s (e_gerente=%s)",
@@ -239,12 +240,25 @@ class IndicadoresView(APIView):
         # =========================
         # VENDAS REALIZADAS (ÁREA)
         # =========================
-        vendido = buscar_vendas_por_vendedor(data_inicio, data_fim)
+        eh_gerente = getattr(ctx, "is_supervisor", False) and rotas_info.get("e_gerente")
+
+        # Se for GERENTE, já manda os vendedores para o SQL
+        if eh_gerente and vendedores_set:
+            vendido = buscar_vendas_por_vendedor(
+                data_inicio,
+                data_fim,
+                cod_vendedores=list(vendedores_set),
+            )
+        else:
+            # supervisor “normal”, vendedor, admin etc → mantém o comportamento atual
+            vendido = buscar_vendas_por_vendedor(data_inicio, data_fim)
+
         lista = vendido.get("vendas_por_vendedor", []) or []
 
-        # filtra por vendedores quando houver lista (admin sem filtro mantém todos)
-        if vendedores_set:
+        # Só mantém o filtro em memória para quem NÃO é gerente
+        if not eh_gerente and vendedores_set:
             lista = [it for it in lista if _to_int(it.get("codcampo")) in vendedores_set]
+
 
         # somatórios
         venda_realizada = sum(_to_float(it.get("ValorLiquido")) for it in lista)
