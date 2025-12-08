@@ -3,10 +3,209 @@ import './IndicativosDeVenda.css';
 import ReactSpeedometer from 'react-d3-speedometer';
 import api from '../../api';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
+import Select from 'react-select';
+
 
 const dlog = (...args) => console.log('[IndicativosDeVenda]', ...args);
 
 /* ========= HELPERS GERAIS (FORA DO COMPONENTE) ========= */
+
+
+const toNum = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const safeDiv = (n, d) => (d ? n / d : 0);
+
+function filtrarPorSupervisao(data, selecionadas) {
+  if (!data) return data;
+
+  const escopo = data.escopo_rotas || {};
+  if (!escopo.e_gerente) return data;
+
+  const selectedIds = (selecionadas || []).map((s) => s.value);
+  if (!selectedIds.length) {
+    return data;
+  }
+
+  const areas = escopo.areas_supervisao || [];
+  const vendedoresSet = new Set();
+
+  areas.forEach((area) => {
+    if (selectedIds.includes(area.cod_area_supervisao)) {
+      (area.vendedores || []).forEach((v) => vendedoresSet.add(String(v)));
+    }
+  });
+
+  const listaOriginal = data?.vendas?.vendas_por_vendedor || [];
+  const listaFiltrada = listaOriginal.filter((row) =>
+    vendedoresSet.has(String(row.codcampo))
+  );
+
+  // se não achou nenhum vendedor, devolve tudo zerado pra não quebrar
+  if (!listaFiltrada.length) {
+    return {
+      ...data,
+      vendas: {
+        ...(data.vendas || {}),
+        vendas_por_vendedor: [],
+        agregados_area: {
+          PreVenda_Valor: 0,
+          Ruptura_TotalValor: 0,
+          QtdClientes: 0,
+        },
+        ano_anterior_agregado: {
+          QtdClientes: 0,
+          ValorLiquido: 0,
+          PesoTotal: 0,
+          Mix: 0,
+        },
+        ano_anterior_agregado_mes: {
+          QtdClientes: 0,
+          ValorLiquido: 0,
+          PesoTotal: 0,
+          Mix: 0,
+        },
+      },
+      realizado_financeiro: {
+        ...(data.realizado_financeiro || {}),
+        valor: 0,
+        percentual_cobertura: 0,
+        variacao: 0,
+      },
+      realizado_peso: {
+        ...(data.realizado_peso || {}),
+        realizado: 0,
+        percentual: 0,
+        variacao: 0,
+      },
+      realizado_mix: {
+        ...(data.realizado_mix || {}),
+        realizado: 0,
+        percentual: 0,
+        variacao: 0,
+      },
+      positivacao: {
+        ...(data.positivacao || {}),
+        realizado: 0,
+        percentual: 0,
+        variacao: 0,
+      },
+      evolucao: {
+        ...(data.evolucao || {}),
+        valor_ano_anterior: 0,
+        percentual: 0,
+      },
+      'pre-venda': {
+        ...(data['pre-venda'] || {}),
+        valor_prevenda: 0,
+        valor_alocado: 0,
+        percentual_prevenda_alocado: 0,
+        variacao_prevenda: 0,
+      },
+      ruptura: {
+        ...(data.ruptura || {}),
+        total_valor: 0,
+        percentual_captado: 0,
+      },
+    };
+  }
+
+  const sumKey = (key) =>
+    listaFiltrada.reduce((acc, it) => acc + toNum(it[key]), 0);
+
+  const vendaRealizada = sumKey('ValorLiquido');
+  const pesoRealizado = sumKey('PesoTotal');
+  const mixRealizado = sumKey('Mix');
+  const preVendaAgregado = sumKey('PreVenda_Valor');
+  const rupturaAgregado = sumKey('Ruptura_TotalValor');
+  const posReal = sumKey('QtdClientes');
+
+  const anoAnteriorAgregado = {
+    QtdClientes: sumKey('Ano_anterior_QtdClientes'),
+    ValorLiquido: sumKey('Ano_anterior_ValorLiquido'),
+    PesoTotal: sumKey('Ano_anterior_PesoTotal'),
+    Mix: sumKey('Ano_anterior_Mix'),
+  };
+
+  const anoAnteriorAgregadoMes = {
+    QtdClientes: sumKey('Ano_anterior_mes_QtdClientes'),
+    ValorLiquido: sumKey('Ano_anterior_mes_ValorLiquido'),
+    PesoTotal: sumKey('Ano_anterior_mes_PesoTotal'),
+    Mix: sumKey('Ano_anterior_mes_Mix'),
+  };
+
+  const objetivo = data.objetivo || {};
+  const objetivoFinanceiro = toNum(objetivo.financeiro);
+  const objetivoPeso = toNum(objetivo.objetivo_peso);
+  const objetivoMix = toNum(objetivo.objetivo_mix);
+  const objetivoPositivacao = toNum(objetivo.objetivo_positivacao);
+
+  const vendaAnoAnterior = anoAnteriorAgregado.ValorLiquido || 0;
+  const evolucaoPercentual =
+    safeDiv(vendaRealizada - vendaAnoAnterior, vendaAnoAnterior) * 100;
+
+  const valorAlocado = vendaRealizada + preVendaAgregado;
+
+  return {
+    ...data,
+    vendas: {
+      ...(data.vendas || {}),
+      vendas_por_vendedor: listaFiltrada,
+      agregados_area: {
+        PreVenda_Valor: preVendaAgregado,
+        Ruptura_TotalValor: rupturaAgregado,
+        QtdClientes: posReal,
+      },
+      ano_anterior_agregado: anoAnteriorAgregado,
+      ano_anterior_agregado_mes: anoAnteriorAgregadoMes,
+    },
+    realizado_financeiro: {
+      ...(data.realizado_financeiro || {}),
+      valor: vendaRealizada,
+      percentual_cobertura: safeDiv(vendaRealizada, objetivoFinanceiro) * 100,
+      variacao: vendaRealizada - objetivoFinanceiro,
+    },
+    realizado_peso: {
+      ...(data.realizado_peso || {}),
+      realizado: pesoRealizado,
+      percentual: safeDiv(pesoRealizado, objetivoPeso) * 100,
+      variacao: pesoRealizado - objetivoPeso,
+    },
+    realizado_mix: {
+      ...(data.realizado_mix || {}),
+      realizado: mixRealizado,
+      percentual: safeDiv(mixRealizado, objetivoMix) * 100,
+      variacao: mixRealizado - objetivoMix,
+    },
+    positivacao: {
+      ...(data.positivacao || {}),
+      realizado: posReal,
+      percentual: safeDiv(posReal, objetivoPositivacao) * 100,
+      variacao: posReal - objetivoPositivacao,
+    },
+    evolucao: {
+      ...(data.evolucao || {}),
+      valor_ano_anterior: vendaAnoAnterior,
+      percentual: evolucaoPercentual,
+    },
+    'pre-venda': {
+      ...(data['pre-venda'] || {}),
+      valor_prevenda: preVendaAgregado,
+      valor_alocado: valorAlocado,
+      percentual_prevenda_alocado:
+        safeDiv(valorAlocado, objetivoFinanceiro) * 100,
+      variacao_prevenda: valorAlocado - objetivoFinanceiro,
+    },
+    ruptura: {
+      ...(data.ruptura || {}),
+      total_valor: rupturaAgregado,
+      percentual_captado: safeDiv(rupturaAgregado, vendaRealizada) * 100,
+    },
+  };
+}
+
 
 const fmtMoeda = (n) =>
   Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -189,6 +388,7 @@ const IndicadoresCards = ({
 
   const [rawData, setRawData] = useState(null);
   const [somarArea, setSomarArea] = useState(false); // false: individual, true: soma da área
+  const [dataEscopoAtual, setDataEscopoAtual] = useState(null);
 
   const [ugUsuario, setUgUsuario] = useState(null);
   const [pdvValorUG, setPdvValorUG] = useState(null);
@@ -199,6 +399,11 @@ const IndicadoresCards = ({
   const [pdvValorAAArea, setPdvValorAAArea] = useState(null);
 
   const [pdvSelecionadoAtual, setPdvSelecionadoAtual] = useState(0);
+  const [isGerente, setIsGerente] = useState(false);
+  const [supervisaoOptions, setSupervisaoOptions] = useState([]);
+  const [supervisaoSelecionada, setSupervisaoSelecionada] = useState([]);
+  const [mapSupVendedores, setMapSupVendedores] = useState({});
+
 
   // === evolução base (sem PDV)
   const applyEvolucaoFromRaw = (data, isArea, atualOverride) => {
@@ -244,7 +449,8 @@ const IndicadoresCards = ({
   };
 
   const applyIndividualFromRaw = (data) => {
-    if (!data) return;
+  if (!data) return;
+  setDataEscopoAtual(data);
 
     const m = data.minha_visao;
     const linha = getMinhaLinha(data);
@@ -360,6 +566,7 @@ const IndicadoresCards = ({
 
   const applyAreaFromRaw = (data) => {
     if (!data) return;
+    setDataEscopoAtual(data);
 
     const realizadoFinanceiro = data.realizado_financeiro || {};
     const valorVendaGrupo = Number(realizadoFinanceiro.valor || 0);
@@ -491,30 +698,70 @@ const IndicadoresCards = ({
 
         if (onObjetivosRecebidos) onObjetivosRecebidos(objetivosUnificados);
 
-        setRawData(data);
-        setSomarArea(false);
+            setRawData(data);
+            setDataEscopoAtual(data);
 
-        const mesCheioNum = Number(
-          data?.vendas?.ano_anterior_agregado_mes?.ValorLiquido || 0
-        );
-        setValorAnoAnteriorMesCheioBase(mesCheioNum || 0);
-        setValorAnoAnteriorMesCheio(
-          mesCheioNum
-            ? mesCheioNum.toLocaleString('pt-BR', {
-                style: 'currency',
-                currency: 'BRL',
-              })
-            : null
-        );
+            const escopo = data?.escopo_rotas || {};
+            const gerente = Boolean(escopo.e_gerente);
+            setIsGerente(gerente);
 
-        applyIndividualFromRaw(data);
-      } catch (error) {
-        console.error('Erro ao buscar os indicadores:', error);
-        setPeso('Erro');
-      } finally {
-        setLoading(false);
-      }
-    };
+            if (Array.isArray(escopo.areas_supervisao)) {
+              const map = {};
+              const opts = escopo.areas_supervisao.map((item) => {
+                const value = item.cod_area_supervisao; // vindo do backend
+
+                const vendedoresDaSup = Array.isArray(item.vendedores)
+                  ? item.vendedores.map((v) => Number(v))
+                  : [];
+
+                map[value] = vendedoresDaSup;
+
+                return {
+                  value,
+                  label: `${item.area_supervisao} - ${item.nome_supervisor}`,
+                };
+              });
+
+              setSupervisaoOptions(opts);
+              setSupervisaoSelecionada([]); // começa SEM nada selecionado
+              setMapSupVendedores(map);
+            } else {
+              setSupervisaoOptions([]);
+              setMapSupVendedores({});
+            }
+
+            const mesCheioNum = Number(
+              data?.vendas?.ano_anterior_agregado_mes?.ValorLiquido || 0
+            );
+            setValorAnoAnteriorMesCheioBase(mesCheioNum || 0);
+            setValorAnoAnteriorMesCheio(
+              mesCheioNum
+                ? mesCheioNum.toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                  })
+                : null
+            );
+
+            // visão padrão conforme o tipo de usuário
+            if (gerente) {
+              // gerente: visão área (todos os vendedores)
+              setSomarArea(true);
+              applyAreaFromRaw(data);
+            } else {
+              // vendedor / supervisor: visão individual
+              setSomarArea(false);
+              applyIndividualFromRaw(data);
+            }
+            } catch (error) {
+              console.error('Erro ao buscar os indicadores:', error);
+              setPeso('Erro');
+            } finally {
+              setLoading(false);
+            }
+            };
+
+
 
     fetchIndicadores();
   }, [periodoSelecionado, onObjetivosRecebidos]);
@@ -632,11 +879,11 @@ const IndicadoresCards = ({
 
       setPdvSelecionadoAtual(usarPDV ? Number(valorPDV || 0) : 0);
 
-      if (rawData) {
+      if (dataEscopoAtual) {
         if (valorAASel != null) {
           setVendaPDVAnoAnterior(valorAASel);
         }
-        applyEvolucaoFromRaw(rawData, somarArea, novoValor);
+        applyEvolucaoFromRaw(dataEscopoAtual, somarArea, novoValor);
       }
 
       notifyPDVResumo(somarArea, usarPDV);
@@ -865,9 +1112,9 @@ const IndicadoresCards = ({
       setPdvSelecionadoAtual(usarPDV ? Number(valorSel || 0) : 0);
       setVendaPDVAnoAnterior(valorAASel ?? 0);
 
-      if (rawData) {
-        applyEvolucaoFromRaw(rawData, novo, novoValor);
-      }
+    if (dataEscopoAtual) {
+      applyEvolucaoFromRaw(dataEscopoAtual, novo, novoValor);
+    }
 
       notifyPDVResumo(novo, usarPDV);
     } else {
@@ -877,8 +1124,68 @@ const IndicadoresCards = ({
         applyIndividualFromRaw(rawData);
       }
       notifyPDVResumo(novo, false);
-    }
+    }  
+
   };
+  const handleChangeSupervisao = (event) => {
+    const selectedValues = Array.from(event.target.selectedOptions).map((opt) =>
+      String(opt.value)
+    );
+
+    const selecionadas = supervisaoOptions.filter((opt) =>
+      selectedValues.includes(String(opt.value))
+    );
+
+    setSupervisaoSelecionada(selecionadas);
+  };
+
+const applySupervisaoFromRaw = (data, selecionadas) => {
+  if (!data) return;
+
+  // nada selecionado -> volta para o escopo completo (todas as áreas)
+  if (!selecionadas || selecionadas.length === 0) {
+    setSomarArea(true); // gerente sempre em visão de área
+    setDataEscopoAtual(data);
+
+    const mesCheioNum = Number(
+      data?.vendas?.ano_anterior_agregado_mes?.ValorLiquido || 0
+    );
+    setValorAnoAnteriorMesCheioBase(mesCheioNum || 0);
+    setValorAnoAnteriorMesCheio(
+      mesCheioNum
+        ? mesCheioNum.toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+          })
+        : null
+    );
+
+    applyAreaFromRaw(data);
+    return;
+  }
+
+  // aplica filtro por supervisão
+  const filtrado = filtrarPorSupervisao(data, selecionadas);
+
+  setSomarArea(true);          // visão sempre "somar área" pro gerente
+  setDataEscopoAtual(filtrado);
+
+  const mesCheioNum = Number(
+    filtrado?.vendas?.ano_anterior_agregado_mes?.ValorLiquido || 0
+  );
+  setValorAnoAnteriorMesCheioBase(mesCheioNum || 0);
+  setValorAnoAnteriorMesCheio(
+    mesCheioNum
+      ? mesCheioNum.toLocaleString('pt-BR', {
+          style: 'currency',
+          currency: 'BRL',
+        })
+      : null
+  );
+
+  // recalcula todos os cards em cima do dado filtrado
+  applyAreaFromRaw(filtrado);
+};
 
   return (
     <div style={{ position: 'relative' }}>
@@ -901,14 +1208,32 @@ const IndicadoresCards = ({
         >
           📊 Graficos
         </button>
-        <button
-          onClick={handleToggleArea}
-          className={`btn-scope ${somarArea ? 'ativo-area' : ''}`}
-          style={{ marginLeft: 'auto' }}
-          title="Alternar entre valores individuais e soma da área"
-        >
-          {somarArea ? '👥 Soma da Minha Área (ON)' : '👤 Individual (ON)'}
-        </button>
+       {isGerente ? (
+          <div style={{ marginLeft: "auto", minWidth: "280px" }}>
+            <Select
+              isMulti
+              options={supervisaoOptions}
+              value={supervisaoSelecionada}
+              onChange={(opts) => {
+                const selecionadas = opts || [];
+                setSupervisaoSelecionada(selecionadas);
+                applySupervisaoFromRaw(rawData, selecionadas);
+              }}
+              placeholder="Selecione supervisões..."
+              className="multi-select-supervisao"
+              classNamePrefix="rs"
+            />
+          </div>
+        ) : (
+          <button
+            onClick={handleToggleArea}
+            className={`btn-scope ${somarArea ? "ativo-area" : ""}`}
+            style={{ marginLeft: "auto" }}
+          >
+            {somarArea ? "👥 Soma da Minha Área (ON)" : "👤 Individual (ON)"}
+          </button>
+        )}
+
       </div>
 
       {modo === 'graficos' ? (
@@ -932,12 +1257,12 @@ const IndicadoresCards = ({
                 Vendas Ano Anterior:
                 <br />
                 {getValorAnoAnteriorTexto(
-                  rawData,
-                  somarArea,
-                  valorAnoAnteriorMesCheioBase,
-                  valorAnoAnteriorBase
-                )}
-              </>
+                    dataEscopoAtual,
+                    somarArea,
+                    valorAnoAnteriorMesCheioBase,
+                    valorAnoAnteriorBase
+                  )}
+                                </>
             }
             percentage={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'}
             subtitle2="Evo % vs Ano Ant."
