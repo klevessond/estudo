@@ -342,7 +342,7 @@ class IndicadoresView(APIView):
             "Mix": sum(_num(x.get("Ano_anterior_Mix")) for x in lista),
         }
         
-        print(f"DEBUG VENDA DO ANO ANTERIOR ATE HOJE {ano_anterior_agregado}")
+        #print(f"DEBUG VENDA DO ANO ANTERIOR ATE HOJE {ano_anterior_agregado}")
 
         # === NOVO: VENDAS DO MÊS COMPLETO DO ANO ANTERIOR ===
         aa_mes_ano = de_dt.year - 1
@@ -392,7 +392,7 @@ class IndicadoresView(APIView):
             "PesoTotal":     sum(_num(x.get("Ano_anterior_mes_PesoTotal"))     for x in lista),
             "Mix":           sum(_num(x.get("Ano_anterior_mes_Mix"))           for x in lista),
         }
-        print(f"DEBUG VENDA DO ANO ANTERIOR MES COMPLETO {ano_anterior_agregado_mes}")
+        #print(f"DEBUG VENDA DO ANO ANTERIOR MES COMPLETO {ano_anterior_agregado_mes}")
 
 
 
@@ -457,7 +457,7 @@ class IndicadoresView(APIView):
         rup_by_cod = {}
         try:
             for itr in (ruptura_dados.get("resumo") or []):
-                print(f"[DEBUG] dado do for {itr}")
+                #print(f"[DEBUG] dado do for {itr}")
                 cod_v = _to_int(itr.get("CodVendedor"))
                 if cod_v is None:
                     continue
@@ -623,11 +623,11 @@ class ObjetivoMensalView(APIView):
         data['usuario'] = request.user.id
         serializer = ObjetivoMensalSerializer(data=data, context={'request': request})
         if serializer.is_valid():
-            print(
+            """print(
                 f"[DEBUG][OBJETIVO_MENSAL][IN] usuario={request.user.id}, mes={data.get('mes_referencia')}, "
                 f"financeiro={data.get('objetivo_financeiro')}, mix={data.get('objetivo_mix')}, "
                 f"peso={data.get('objetivo_peso')}, pos={data.get('objetivo_positivacao')}"
-            )
+            )"""
 
             objetivo, created = ObjetivoMensal.objects.update_or_create(
                 usuario=request.user,
@@ -640,10 +640,9 @@ class ObjetivoMensalView(APIView):
                 }
             )
 
-            print(
-                f"[DEBUG][OBJETIVO_MENSAL][OUT] created={created}, "
-                f"financeiro={objetivo.objetivo_financeiro}, mix={objetivo.objetivo_mix}, "
-                f"peso={objetivo.objetivo_peso}, pos={objetivo.objetivo_positivacao}"
+            print(f"[DEBUG][OBJETIVO_MENSAL][OUT] created={created}, "
+                     f"financeiro={objetivo.objetivo_financeiro}, mix={objetivo.objetivo_mix}, "
+                     f"peso={objetivo.objetivo_peso}, pos={objetivo.objetivo_positivacao}"
             )
             return Response(ObjetivoMensalSerializer(objetivo).data)
         return Response(serializer.errors, status=400)
@@ -870,36 +869,98 @@ class VendasPorVendedorView(APIView):
         data_inicio = request.GET.get("de")
         data_fim = request.GET.get("ate")
 
-        if not data_inicio or not data_fim:
-            return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
+        print("\n============================")
+        print("🔥 [VENDAS POR VENDEDOR] INÍCIO")
+        print(f"Período solicitado: de={data_inicio} até={data_fim}")
+        print("============================")
 
-        # === NOVO: capturar papel/rotas e lista de vendedores exatamente como na IndicadoresView ===
+        if not data_inicio or not data_fim:
+            return Response(
+                {"error": "Parâmetros 'de' e 'ate' são obrigatórios."},
+                status=400
+            )
+
+        # === CONTEXTO DO USUÁRIO ===
         ctx = get_role_context(request.user)
+
+        # usa getattr para não quebrar se o atributo não existir
+        is_vendedor = getattr(ctx, "is_vendedor", False)
+        is_supervisor = getattr(ctx, "is_supervisor", False)
+        is_gerente = getattr(ctx, "is_gerente", False)  # 👈 NOVO
+
+        print(f"[DEBUG] Usuário: {request.user}")
+        print(
+            f"[DEBUG] Papel detectado -> "
+            f"vendedor={is_vendedor}, supervisor={is_supervisor}, gerente={is_gerente}"
+        )
+        print(f"[DEBUG] Cod funcionário: {getattr(ctx, 'cod_funcionario', None)}")
+        print("----------------------------")
+
         rotas_info = buscar_rotas_usuario(ctx)
-        vendedores = rotas_info.get("vendedores") if rotas_info else None  # mesmo ponto da IndicadoresView
-        if ctx.is_vendedor:
-             vendedores = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario)
-             print(f"[DEBUG] outros vendedores da mesma supervisao {vendedores}")
+        vendedores = None
+
+        # === REGRAS DE EXIBIÇÃO (PRIORIDADE: GERENTE > SUPERVISOR > VENDEDOR) ===
+        if is_gerente:
+            # gerente: não aplica filtro → vê todos
+            vendedores = None
+            print("[DEBUG] Usuário é GERENTE → NÃO será aplicado filtro de vendedores (acesso a todos).")
+
+        elif is_supervisor:
+            # supervisor: usa o escopo já calculado em buscar_rotas_usuario
+            vendedores = rotas_info.get("vendedores") if rotas_info else None
+            print(f"[DEBUG] Usuário é SUPERVISOR → vendedores do escopo: {vendedores}")
+
+        elif is_vendedor:
+            # vendedor: lista apenas ele + colegas da mesma supervisão
+            vendedores = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario)
+            print(f"[DEBUG] Usuário é VENDEDOR → vendedores da mesma supervisão: {vendedores}")
+
+        else:
+            # outros perfis “acima” ou diferentes → também não filtra
+            vendedores = None
+            print("[DEBUG] Usuário NÃO é vendedor/supervisor/gerente → sem filtro de vendedores (acesso a todos).")
 
         # helper robusto para int
         def to_int(v):
             try:
                 return int(str(v).strip())
-            except (TypeError, ValueError):
+            except Exception:
                 return None
 
-        vendedores_set = set(to_int(v) for v in (vendedores or []) if to_int(v) is not None)
+        vendedores_set = set()
+        if vendedores:
+            vendedores_set = {
+                to_int(v)
+                for v in vendedores
+                if to_int(v) is not None
+            }
 
-        # Busca original
+        print(f"[DEBUG] vendedores_set gerado para filtro: {vendedores_set}")
+        print("----------------------------")
+
+        # === BUSCA PRINCIPAL NO BANCO ===
         resultado = buscar_vendas_por_vendedor(data_inicio, data_fim)
 
-        # Se tivermos lista de vendedores, filtra "vendas_por_vendedor" por codcampo ∈ vendedores_set
         lista = resultado.get("vendas_por_vendedor", [])
-        if vendedores_set:
-            lista = [item for item in lista if to_int(item.get("codcampo")) in vendedores_set]
-            resultado["vendas_por_vendedor"] = lista
+        print(f"[DEBUG] Total bruto retornado por buscar_vendas_por_vendedor: {len(lista)} vendedores")
 
-        # Pré-venda: padroniza as chaves para int e aplica nos mesmos codigos
+        # === APLICA FILTRO (somente se houver lista de vendedores) ===
+        if vendedores_set:
+            lista_filtrada = [
+                item for item in lista
+                if to_int(item.get("codcampo")) in vendedores_set
+            ]
+            print(
+                f"[DEBUG] Filtro APLICADO → de {len(lista)} foram mantidos "
+                f"{len(lista_filtrada)} vendedores."
+            )
+            resultado["vendas_por_vendedor"] = lista_filtrada
+        else:
+            print("[DEBUG] Nenhum filtro aplicado → mantendo TODOS os vendedores retornados.")
+
+        print("----------------------------")
+        print("[DEBUG] Iniciando cálculo de pré-venda…")
+
         chave = f"prevenda_{data_inicio}_{data_fim}"
         prevenda = get_cached_data(chave, lambda: buscar_pre_venda(data_inicio, data_fim))
 
@@ -911,12 +972,24 @@ class VendasPorVendedorView(APIView):
             valor = float(item.get("Valor", 0) or 0)
             prevenda_por_vendedor[cod_vend] += valor
 
-        # Inserir valor alocado em cada vendedor (agora tudo em int)
+        print(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
+
+        # Enriquecendo vendedores
         for vendedor in resultado.get("vendas_por_vendedor", []):
             codcampo_int = to_int(vendedor.get("codcampo"))
             valor_prevenda = prevenda_por_vendedor.get(codcampo_int, 0.0)
+
+            valor_realizado = float(vendedor.get("ValorLiquido", 0) or 0)
             vendedor["pre-venda"] = round(valor_prevenda, 2)
-            vendedor["alocado"] = round(float(vendedor.get("ValorLiquido", 0) or 0) + valor_prevenda, 2)
+            vendedor["alocado"] = round(valor_realizado + valor_prevenda, 2)
+
+            print(
+                f"[DEBUG] Vendedor {codcampo_int}: "
+                f"ValorLiquido={valor_realizado}, prevenda={valor_prevenda}, alocado={vendedor['alocado']}"
+            )
+
+        print("🔥 [VENDAS POR VENDEDOR] FIM")
+        print("============================\n")
 
         return Response({"resultado": resultado})
 
@@ -988,10 +1061,10 @@ class ObjetivoMensalVendedorView(APIView):
                 total_empresa_peso += valor_peso
                 total_empresa_pos += valor_pos
 
-                print(
+                """print(
                     f"[DEBUG][OBJ-VEND ITEM] vendedor_id={vendedor_id}, nome={nome}, "
                     f"financeiro={valor_fin}, mix={valor_mix}, peso={valor_peso}, pos={valor_pos}"
-                )
+                )"""
 
                 ObjetivoMensalVendedor.objects.update_or_create(
                     mes_referencia=mes_referencia,
@@ -1017,10 +1090,10 @@ class ObjetivoMensalVendedorView(APIView):
                 }
             )
 
-        print(
+        """print(
             f"[DEBUG][OBJETIVO_MENSAL][TOTAL] usuario={request.user.id}, mes={mes_referencia}, "
             f"fin={total_empresa_fin}, mix={total_empresa_mix}, peso={total_empresa_peso}, pos={total_empresa_pos}"
-        )
+        )"""
         return Response({"message": "Objetivos cadastrados com sucesso."})
     
 
@@ -1091,7 +1164,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        print("dados de cadastro",validated_data)
+        """print("dados de cadastro",validated_data)"""
         phone = validated_data.pop('phone')
         cod_funcionario = validated_data.pop('cod_funcionario')
         cod_unid_gestora = validated_data.pop('cod_unid_gestora')
