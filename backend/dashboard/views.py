@@ -207,6 +207,66 @@ class IndicadoresView(APIView):
             "objetivo_positivacao": round(float(objetivo_mensal_data.get("objetivo_positivacao") or 0), 2),
         }
         objetivos_vendedores = get_objetivos_vendedores_por_mes(data_inicio)
+        # == agrega objetivos por área de supervisão (para gerente) ===
+        def _agregar_objetivos_por_area(areas_supervisao, objetivos_vendedores):
+            """
+            Para cada área de supervisão, soma os objetivos de todos os vendedores
+            daquela área e adiciona no próprio dict:
+              - objetivo_financeiro_area
+              - objetivo_peso_area
+              - objetivo_mix_area
+              - objetivo_positivacao_area
+            """
+            if not areas_supervisao or not objetivos_vendedores:
+                return areas_supervisao
+
+            # Mapa vendedor_id -> objetivos
+            obj_by_vendedor = {}
+            for o in objetivos_vendedores or []:
+                try:
+                    vend_id = int(str(o.get("vendedor_id")).strip())
+                except (TypeError, ValueError):
+                    continue
+
+                obj_by_vendedor[vend_id] = {
+                    "financeiro": float(o.get("objetivo_financeiro") or 0),
+                    "peso":       float(o.get("objetivo_peso") or 0),
+                    "mix":        float(o.get("objetivo_mix") or 0),
+                    "pos":        float(o.get("objetivo_positivacao") or 0),
+                }
+
+            # Percorre as áreas e agrega os objetivos dos vendedores daquela área
+            for area in areas_supervisao:
+                soma_fin  = 0.0
+                soma_peso = 0.0
+                soma_mix  = 0.0
+                soma_pos  = 0.0
+
+                for vend in area.get("vendedores") or []:
+                    try:
+                        vend_id = int(str(vend).strip())
+                    except (TypeError, ValueError):
+                        continue
+
+                    obj = obj_by_vendedor.get(vend_id)
+                    if not obj:
+                        continue
+
+                    soma_fin  += obj["financeiro"]
+                    soma_peso += obj["peso"]
+                    soma_mix  += obj["mix"]
+                    soma_pos  += obj["pos"]
+
+                area["objetivo_financeiro_area"]  = round(soma_fin, 2)
+                area["objetivo_peso_area"]        = round(soma_peso, 2)
+                area["objetivo_mix_area"]         = round(soma_mix, 2)
+                area["objetivo_positivacao_area"] = round(soma_pos, 2)
+
+            return areas_supervisao
+
+        # Se for supervisor-gerente, já devolve as áreas com os objetivos agregados
+        if grupos_supervisao:
+            grupos_supervisao = _agregar_objetivos_por_area(grupos_supervisao, objetivos_vendedores)
 
         # variáveis locais
         objetivo_financeiro   = objetivo["financeiro"]
