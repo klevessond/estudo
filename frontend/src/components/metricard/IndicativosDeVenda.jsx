@@ -19,6 +19,7 @@ const toNum = (v) => {
 const safeDiv = (n, d) => (d ? n / d : 0);
 
 function filtrarPorSupervisao(data, selecionadas) {
+
   if (!data) return data;
 
   const escopo = data.escopo_rotas || {};
@@ -205,6 +206,66 @@ function filtrarPorSupervisao(data, selecionadas) {
     },
   };
 }
+
+// ===== GERENTE: somas por areas_supervisao (sem filtrar lista de vendedores) =====
+const sumAreas = (areas, key) =>
+  (Array.isArray(areas) ? areas : []).reduce((acc, a) => acc + toNum(a?.[key]), 0);
+
+const getVendaBases = ({ rawData, selecionadas }) => {
+  const escopo = rawData?.escopo_rotas || {};
+  const isGerente = Boolean(escopo.e_gerente);
+
+  // NÃO gerente: mantém o comportamento antigo (usa payload padrão)
+  if (!isGerente) {
+    const atual = toNum(rawData?.realizado_financeiro?.valor);
+    const aa = toNum(rawData?.evolucao?.valor_ano_anterior); // já vem do backend hoje
+    return { atual, aa };
+  }
+
+  // Gerente: usa escopo_rotas.areas_supervisao
+  const areas = pickAreas(escopo.areas_supervisao || [], selecionadas);
+
+  const atual = sumAreas(areas, "venda_realizada_area");
+  const aa = sumAreas(areas, "venda_ano_anterior_area");
+
+  return { atual, aa };
+};
+
+
+const pickAreas = (areas, selecionadas) => {
+  const ids = (selecionadas || []).map((s) => String(s.value));
+  if (!ids.length) return Array.isArray(areas) ? areas : [];
+  return (Array.isArray(areas) ? areas : []).filter((a) =>
+    ids.includes(String(a?.cod_area_supervisao))
+  );
+};
+
+const calcGerenteVendaFromEscopo = (data, selecionadas) => {
+  const escopo = data?.escopo_rotas || {};
+  const areas = pickAreas(escopo.areas_supervisao || [], selecionadas);
+
+  const atual = sumAreas(areas, "venda_realizada_area");         // ano atual (período consultado)
+  const aa    = sumAreas(areas, "venda_ano_anterior_area");      // ano anterior (mês cheio, por área)
+  return { atual, aa };
+};
+
+// ===== GERENTE: objetivos por areas_supervisao =====
+const calcGerenteObjetivosFromEscopo = (data, selecionadas) => {
+  const escopo = data?.escopo_rotas || {};
+  const areas = pickAreas(escopo.areas_supervisao || [], selecionadas);
+
+  const objetivo_financeiro = sumAreas(areas, "objetivo_financeiro_area");
+  const objetivo_peso = sumAreas(areas, "objetivo_peso_area");
+  const objetivo_mix = sumAreas(areas, "objetivo_mix_area");
+  const objetivo_positivacao = sumAreas(areas, "objetivo_positivacao_area");
+
+  return {
+    objetivo_financeiro,
+    objetivo_peso,
+    objetivo_mix,
+    objetivo_positivacao,
+  };
+};
 
 
 const fmtMoeda = (n) =>
@@ -407,6 +468,9 @@ const IndicadoresCards = ({
 
   // === evolução base (sem PDV)
   const applyEvolucaoFromRaw = (data, isArea, atualOverride) => {
+    const isGerente = Boolean(data?.escopo_rotas?.e_gerente);
+    if (isGerente) return; // gerente já tem evolução própria
+
     if (!data) return;
     let valorAnoAnterior = 0;
 
@@ -627,16 +691,75 @@ const IndicadoresCards = ({
 
     dlog('AREA preAgg:', preAgg, 'rupAgg:', rupAgg, 'posAgg(QtdClientes soma):', posAgg);
 
-    const objFin = Number(data?.objetivo?.financeiro || 0);
-    const valorAlocado = valorVendaGrupo + preAgg;
-    setAlocacaoPrevenda(fmtMoeda(preAgg));
-    setAlocacaoRealizada(fmtMoeda(valorAlocado));
-    const percAlocado = pct(valorAlocado, objFin);
-    setAlocacaoPercentual(`${percAlocado.toFixed(2)}%`);
-    setAlocacaoVariacao(
-      (valorAlocado - objFin).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
-    );
+// ====== Alocação (Venda + Pré-venda) ======
+// Regra (sem quebrar o atual):
+// - GERENTE + filtro de supervisor vazio => usa os agregados por área (escopo_rotas.areas_supervisao)
+// - Caso contrário => mantém o cálculo atual (agregados_area / lista de vendedores)
+const areas = Array.isArray(data?.escopo_rotas?.areas_supervisao)
+  ? data.escopo_rotas.areas_supervisao
+  : [];
 
+// ====== ALOCAÇÃO (NOVO PADRÃO — IGUAL AOS OUTROS CARDS) ======
+
+const escopo = data?.escopo_rotas || {};
+const gerente = Boolean(escopo.e_gerente);
+
+const allAreas = Array.isArray(escopo.areas_supervisao)
+  ? escopo.areas_supervisao
+  : [];
+
+// supervisaoSelecionada = state do select (array)
+const selecionadas = Array.isArray(supervisaoSelecionada)
+  ? supervisaoSelecionada
+  : [];
+
+const setSel = new Set(selecionadas.map(s => String(s?.value)));
+
+const areasUsadas = gerente
+  ? (setSel.size === 0
+      ? allAreas
+      : allAreas.filter(a =>
+          setSel.has(String(a?.cod_supervisor))
+        ))
+  : [];
+
+// === OBJETIVO ===
+const objFin = gerente
+  ? areasUsadas.reduce(
+      (acc, a) => acc + toNum(a?.objetivo_financeiro_area),
+      0
+    )
+  : toNum(data?.objetivo?.financeiro);
+
+// === PRÉ-VENDA ===
+const prevendaBase = gerente
+  ? areasUsadas.reduce(
+      (acc, a) => acc + toNum(a?.pre_venda_area),
+      0
+    )
+  : toNum(preAgg);
+
+// === VENDA REALIZADA ===
+const vendaRealizadaBaseLocal = gerente
+  ? areasUsadas.reduce(
+      (acc, a) => acc + toNum(a?.venda_realizada_area),
+      0
+    )
+  : toNum(valorVendaGrupo);
+
+// === ALOCAÇÃO FINAL ===
+const valorAlocado = vendaRealizadaBaseLocal + prevendaBase;
+
+setAlocacaoPrevenda(fmtMoeda(prevendaBase));
+setAlocacaoRealizada(fmtMoeda(valorAlocado));
+
+const percAlocado = pct(valorAlocado, objFin);
+setAlocacaoPercentual(`${percAlocado.toFixed(2)}%`);
+setAlocacaoVariacao(
+  (valorAlocado - objFin).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+  })
+);
     // Captado base + exibido (área)
     setCaptadoBase(rupAgg);
     setCaptadoValor(fmtMoeda(rupAgg));
@@ -655,6 +778,7 @@ const IndicadoresCards = ({
 
   // ========= fetch inicial =========
   useEffect(() => {
+    
     const fetchIndicadores = async () => {
       const { de, ate } = periodoSelecionado || {};
       if (!de || !ate) return;
@@ -666,6 +790,7 @@ const IndicadoresCards = ({
         dlog('payload bruto /Indicadores:', data);
 
         const objetivos = [];
+        
 
         if (Array.isArray(data.objetivo?.detalhamento)) {
           const detalhamento = data.objetivo.detalhamento.map((item) => ({
@@ -765,6 +890,18 @@ const IndicadoresCards = ({
 
     fetchIndicadores();
   }, [periodoSelecionado, onObjetivosRecebidos]);
+
+  useEffect(() => {
+  if (!rawData) return;
+
+  const isGerente = Boolean(rawData?.escopo_rotas?.e_gerente);
+
+  if (isGerente) {
+    // 🔥 PONTO-CHAVE:
+    // filtro vazio = soma TODAS as supervisões
+    applySupervisaoFromRaw(rawData, []);
+  }
+}, [rawData]);
 
   // helper para somar PDV (atual/AA) por UG e por área
   function somarPDV(rows, ugFiltro = null) {
@@ -1142,49 +1279,85 @@ const IndicadoresCards = ({
 const applySupervisaoFromRaw = (data, selecionadas) => {
   if (!data) return;
 
-  // nada selecionado -> volta para o escopo completo (todas as áreas)
-  if (!selecionadas || selecionadas.length === 0) {
-    setSomarArea(true); // gerente sempre em visão de área
+  const escopo = data?.escopo_rotas || {};
+  const gerente = Boolean(escopo.e_gerente);
+
+  // se não for gerente, mantém tudo como já está hoje
+  if (!gerente) {
+    setSomarArea(false);
     setDataEscopoAtual(data);
-
-    const mesCheioNum = Number(
-      data?.vendas?.ano_anterior_agregado_mes?.ValorLiquido || 0
-    );
-    setValorAnoAnteriorMesCheioBase(mesCheioNum || 0);
-    setValorAnoAnteriorMesCheio(
-      mesCheioNum
-        ? mesCheioNum.toLocaleString('pt-BR', {
-            style: 'currency',
-            currency: 'BRL',
-          })
-        : null
-    );
-
-    applyAreaFromRaw(data);
+    applyIndividualFromRaw(data);
     return;
   }
 
-  // aplica filtro por supervisão
-  const filtrado = filtrarPorSupervisao(data, selecionadas);
+  // ===== gerente: sempre visão de área =====
+  setSomarArea(true);
 
-  setSomarArea(true);          // visão sempre "somar área" pro gerente
+  // (A) recalcula os demais cards pela lógica atual (filtrando vendedores quando selecionar)
+  //     - vazio: aplica visão geral
+  //     - selecionado: aplica filtrado
+  const filtrado = !selecionadas || selecionadas.length === 0
+    ? data
+    : filtrarPorSupervisao(data, selecionadas);
+
   setDataEscopoAtual(filtrado);
-
-  const mesCheioNum = Number(
-    filtrado?.vendas?.ano_anterior_agregado_mes?.ValorLiquido || 0
-  );
-  setValorAnoAnteriorMesCheioBase(mesCheioNum || 0);
-  setValorAnoAnteriorMesCheio(
-    mesCheioNum
-      ? mesCheioNum.toLocaleString('pt-BR', {
-          style: 'currency',
-          currency: 'BRL',
-        })
-      : null
-  );
-
-  // recalcula todos os cards em cima do dado filtrado
   applyAreaFromRaw(filtrado);
+
+  // (B) AGORA: sobrescreve somente o que precisa ser "por escopo_rotas":
+  //     - Venda Realizada (card)
+  //     - Ano Anterior (base de evolução)
+  //     - % evolução
+  const { atual, aa } = calcGerenteVendaFromEscopo(data, selecionadas);
+
+  // venda realizada no card (base)
+  setVendaRealizadaBase(atual);
+  setVendaRealizada(fmtMoeda(atual));
+
+  // base do ano anterior (para evolução / texto)
+  setValorAnoAnteriorBase(aa);
+
+  // opcional: se você quiser que o "Vendas Ano Anterior" do card use esse mesmo valor
+  setValorAnoAnteriorMesCheioBase(aa);
+  setValorAnoAnteriorMesCheio(fmtMoeda(aa));
+
+  // evolução % com base nos dois (sem PDV)
+  const perc = aa > 0 ? ((atual - aa) / aa) * 100 : 0;
+  setEvolucaoAnoAnterior(`${perc.toFixed(2)}%`);
+
+  // ===========================
+  const obj = calcGerenteObjetivosFromEscopo(data, selecionadas);
+
+  // 1) Objetivo Financeiro (card "Objetivo & Evolução")
+  setObjetivoFinanceiro(fmtMoeda(obj.objetivo_financeiro));
+
+  // 2) Atualiza % cobertura e desvio da VENDA usando o objetivo novo
+  const vendaPerc = obj.objetivo_financeiro > 0 ? (atual / obj.objetivo_financeiro) * 100 : 0;
+  const vendaVar = atual - obj.objetivo_financeiro;
+
+  setVendaPercentual(`${vendaPerc.toFixed(2)}%`);
+  setVendaVariacao(
+    vendaVar < 0
+      ? `R$ -${Math.abs(vendaVar).toFixed(2).replace('.', ',')}`
+      : `R$ ${vendaVar.toFixed(2).replace('.', ',')}`
+  );
+
+  // 3) Peso
+  setPeso(obj.objetivo_peso.toLocaleString('pt-BR'));
+  const pesoReal = Number(filtrado?.realizado_peso?.realizado ?? 0);
+  setPesoPercentual(`${(obj.objetivo_peso > 0 ? (pesoReal / obj.objetivo_peso) * 100 : 0).toFixed(2)}%`);
+  setPesoVariacao((pesoReal - obj.objetivo_peso).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+
+  // 4) MIX
+  setObjetivoMix(String(obj.objetivo_mix || 0));
+  const mixReal = Number(filtrado?.realizado_mix?.realizado ?? 0);
+  setMixPercentual(`${(obj.objetivo_mix > 0 ? (mixReal / obj.objetivo_mix) * 100 : 0).toFixed(2)}%`);
+  setMixVariacao(String(mixReal - obj.objetivo_mix));
+
+  // 5) Positivação
+  const posReal = Number(filtrado?.positivacao?.realizado ?? 0);
+  setPositivadoObjetivo(obj.objetivo_positivacao.toLocaleString('pt-BR'));
+  setPositivadoPercentual(`${(obj.objetivo_positivacao > 0 ? (posReal / obj.objetivo_positivacao) * 100 : 0).toFixed(2)}%`);
+  setPositivadoVariacao((posReal - obj.objetivo_positivacao).toLocaleString('pt-BR'));
 };
 
   return (
@@ -1211,14 +1384,14 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
        {isGerente ? (
           <div style={{ marginLeft: "auto", minWidth: "280px" }}>
             <Select
-              isMulti
-              options={supervisaoOptions}
-              value={supervisaoSelecionada}
-              onChange={(opts) => {
-                const selecionadas = opts || [];
-                setSupervisaoSelecionada(selecionadas);
-                applySupervisaoFromRaw(rawData, selecionadas);
-              }}
+                isMulti
+                options={supervisaoOptions}
+                value={supervisaoSelecionada}
+                onChange={(opts) => {
+                  const selecionadas = opts || [];
+                  setSupervisaoSelecionada(selecionadas);
+                  applySupervisaoFromRaw(rawData, selecionadas);
+                }}
               placeholder="Selecione supervisões..."
               className="multi-select-supervisao"
               classNamePrefix="rs"
