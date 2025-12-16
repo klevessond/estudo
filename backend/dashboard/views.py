@@ -168,15 +168,21 @@ class IndicadoresView(APIView):
         
         rotas_codigos = rotas_info.get("rotas") if rotas_info else None
 
-        # 🔧 Se for VENDEDOR, usar a lista da MESMA SUPERVISÃO
-        if ctx.is_vendedor:
-            try:
-                vendedores = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario) or [int(ctx.cod_funcionario)]
-            except Exception:
-                vendedores = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else None
-        else:
-            # supervisor/admin: usa o escopo calculado no serviço
+       
+        # 🔧 PRIORIDADE: supervisor/gerente > vendedor
+        if getattr(ctx, "is_supervisor", False):
+            # supervisor/gerente: usa o escopo calculado no serviço (NÃO pode cair no escopo "mesma supervisão")
             vendedores = rotas_info.get("vendedores") if rotas_info else None
+        else:
+            # vendedor "puro": usa lista da mesma supervisão
+            if getattr(ctx, "is_vendedor", False):
+                try:
+                    vendedores = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario) or [int(ctx.cod_funcionario)]
+                except Exception:
+                    vendedores = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else None
+            else:
+                # admin/outros: usa o escopo calculado no serviço
+                vendedores = rotas_info.get("vendedores") if rotas_info else None
 
         # 🔧 Se for SUPERVISOR-GERENTE, montamos também grupos por área de supervisão
         grupos_supervisao = None
@@ -527,6 +533,96 @@ class IndicadoresView(APIView):
         prevenda = buscar_pre_venda(data_inicio, data_fim, cod_vendedores=vendedores)
         valor_prevenda = prevenda.get("pre_venda_valor", 0)
         valor_alocado = venda_realizada + valor_prevenda
+
+        print("[DEBUG][PREVENDA_RAW] keys=", list((prevenda or {}).keys()))
+        det = (prevenda.get("detalhado") or [])
+        print("[DEBUG][PREVENDA_RAW] detalhado_len=", len(det), "amostra=", det[:3])
+        
+
+       # ==========================
+        # PRÉ-VENDA: mapa por vendedor (ACUMULADO)
+        # ==========================
+        pre_by_cod = {}
+        try:
+            detalhado_pre = prevenda.get("detalhado") or []
+            for row in detalhado_pre:
+                cod_v = _to_int(row.get("CodVendedor"))
+                if cod_v is None:
+                    continue
+                valor = _num(row.get("Valor"))
+                pre_by_cod[cod_v] = pre_by_cod.get(cod_v, 0.0) + valor
+        except Exception as e:
+            logger.exception(f"[PREVENDA] erro ao montar pre_by_cod: {e}")
+            pre_by_cod = {}
+
+        print("[DEBUG] Iniciando cálculo de pré-venda…")
+        print(f"[DEBUG] Pré-venda calculada para {len(pre_by_cod)} vendedores")
+
+        # (opcional) log de alguns vendedores
+        for k in list(pre_by_cod.keys())[:15]:
+            print(f"[DEBUG] PRE vendedor {k}: {pre_by_cod[k]}")
+
+        # ==========================
+        # PRÉ-VENDA: soma por área (escopo_rotas -> areas_supervisao)
+        # ==========================
+        if grupos_supervisao:
+            print("\n[DEBUG][PREVENDA_POR_AREA] iniciando...")
+
+            pre_keys = set(pre_by_cod.keys())
+
+            for area in grupos_supervisao:
+                area_vendedores = [_to_int(v) for v in (area.get("vendedores") or [])]
+                area_vendedores = [v for v in area_vendedores if v is not None]
+
+                intersec = sorted(list(set(area_vendedores) & pre_keys))
+
+                print(
+                    f"[DEBUG][PREVENDA_MATCH] area={area.get('cod_area_supervisao')} "
+                    f"sup={area.get('cod_supervisor')} "
+                    f"qtd_area_vend={len(area_vendedores)} qtd_pre_keys={len(pre_keys)} "
+                    f"intersec={len(intersec)} amostra_inter={intersec[:15]}"
+                )
+
+                soma_pre_area = sum(pre_by_cod.get(v, 0.0) for v in area_vendedores)
+                area["pre_venda_area"] = round(soma_pre_area, 2)
+
+                print(
+                    f"[DEBUG][PREVENDA_POR_AREA_TOTAL] area={area.get('cod_area_supervisao')} "
+                    f"sup={area.get('cod_supervisor')} PRE_TOTAL={area['pre_venda_area']}"
+                )
+
+
+
+        # ========= PRÉ-VENDA POR ÁREA (para gerente) =========
+        if grupos_supervisao:
+            print("\n[DEBUG][PREVENDA_POR_AREA] iniciando...")
+
+            for area in grupos_supervisao:
+                area_vendedores = [_to_int(v) for v in (area.get("vendedores") or [])]
+                area_vendedores = [v for v in area_vendedores if v is not None]
+
+                inter = set(area_vendedores) & set(pre_by_cod.keys())
+                print(
+                f"[DEBUG][PREVENDA_MATCH] area={area.get('cod_area_supervisao')} "
+                f"qtd_area_vend={len(area_vendedores)} qtd_pre_keys={len(pre_by_cod)} "
+                f"intersec={len(inter)} amostra_inter={list(inter)[:10]}"
+                )
+
+
+                soma_pre_area = sum(_num(pre_by_cod.get(v, 0.0)) for v in area_vendedores)
+
+                area["pre_venda_area"] = round(soma_pre_area, 2)
+
+                if "venda_realizada_area" in area:
+                    area["valor_alocado_area"] = round(_num(area.get("venda_realizada_area")) + soma_pre_area, 2)
+
+                print(
+                    f"[DEBUG][PREVENDA_POR_AREA_TOTAL] "
+                    f"area={area.get('cod_area_supervisao')} sup={area.get('cod_supervisor')} "
+                    f"PRE_TOTAL={area['pre_venda_area']}"
+                )
+
+
 
         # KPIs (área)
         variacao = peso_realizado - objetivo.get("objetivo_peso", 0)
