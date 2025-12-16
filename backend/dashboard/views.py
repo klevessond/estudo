@@ -495,8 +495,8 @@ class IndicadoresView(APIView):
                 # AA (mês completo do ano anterior) — mantém sua regra
                 # =========
                 res_aa_area = buscar_vendas_por_vendedor(
-                    aa_mes_ini.strftime("%Y-%m-%d"),
-                    aa_mes_fim.strftime("%Y-%m-%d"),
+                    aa_ini.strftime("%Y-%m-%d"),
+                    aa_fim.strftime("%Y-%m-%d"),
                     cod_vendedores=area_vendedores,
                 )
                 lista_aa_area = res_aa_area.get("vendas_por_vendedor", []) or []
