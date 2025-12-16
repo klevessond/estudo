@@ -659,14 +659,35 @@ def buscar_pre_venda(data_inicio: str | date, data_fim: str | date, cod_vendedor
     return {"pre_venda_valor": pre_venda_valor, "detalhado": dados}
 
 
-def buscar_vendas_por_vendedor(data_inicio: str | date, data_fim: str | date, rotas: Optional[Iterable[int]] = None,cod_vendedores: Optional[Iterable[int]] = None,) -> Dict[str, Any]:
+def buscar_vendas_por_vendedor(
+    data_inicio: str | date,
+    data_fim: str | date,
+    rotas: Optional[Iterable[int]] = None,
+    cod_vendedores: Optional[Iterable[int]] = None,
+) -> Dict[str, Any]:
     p1, p2 = _dt_bounds(data_inicio, data_fim)
+
+    # ✅ filtro opcional por vendedores (não altera comportamento quando None/vazio)
+    vend_list = [int(v) for v in (cod_vendedores or []) if v is not None]
+    vend_list = list(dict.fromkeys(vend_list))
+
+    if len(vend_list) == 0:
+        vend_filter_sql = ""
+        vend_filter_mix_sql = ""
+    elif len(vend_list) == 1:
+        vend_filter_sql = f" AND PedidoVenda.CodVendedor = {vend_list[0]} "
+        vend_filter_mix_sql = f" AND PV.CodVendedor = {vend_list[0]} "
+    else:
+        in_list = ",".join(map(str, vend_list))
+        vend_filter_sql = f" AND PedidoVenda.CodVendedor IN ({in_list}) "
+        vend_filter_mix_sql = f" AND PV.CodVendedor IN ({in_list}) "
+
     sql = f"""
         DECLARE @P1 datetime2 = '{p1:%Y-%m-%d %H:%M:%S}';
         DECLARE @P2 datetime2 = '{p2:%Y-%m-%d %H:%M:%S}';
 
         SELECT codcampo,
-               Campo, 
+               Campo,
                COUNT(DISTINCT QtdClientes) AS QtdClientes,
                CAST(SUM(ValorProdutos - Desconto) AS FLOAT) AS ValorLiquido,
                CAST(SUM(Peso) AS FLOAT) AS PesoTotal,
@@ -682,60 +703,63 @@ def buscar_vendas_por_vendedor(data_inicio: str | date, data_fim: str | date, ro
                      AND PV.DataVenda >= @P1
                      AND PV.DataVenda <  @P2
                      AND M.EmbRetornavel = 0
+                     {vend_filter_mix_sql}
                      AND PV.CodVendedor = CAST(Consulta.CodCampo AS INT)
                ) AS Mix
         FROM (
-            select Cliente.CodCliente as QtdClientes,
-              Cast(Funcionario.CodFuncionario as VarChar) as CodCampo,
-              Funcionario.Funcionario as Campo,
-              sum(
-                case NaturezaOperacao.Venda 
-                  when 1 then PedidoVendaItens.quantidade * PedidoVendaItens.qtdembalagem
-                  else 0
-                end) As Qtd,
-              sum(
-                case NaturezaOperacao.Venda 
-                  when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / Material.QtdVolume) 
-                  else 0
-                end) As QtdEmbalagem,
-              sum(
-                case NaturezaOperacao.Venda 
-                  when 1 then (PedidoVendaItens.Quantidade * PedidoVendaItens.QtdEmbalagem * Material.VolumeBruto)
-                  else 0
-                end) As Volume,
-              sum(
-                case NaturezaOperacao.Venda 
-                  when 1 then (PedidoVendaItens.Quantidade * PedidoVendaItens.QtdEmbalagem * Material.PesoBruto)
-                  else 0
-                end) As Peso,
-              case NaturezaOperacao.Venda 
-                when 1 then sum(dbo.Round2(PedidoVendaItens.quantidade * (PedidoVendaItens.ValorEmbalagem)))
-                else 0
-              end As ValorProdutos,
-              sum(
-                case NaturezaOperacao.Venda 
-                  when 1 then dbo.Round2(PedidoVendaItens.DescontoRef + (PedidoVendaItens.Desconto * PedidoVendaItens.quantidade))
-                  else 0
-                end) As Desconto
-            from PedidoVenda 
-            left join PedidoVendaItens on PedidoVenda.CodPedidoVenda = PedidoVendaItens.CodPedidoVenda
-            left join Material on PedidoVendaItens.CodMaterial = Material.CodMaterial
-            left join Cliente on PedidoVenda.CodCliente = Cliente.CodCliente
-            left join Funcionario on PedidoVenda.CodVendedor = Funcionario.CodFuncionario
-            left join NaturezaOperacao on PedidoVenda.CodNaturezaOperacao = NaturezaOperacao.CodNaturezaOperacao
-            where Material.EmbRetornavel = 0
-              and PedidoVenda.Status = 0
-              and (NaturezaOperacao.Venda = 1)
-              and PedidoVenda.UnidGestora in (select UnidGestora from unidadegestora)
-              and PedidoVenda.DataVenda >= @P1
-              and PedidoVenda.DataVenda < @P2
-              group by Funcionario.CodFuncionario, Funcionario.Funcionario, PedidoVenda.UnidGestora, NaturezaOperacao.Venda, Cliente.CodCliente
+            SELECT Cliente.CodCliente as QtdClientes,
+                   CAST(Funcionario.CodFuncionario as VarChar) as CodCampo,
+                   Funcionario.Funcionario as Campo,
+                   SUM(
+                     CASE NaturezaOperacao.Venda
+                       WHEN 1 THEN PedidoVendaItens.quantidade * PedidoVendaItens.qtdembalagem
+                       ELSE 0
+                     END) As Qtd,
+                   SUM(
+                     CASE NaturezaOperacao.Venda
+                       WHEN 1 THEN dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / Material.QtdVolume)
+                       ELSE 0
+                     END) As QtdEmbalagem,
+                   SUM(
+                     CASE NaturezaOperacao.Venda
+                       WHEN 1 THEN (PedidoVendaItens.Quantidade * PedidoVendaItens.QtdEmbalagem * Material.VolumeBruto)
+                       ELSE 0
+                     END) As Volume,
+                   SUM(
+                     CASE NaturezaOperacao.Venda
+                       WHEN 1 THEN (PedidoVendaItens.Quantidade * PedidoVendaItens.QtdEmbalagem * Material.PesoBruto)
+                       ELSE 0
+                     END) As Peso,
+                   CASE NaturezaOperacao.Venda
+                     WHEN 1 THEN SUM(dbo.Round2(PedidoVendaItens.quantidade * (PedidoVendaItens.ValorEmbalagem)))
+                     ELSE 0
+                   END As ValorProdutos,
+                   SUM(
+                     CASE NaturezaOperacao.Venda
+                       WHEN 1 THEN dbo.Round2(PedidoVendaItens.DescontoRef + (PedidoVendaItens.Desconto * PedidoVendaItens.quantidade))
+                       ELSE 0
+                     END) As Desconto
+            FROM PedidoVenda
+            LEFT JOIN PedidoVendaItens on PedidoVenda.CodPedidoVenda = PedidoVendaItens.CodPedidoVenda
+            LEFT JOIN Material on PedidoVendaItens.CodMaterial = Material.CodMaterial
+            LEFT JOIN Cliente on PedidoVenda.CodCliente = Cliente.CodCliente
+            LEFT JOIN Funcionario on PedidoVenda.CodVendedor = Funcionario.CodFuncionario
+            LEFT JOIN NaturezaOperacao on PedidoVenda.CodNaturezaOperacao = NaturezaOperacao.CodNaturezaOperacao
+            WHERE Material.EmbRetornavel = 0
+              AND PedidoVenda.Status = 0
+              AND (NaturezaOperacao.Venda = 1)
+              AND PedidoVenda.UnidGestora in (select UnidGestora from unidadegestora)
+              AND PedidoVenda.DataVenda >= @P1
+              AND PedidoVenda.DataVenda < @P2
+              {vend_filter_sql}
+            GROUP BY Funcionario.CodFuncionario, Funcionario.Funcionario, PedidoVenda.UnidGestora, NaturezaOperacao.Venda, Cliente.CodCliente
         ) Consulta
         GROUP BY CodCampo, Campo
         ORDER BY Campo
     """
     dados = query_all(sql)
     return {"vendas_por_vendedor": dados}
+
 
 
 def buscar_resumo_segmento_area_venda(

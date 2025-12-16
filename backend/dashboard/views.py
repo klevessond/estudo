@@ -367,13 +367,13 @@ class IndicadoresView(APIView):
             aa_fim = _ajusta_data_aa(ate_dt)
 
         res_aa  = buscar_vendas_por_vendedor(aa_ini.strftime("%Y-%m-%d"), aa_fim.strftime("%Y-%m-%d"))
-        # print(f"[DEBUG][VENDA ANO ANTERIOR INTEIRA] {res_aa}")
+        print(f"[DEBUG][VENDA ANO ANTERIOR INTEIRA] {res_aa}")
         lista_aa = res_aa.get("vendas_por_vendedor", []) or []
         if vendedores_set:
             lista_aa = [it for it in lista_aa if _to_int(it.get("codcampo")) in vendedores_set]
 
         venda_ano_anterior = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa) or 1.0  # evita div/0
-        # print(f"[DEBUG][VENDA ANO ANTERIOR] {venda_ano_anterior}")
+        print(f"[DEBUG][VENDA ANO ANTERIOR] {venda_ano_anterior}")
 
         # índice por vendedor do ANO ANTERIOR (para merge no payload de vendas)
         aa_by_cod = {}
@@ -453,6 +453,62 @@ class IndicadoresView(APIView):
             "Mix":           sum(_num(x.get("Ano_anterior_mes_Mix"))           for x in lista),
         }
         #print(f"DEBUG VENDA DO ANO ANTERIOR MES COMPLETO {ano_anterior_agregado_mes}")
+
+        if grupos_supervisao:
+            print("\n[DEBUG][AREAS] iniciando soma ATUAL + AA por área...")
+
+            for area in grupos_supervisao:
+                area_vendedores = [_to_int(v) for v in (area.get("vendedores") or [])]
+                area_vendedores = [v for v in area_vendedores if v is not None]
+
+                print(
+                    f"\n[DEBUG][AREA] area={area.get('cod_area_supervisao')} "
+                    f"sup={area.get('cod_supervisor')} "
+                    f"qtd_vendedores={len(area_vendedores)} "
+                    f"vendedores(amostra)={area_vendedores[:10]}"
+                )
+
+                if not area_vendedores:
+                    area["venda_ano_anterior_area"] = 0.0
+                    area["venda_realizada_area"] = 0.0
+                    continue
+
+                # =========
+                # ATUAL (período consultado)
+                # =========
+                res_atual_area = buscar_vendas_por_vendedor(
+                    data_inicio,
+                    data_fim,
+                    cod_vendedores=area_vendedores,
+                )
+                lista_atual_area = res_atual_area.get("vendas_por_vendedor", []) or []
+                soma_atual_area = sum(_to_float(it.get("ValorLiquido")) for it in lista_atual_area)
+                area["venda_realizada_area"] = round(soma_atual_area, 2)
+
+                print(
+                    f"[DEBUG][ATUAL_POR_AREA_TOTAL] "
+                    f"area={area.get('cod_area_supervisao')} sup={area.get('cod_supervisor')} "
+                    f"ATUAL_TOTAL={area['venda_realizada_area']}"
+                )
+
+                # =========
+                # AA (mês completo do ano anterior) — mantém sua regra
+                # =========
+                res_aa_area = buscar_vendas_por_vendedor(
+                    aa_mes_ini.strftime("%Y-%m-%d"),
+                    aa_mes_fim.strftime("%Y-%m-%d"),
+                    cod_vendedores=area_vendedores,
+                )
+                lista_aa_area = res_aa_area.get("vendas_por_vendedor", []) or []
+                soma_aa_area = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa_area)
+                area["venda_ano_anterior_area"] = round(soma_aa_area, 2)
+
+                print(
+                    f"[DEBUG][AA_POR_AREA_TOTAL] "
+                    f"area={area.get('cod_area_supervisao')} sup={area.get('cod_supervisor')} "
+                    f"AA_TOTAL={area['venda_ano_anterior_area']}"
+                )
+
 
 
 
