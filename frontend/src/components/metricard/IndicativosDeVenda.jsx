@@ -628,7 +628,7 @@ const IndicadoresCards = ({
     applyEvolucaoFromRaw(data, false);
   };
 
-  const applyAreaFromRaw = (data) => {
+  const applyAreaFromRaw = (data, selecionadasOverride = null) => {
     if (!data) return;
     setDataEscopoAtual(data);
 
@@ -691,60 +691,35 @@ const IndicadoresCards = ({
 
     dlog('AREA preAgg:', preAgg, 'rupAgg:', rupAgg, 'posAgg(QtdClientes soma):', posAgg);
 
-// ====== Alocação (Venda + Pré-venda) ======
+// ======= Alocação (Venda + Pré-venda) ======
 // Regra (sem quebrar o atual):
-// - GERENTE + filtro de supervisor vazio => usa os agregados por área (escopo_rotas.areas_supervisao)
-// - Caso contrário => mantém o cálculo atual (agregados_area / lista de vendedores)
-const areas = Array.isArray(data?.escopo_rotas?.areas_supervisao)
-  ? data.escopo_rotas.areas_supervisao
-  : [];
-
-// ====== ALOCAÇÃO (NOVO PADRÃO — IGUAL AOS OUTROS CARDS) ======
+// - GERENTE => usa escopo_rotas.areas_supervisao (respeita filtro do Select)
+// - NÃO gerente => mantém agregados_area/lista (como já estava)
 
 const escopo = data?.escopo_rotas || {};
 const gerente = Boolean(escopo.e_gerente);
 
-const allAreas = Array.isArray(escopo.areas_supervisao)
-  ? escopo.areas_supervisao
-  : [];
+// ✅ usa a seleção “passada” (quando existir) para evitar state desatualizado
+const selecionadasNow = Array.isArray(selecionadasOverride)
+  ? selecionadasOverride
+  : (Array.isArray(supervisaoSelecionada) ? supervisaoSelecionada : []);
 
-// supervisaoSelecionada = state do select (array)
-const selecionadas = Array.isArray(supervisaoSelecionada)
-  ? supervisaoSelecionada
-  : [];
-
-const setSel = new Set(selecionadas.map(s => String(s?.value)));
-
-const areasUsadas = gerente
-  ? (setSel.size === 0
-      ? allAreas
-      : allAreas.filter(a =>
-          setSel.has(String(a?.cod_supervisor))
-        ))
-  : [];
+const allAreas = Array.isArray(escopo.areas_supervisao) ? escopo.areas_supervisao : [];
+const areasUsadas = gerente ? pickAreas(allAreas, selecionadasNow) : [];
 
 // === OBJETIVO ===
 const objFin = gerente
-  ? areasUsadas.reduce(
-      (acc, a) => acc + toNum(a?.objetivo_financeiro_area),
-      0
-    )
+  ? sumAreas(areasUsadas, "objetivo_financeiro_area")
   : toNum(data?.objetivo?.financeiro);
 
 // === PRÉ-VENDA ===
 const prevendaBase = gerente
-  ? areasUsadas.reduce(
-      (acc, a) => acc + toNum(a?.pre_venda_area),
-      0
-    )
+  ? sumAreas(areasUsadas, "pre_venda_area")
   : toNum(preAgg);
 
-// === VENDA REALIZADA ===
+// === VENDA REALIZADA (base do período) ===
 const vendaRealizadaBaseLocal = gerente
-  ? areasUsadas.reduce(
-      (acc, a) => acc + toNum(a?.venda_realizada_area),
-      0
-    )
+  ? sumAreas(areasUsadas, "venda_realizada_area")
   : toNum(valorVendaGrupo);
 
 // === ALOCAÇÃO FINAL ===
@@ -756,10 +731,9 @@ setAlocacaoRealizada(fmtMoeda(valorAlocado));
 const percAlocado = pct(valorAlocado, objFin);
 setAlocacaoPercentual(`${percAlocado.toFixed(2)}%`);
 setAlocacaoVariacao(
-  (valorAlocado - objFin).toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-  })
+  (valorAlocado - objFin).toLocaleString("pt-BR", { minimumFractionDigits: 2 })
 );
+
     // Captado base + exibido (área)
     setCaptadoBase(rupAgg);
     setCaptadoValor(fmtMoeda(rupAgg));
@@ -1301,7 +1275,7 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
     : filtrarPorSupervisao(data, selecionadas);
 
   setDataEscopoAtual(filtrado);
-  applyAreaFromRaw(filtrado);
+  applyAreaFromRaw(filtrado, selecionadas);
 
   // (B) AGORA: sobrescreve somente o que precisa ser "por escopo_rotas":
   //     - Venda Realizada (card)
