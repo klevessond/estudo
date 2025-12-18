@@ -655,7 +655,7 @@ class IndicadoresView(APIView):
 
         # ========= NOVO: MERGE por-vendedor (Pré-venda, Ruptura, Positivação) =========
         # 1) Pré-venda detalhada (esperado: prevenda['detalhado'] = [{CodVendedor, Valor}, ...])
-        pre_by_cod = {}
+        """pre_by_cod = {}
         try:
             for itp in (prevenda.get("detalhado") or []):
                 cod_v = _to_int(itp.get("CodVendedor"))
@@ -663,7 +663,7 @@ class IndicadoresView(APIView):
                     continue
                 pre_by_cod[cod_v] = _num(itp.get("Valor"))
         except Exception:
-            pre_by_cod = {}
+            pre_by_cod = {}"""
 
         # 2) Ruptura detalhada (esperado: ruptura_dados['detalhado'] = [{CodVendedor, TotalValor}, ...])
         rup_by_cod = {}
