@@ -30,6 +30,17 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   const objetivoMix = dadosColaborador?.objetivo_mix || 0;
   const porcentagemMix = objetivoMix > 0 ? (mixRealizado / objetivoMix) * 100 : 0;
 
+
+const alocado = colaborador.alocado || 0;
+
+  // % do Alocado em relação ao objetivo financeiro
+  const percentualAlocado = objetivoFinanceiro > 0 ? (alocado / objetivoFinanceiro) * 100 : 0;
+
+  // % de Variação em relação ao objetivo financeiro
+  // (equivale ao crescimento/queda vs meta)
+  const percentualVariacaoFinanceira = objetivoFinanceiro > 0 ? (variacaoFinanceira / objetivoFinanceiro) * 100 : 0;
+
+
   const getProgressClass = (percentage) => {
     if (percentage >= 100) return 'progress-high';
     if (percentage >= 50) return 'progress-medium';
@@ -153,15 +164,32 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
             R$ {colaborador.aFaturar?.toLocaleString('pt-BR')}
           </div>
 
-          <div className="card" style={{ background: '#f9f0e6' }}>
-            <div className="card-title">Alocado:</div>
-            R$ {colaborador.alocado?.toLocaleString('pt-BR')}
-          </div>
+            <div className="card" style={{ background: '#f9f0e6' }}>
+              <div className="card-title">Alocado:</div>
+              R$ {alocado.toLocaleString('pt-BR')}
 
-          <div className="card" style={{ background: '#f1faff' }}>
-            <div className="card-title">Variação:</div>
-            R$ {variacaoFinanceira.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </div>
+              {objetivoFinanceiro > 0 && (
+                <>
+                  <div className="progress-container">
+                    <div
+                      className={`progress-bar ${getProgressClass(percentualAlocado)}`}
+                      style={{ width: `${Math.min(percentualAlocado, 100)}%` }}
+                    />
+                  </div>
+                  <div>Progresso: {percentualAlocado.toFixed(1)}%</div>
+                </>
+              )}
+            </div>
+        <div className="card" style={{ background: '#f1faff' }}>
+          <div className="card-title">Variação:</div>
+          R$ {variacaoFinanceira.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+
+          {objetivoFinanceiro > 0 && (
+            <div>
+              Percentual: {percentualVariacaoFinanceira.toFixed(1)}%
+            </div>
+          )}
+        </div>
 
           <div className="card" style={{ background: '#fff0f3' }}>
             <div className="card-title">Positivação:</div>
