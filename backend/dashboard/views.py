@@ -1013,6 +1013,14 @@ class PDVPorVendedorAPIView(APIView):
                 "pdv": {"valor": round(valor, 2), "peso": round(peso, 3)},
                 "detalhado": detalhado,  # [{UnidGestora, Qtd, QtdEmbalagem, ValorProdutos, Peso}, ...]
             }
+            print(
+                f"[PDV-por-vendedor] vid={vid} | "
+                f"ugs={ugs} | "
+                f"valor={round(valor, 2)} | "
+                f"peso={round(peso, 3)} | "
+                f"detalhado_len={len(detalhado)}"
+            )
+
 
         return Response({"resultado": resultado})
 
@@ -1174,7 +1182,7 @@ class VendasPorVendedorView(APIView):
         print("[DEBUG] Iniciando cálculo de pré-venda…")
 
         chave = f"prevenda_{data_inicio}_{data_fim}"
-        prevenda = get_cached_data(chave, lambda: buscar_pre_venda(data_inicio, data_fim))
+        prevenda = buscar_pre_venda(data_inicio, data_fim)
 
         prevenda_por_vendedor = defaultdict(float)
         for item in prevenda.get("detalhado", []):

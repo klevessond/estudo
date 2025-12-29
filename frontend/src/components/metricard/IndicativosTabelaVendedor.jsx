@@ -225,11 +225,20 @@ const IndicativosTabelaVendedor = ({
         accessorKey: 'colaborador',
         header: 'Colaborador',
         // Exibe apenas o primeiro nome
-        cell: (info) => {
-          const full = String(info.getValue() ?? '').trim();
-          const first = full.split(/\s+/)[0] || '';
-          return first || full;
-        },
+          cell: (info) => {
+            const full = String(info.getValue() ?? '').trim();
+            if (!full) return '';
+
+            const parts = full.split(/\s+/);
+
+            // Se começar com "FILIAL", mostra o segundo nome
+            if (parts[0].toUpperCase() === 'FILIAL' && parts.length > 1) {
+              return parts[1];
+            }
+
+            // Caso padrão: primeiro nome
+            return parts[0];
+          },
       },
       {
         accessorKey: 'faturado',
