@@ -1182,7 +1182,7 @@ class VendasPorVendedorView(APIView):
         print("[DEBUG] Iniciando cálculo de pré-venda…")
 
         chave = f"prevenda_{data_inicio}_{data_fim}"
-        prevenda = get_cached_data(chave, lambda: buscar_pre_venda(data_inicio, data_fim))
+        prevenda = buscar_pre_venda(data_inicio, data_fim)
 
         prevenda_por_vendedor = defaultdict(float)
         for item in prevenda.get("detalhado", []):
