@@ -152,6 +152,7 @@ const Dashboard = () => {
           params: { de, ate, vendedores: vendParam },
           signal: ctrl.signal, // funciona no axios >=1.4 usando fetch adapter; se não, ignora
         });
+        //console.log('[PDV-por-vendedor][RAW RESPONSE]', data);
 
         // Esperado: data.resultado é OBJETO: { "178": { pdv:{valor,peso}, ... }, "224": {...}, ... }
         const mapa = data?.resultado || {};
