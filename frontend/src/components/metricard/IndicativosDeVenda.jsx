@@ -288,35 +288,38 @@ const getValorAnoAnteriorTexto = (
   rawData,
   somarArea,
   valorAnoAnteriorMesCheioBase,
-  valorAnoAnteriorBase
+  valorAnoAnteriorBase,
+  usarPDV,
+  vendaPDVAnoAnterior
 ) => {
   if (!rawData) return '--';
 
-  // 👥 SOMA DA MINHA ÁREA (ON) -> usa o agregado de mês cheio do ano anterior
+  const pdvAA = usarPDV ? Number(vendaPDVAnoAnterior || 0) : 0;
+
+  // 👥 SOMA DA ÁREA
   if (somarArea) {
     const baseMesArea =
       Number(valorAnoAnteriorMesCheioBase || 0) ||
       Number(rawData?.vendas?.ano_anterior_agregado_mes?.ValorLiquido || 0);
 
-    if (!baseMesArea) return '--';
-    return fmtMoeda(baseMesArea);
+    const total = Number(baseMesArea || 0) + pdvAA;
+    return total ? fmtMoeda(total) : '--';
   }
 
-  // 👤 INDIVIDUAL (ON) -> usa o mês cheio do vendedor (codcampo), se existir
+  // 👤 INDIVIDUAL
   const linha = getMinhaLinha(rawData);
   const vendMes = Number(linha?.Ano_anterior_mes_ValorLiquido || 0);
 
+  // se tiver mês cheio do vendedor, soma PDV AA
   if (vendMes) {
-    return fmtMoeda(vendMes);
+    const total = vendMes + pdvAA;
+    return fmtMoeda(total);
   }
 
-  // fallback: se não tiver mês cheio, mostra o "até hoje" que já usamos na evolução
+  // fallback “até hoje”
   const base = Number(valorAnoAnteriorBase || 0);
-  if (base) {
-    return fmtMoeda(base);
-  }
-
-  return '--';
+  const total = base + pdvAA;
+  return total ? fmtMoeda(total) : '--';
 };
 
 /* ========= COMPONENTES DE APRESENTAÇÃO ========= */
@@ -1009,6 +1012,8 @@ setAlocacaoVariacao(
         const res = await api.get('/indicadores/pdv/', { params: { de, ate } });
         const data = res.data || {};
 
+        console.log('[IndicadoresPDV][RAW]', data);
+
         const ug =
           data.unid_gestora_usuario != null
             ? String(data.unid_gestora_usuario)
@@ -1404,11 +1409,13 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
                 Vendas Ano Anterior:
                 <br />
                 {getValorAnoAnteriorTexto(
-                    dataEscopoAtual,
-                    somarArea,
-                    valorAnoAnteriorMesCheioBase,
-                    valorAnoAnteriorBase
-                  )}
+                  dataEscopoAtual,
+                  somarArea,
+                  valorAnoAnteriorMesCheioBase,
+                  valorAnoAnteriorBase,
+                  usarPDV,
+                  vendaPDVAnoAnterior
+                )}
                                 </>
             }
             percentage={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'}
