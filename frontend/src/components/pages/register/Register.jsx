@@ -4,6 +4,19 @@ import { useNavigate } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
 import api from '../../../api';
 
+const toYYYYMM = (dateObj) => {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+};
+
+const addMonthsYYYYMM = (yyyyMm, delta) => {
+  if (!yyyyMm) return yyyyMm;
+  const [y, m] = yyyyMm.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return toYYYYMM(d);
+};
+
 const RegisterObjetivosVendedores = () => {
   const [vendedores, setVendedores] = useState([]);
   const [objetivosFinanceiros, setObjetivosFinanceiros] = useState({});
@@ -11,47 +24,76 @@ const RegisterObjetivosVendedores = () => {
   const [objetivosPeso, setObjetivosPeso] = useState({});
   const [objetivosPos, setObjetivosPos] = useState({});
   const [mesReferencia, setMesReferencia] = useState('');
+  const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
 
+  // 1) Inicializa mês atual + carrega vendedores 1x
   useEffect(() => {
     const today = new Date();
-    const y = today.getFullYear();
-    const m = String(today.getMonth() + 1).padStart(2, '0');
-    setMesReferencia(`${y}-${m}`);
-    const mesReferenciaAtual = `${y}-${m}-01`;
+    setMesReferencia(toYYYYMM(today));
 
     (async () => {
       try {
         const { data: venResp } = await api.get('/todos-vendedores/');
-        const lista = venResp.detalhamento || [];
-        setVendedores(lista);
+        setVendedores(venResp.detalhamento || []);
+      } catch (err) {
+        console.error('Erro ao buscar vendedores:', err);
+        setVendedores([]);
+      }
+    })();
+  }, []);
+
+  // 2) Sempre que o mês mudar (e já tiver vendedores), recarrega objetivos do mês
+  useEffect(() => {
+    const fetchObjetivosMes = async () => {
+      const { length } = vendedores || [];
+      if (!mesReferencia || !length) return;
+
+      setLoading(true);
+      try {
+        const mesReferenciaAtual = `${mesReferencia}-01`;
 
         const { data: objResp } = await api.get('/objetivos-vendedores/', {
           params: { mes_referencia: mesReferenciaAtual },
         });
+
         const existentes = objResp.objetivos || [];
 
         const objFin = {};
         const objMix = {};
         const objPeso = {};
-        const objPos  = {};
-        lista.forEach((v) => {
-          const e = existentes.find((x) => Number(x.vendedor_id) === v.CodFuncionario);
-          objFin[v.CodFuncionario]  = e ? e.objetivo_financeiro  : '';
-          objMix[v.CodFuncionario]  = e ? e.objetivo_mix         : '';
-          objPeso[v.CodFuncionario] = e ? e.objetivo_peso        : '';
-          objPos[v.CodFuncionario]  = e ? e.objetivo_positivacao : '';
+        const objPos = {};
+
+        vendedores.forEach((v) => {
+          const e = existentes.find(
+            (x) => Number(x.vendedor_id) === Number(v.CodFuncionario)
+          );
+
+          objFin[v.CodFuncionario] = e ? e.objetivo_financeiro : '';
+          objMix[v.CodFuncionario] = e ? e.objetivo_mix : '';
+          objPeso[v.CodFuncionario] = e ? e.objetivo_peso : '';
+          objPos[v.CodFuncionario] = e ? e.objetivo_positivacao : '';
         });
+
         setObjetivosFinanceiros(objFin);
         setObjetivosMix(objMix);
         setObjetivosPeso(objPeso);
         setObjetivosPos(objPos);
       } catch (err) {
-        console.error('Erro ao buscar vendedores/objetivos:', err);
-        setVendedores([]);
+        console.error('Erro ao buscar objetivos do mês:', err);
+        // opcional: limpar inputs quando falhar
+        setObjetivosFinanceiros({});
+        setObjetivosMix({});
+        setObjetivosPeso({});
+        setObjetivosPos({});
+      } finally {
+        setLoading(false);
       }
-    })();
-  }, []);
+    };
+
+    fetchObjetivosMes();
+  }, [mesReferencia, vendedores]);
 
   const handleFinanceiroChange = (id, value) =>
     setObjetivosFinanceiros((p) => ({ ...p, [id]: value }));
@@ -67,6 +109,7 @@ const RegisterObjetivosVendedores = () => {
 
   const handleSubmit = async () => {
     const dataFormatada = `${mesReferencia}-01`;
+
     const payload = {
       mes_referencia: dataFormatada,
       objetivos: vendedores.map((v) => ({
@@ -112,13 +155,35 @@ const RegisterObjetivosVendedores = () => {
     <div className="register-container">
       <h2 className="register-title">Cadastro de Objetivos por Vendedor</h2>
 
-      <div className="register-card register-form">
-        <label>Mês de Referência:</label>
-        <input
-          type="month"
-          value={mesReferencia}
-          onChange={(e) => setMesReferencia(e.target.value)}
-        />
+      <div
+        className="register-card register-form"
+        style={{ display: 'flex', gap: 10, alignItems: 'center' }}
+      >
+        <button
+          type="button"
+          onClick={() => setMesReferencia((m) => addMonthsYYYYMM(m, -1))}
+        >
+          ◀ Anterior
+        </button>
+
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label>Mês de Referência:</label>
+          <input
+            type="month"
+            value={mesReferencia}
+            onChange={(e) => setMesReferencia(e.target.value)}
+          />
+          {loading ? (
+            <small style={{ opacity: 0.8 }}>Carregando objetivos…</small>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setMesReferencia((m) => addMonthsYYYYMM(m, +1))}
+        >
+          Próximo ▶
+        </button>
       </div>
 
       <div className="register-card">
@@ -132,6 +197,7 @@ const RegisterObjetivosVendedores = () => {
               <th>Objetivo Positivação (clientes)</th>
             </tr>
           </thead>
+
           <tbody>
             {vendedores.map((v) => (
               <tr key={v.CodFuncionario}>
@@ -211,7 +277,9 @@ const RegisterObjetivosVendedores = () => {
       </div>
 
       <div className="register-card register-form">
-        <button onClick={handleSubmit}>Salvar Objetivos</button>
+        <button onClick={handleSubmit} disabled={loading}>
+          Salvar Objetivos
+        </button>
       </div>
     </div>
   );
