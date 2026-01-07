@@ -48,6 +48,9 @@ const Dashboard = () => {
   // PDV distribuído por vendedor (para a tabela somar na linha do vendedor)
   const [pdvPorVendedor, setPdvPorVendedor] = useState([]);
 
+  // Filtro (gerente): vendedores permitidos na tabela quando uma supervisão é selecionada
+  const [vendedoresPermitidosTabela, setVendedoresPermitidosTabela] = useState([]);
+
   // refs para evitar chamadas repetidas/concorrentes
   const ultimaChaveFetchRef = useRef('');
   const abortCtrlRef = useRef(null);
@@ -247,6 +250,7 @@ const Dashboard = () => {
             onObjetivosRecebidos={setObjetivosVendedores}
             vendedoresDaArea={vendedoresDaArea}
             onVendasColaboradores={setVendasColaboradores}
+            onVendedoresPermitidosTabelaChange={setVendedoresPermitidosTabela}  
           />
         </div>
 
@@ -311,6 +315,7 @@ const Dashboard = () => {
                 /* >>> Soma PDV direto na linha do vendedor <<< */
                 usarPDV={usarPDV}
                 pdvPorVendedor={pdvPorVendedor}
+                vendedoresPermitidosTabela={vendedoresPermitidosTabela}
               />
             )}
           </section>

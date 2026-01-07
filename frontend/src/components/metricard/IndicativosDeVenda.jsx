@@ -392,6 +392,7 @@ const IndicadoresCards = ({
   usarPDV,
   onObjetivosRecebidos,
   onPDVResumoChange,
+  onVendedoresPermitidosTabelaChange,
 }) => {
   const [loading, setLoading] = useState(false);
 
@@ -826,10 +827,16 @@ setAlocacaoVariacao(
 
               setSupervisaoOptions(opts);
               setSupervisaoSelecionada([]); // começa SEM nada selecionado
+              if (typeof onVendedoresPermitidosTabelaChange === 'function') {
+                  onVendedoresPermitidosTabelaChange([]); // <<< NOVO: filtro vazio = mostra todos
+                }
               setMapSupVendedores(map);
             } else {
               setSupervisaoOptions([]);
               setMapSupVendedores({});
+              if (typeof onVendedoresPermitidosTabelaChange === 'function') {
+                onVendedoresPermitidosTabelaChange([]); // garante “sem filtro”
+              }
             }
 
             const mesCheioNum = Number(
@@ -1369,7 +1376,20 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
                 onChange={(opts) => {
                   const selecionadas = opts || [];
                   setSupervisaoSelecionada(selecionadas);
+
+                  // mantém o comportamento atual (cards mudam)
                   applySupervisaoFromRaw(rawData, selecionadas);
+
+                  // >>> NOVO: avisa o Dashboard quais vendedores devem aparecer na tabela <<<
+                  if (typeof onVendedoresPermitidosTabelaChange === "function") {
+                    const permitidos = (selecionadas || [])
+                      .map((s) => String(s.value)) // ids das supervisões selecionadas
+                      .flatMap((id) => mapSupVendedores[String(id)] || []) // vendedores do escopo_rotas
+                      .map((v) => Number(v))
+                      .filter((n) => Number.isFinite(n));
+
+                    onVendedoresPermitidosTabelaChange(permitidos);
+                  }
                 }}
               placeholder="Selecione supervisões..."
               className="multi-select-supervisao"

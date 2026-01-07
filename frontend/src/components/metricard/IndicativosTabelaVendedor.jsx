@@ -32,10 +32,12 @@ const IndicativosTabelaVendedor = ({
   objetivosVendedores = [],
   usarPDV = false,
   pdvPorVendedor = [],
+  vendedoresPermitidosTabela = []
 }) => {
   const [globalFilter, setGlobalFilter] = useState('');
   const [baseData, setBaseData] = useState([]); // dados crus vindos da API
   const [data, setData] = useState([]);         // dados enriquecidos (com PDV somado quando ativo)
+  const [baseDataAll, setBaseDataAll] = useState([]);
 
   // Guarda a assinatura do último payload emitido ao pai
   const lastEmittedSigRef = useRef('');
@@ -86,6 +88,23 @@ const IndicativosTabelaVendedor = ({
     return m;
   }, [pdvPorVendedor]);
 
+  // ✅ Filtro do gerente: quando houver lista de vendedores permitidos, limita a base exibida.
+// Se estiver vazio, mantém tudo (comportamento atual).
+useEffect(() => {
+    const permitidos = Array.isArray(vendedoresPermitidosTabela) ? vendedoresPermitidosTabela : [];
+
+    if (!permitidos.length) {
+      setBaseData(baseDataAll);
+      return;
+    }
+
+    const setPermitidos = new Set(permitidos.map((v) => Number(v)));
+    const filtrada = (baseDataAll || []).filter((r) => setPermitidos.has(Number(r.codFuncionario)));
+
+    setBaseData(filtrada);
+  }, [vendedoresPermitidosTabela, baseDataAll]);
+
+
   // 1) Busca a lista de vendas por vendedor (apenas quando o período muda)
   useEffect(() => {
     const fetchData = async () => {
@@ -111,7 +130,7 @@ const IndicativosTabelaVendedor = ({
           mix: Number(vendedor.Mix || 0),
         }));
 
-        setBaseData(tabelaBase);
+        setBaseDataAll(tabelaBase);
 
         // LOG: base carregada
         dlog('baseData carregada (len):', tabelaBase.length);
