@@ -26,6 +26,7 @@ from rest_framework.permissions import IsAdminUser
 from .models import Profile
 from dashboard.services.usuarios.funcionario_service import listar_funcionarios,get_funcionario_por_codigo,obter_unid_gestora,obter_unid_gestoras_por_vendedores
 import logging
+from decimal import Decimal
 from dashboard.roles import get_role_context  
 from dashboard.services.indicadores.info_service import Todos_Vendedores
 from dashboard.services.indicadores.ruptura_service import buscar_ruptura
@@ -99,6 +100,35 @@ def get_dados_excel(request):
     except Exception as e:
         return JsonResponse({'erro': str(e)}, status=500)
 
+
+def _to_float_safe(v):
+    # Decimal -> float, string número -> float, None -> 0.0
+    try:
+        if isinstance(v, Decimal):
+            return float(v)
+        return float(v or 0)
+    except Exception:
+        return 0.0
+
+def _resumo_detalhamento(det):
+    """
+    det: lista de dicts do service (ret_vendido['detalhamento'])
+    devolve: lista com apenas Campo e ValorProdutos
+    """
+    out = []
+    for row in (det or []):
+        cod=row.get("CodCampo")
+        campo = (row.get("Campo") or "").strip()
+        valor = row.get("ValorProdutos")
+        out.append({
+            "Codrota" :cod,
+            "Campo": campo,
+            "ValorProdutos": _to_float_safe(valor),
+        })
+    return out
+
+    
+
 class MinhasRotasSupervisorView(APIView):
     #permission_classes = [IsAuthenticated]
 
@@ -167,6 +197,46 @@ class IndicadoresView(APIView):
 
         
         rotas_codigos = rotas_info.get("rotas") if rotas_info else None
+        print(">>> ENTROU NO TESTE buscar_vendido", data_inicio, data_fim, rotas_codigos)
+
+
+        try:
+           logger.warning("[TEST buscar_vendido] ENTROU NO BLOCO")
+           ret_vendido = buscar_vendido(data_inicio, data_fim, rotas=rotas_codigos)
+           if isinstance(ret_vendido, dict):
+                    det = ret_vendido.get("detalhamento") or []
+
+                    amostra = {
+                        "peso_realizado": _to_float_safe(ret_vendido.get("peso_realizado")),
+                        "venda_realizada": _to_float_safe(ret_vendido.get("venda_realizada")),
+                        "detalhamento": _resumo_detalhamento(det),  # <-- só Campo + ValorProdutos
+                    }
+
+                    logger.warning(
+                        "[IndicadoresView][TEST buscar_vendido] de=%s ate=%s rotas=%s keys=%s amostra=%s",
+                        data_inicio,
+                        data_fim,
+                        rotas_codigos if rotas_codigos is not None else "sem_filtro",
+                        list(ret_vendido.keys()),  # mantém keys=['peso_realizado','venda_realizada','detalhamento']
+                        amostra,                   # <-- log limpo
+                    )
+           else:
+            logger.warning(
+                        "[IndicadoresView][TEST buscar_vendido] de=%s ate=%s rotas=%s tipo=%s amostra=%s",
+                        data_inicio,
+                        data_fim,
+                        rotas_codigos if rotas_codigos is not None else "sem_filtro",
+                        type(ret_vendido).__name__,
+                        str(ret_vendido)[:600],
+                    )
+        except Exception:
+            logger.exception(
+                "[IndicadoresView][TEST buscar_vendido] ERRO de=%s ate=%s rotas=%s",
+                data_inicio,
+                data_fim,
+                rotas_codigos if rotas_codigos is not None else "sem_filtro",
+            )
+
 
        
         # 🔧 PRIORIDADE: supervisor/gerente > vendedor
@@ -373,11 +443,30 @@ class IndicadoresView(APIView):
             aa_fim = _ajusta_data_aa(ate_dt)
 
         res_aa  = buscar_vendas_por_vendedor(aa_ini.strftime("%Y-%m-%d"), aa_fim.strftime("%Y-%m-%d"))
-        print(f"[DEBUG][VENDA ANO ANTERIOR INTEIRA] {res_aa}")
+        print(
+            "[DEBUG][VENDA ANO ANTERIOR]\n"
+            f"  Total registros retornados: {len(res_aa.get('vendas_por_vendedor', []) or [])}\n"
+            f"  Payload bruto: {res_aa}"
+        )
         lista_aa = res_aa.get("vendas_por_vendedor", []) or []
+        print(
+            "[DEBUG][VENDA ANO ANTERIOR]\n"
+            f"  Registros totais: {len(lista_aa)}\n"
+            f"  Vendedores filtrados: {len(vendedores_set) if vendedores_set else 'TODOS'}\n"
+            f"  IDs filtrados: {sorted(vendedores_set) if vendedores_set else 'N/A'}"
+            )
+
         if vendedores_set:
             lista_aa = [it for it in lista_aa if _to_int(it.get("codcampo")) in vendedores_set]
-
+            codigos_considerados = sorted(
+                                                {_to_int(it.get("codcampo")) for it in lista_aa if _to_int(it.get("codcampo")) is not None}
+                                            )
+            
+            print(
+                    "[DEBUG][VENDA ANO ANTERIOR][APÓS FILTRO]\n"
+                    f"  Registros considerados: {len(lista_aa)}"
+                    f"  Códigos vendedores: {codigos_considerados}"
+                )
         venda_ano_anterior = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa) or 1.0  # evita div/0
         print(f"[DEBUG][VENDA ANO ANTERIOR] {venda_ano_anterior}")
 
