@@ -118,12 +118,18 @@ def _resumo_detalhamento(det):
     out = []
     for row in (det or []):
         cod=row.get("CodCampo")
+        codvendedor = row.get("CodVendedor")
         campo = (row.get("Campo") or "").strip()
-        valor = row.get("ValorProdutos")
+        valor = _to_float_safe(row.get("ValorProdutos"))
+        desconto = _to_float_safe(row.get("Desconto"))
+        valor_liquido = valor-desconto
         out.append({
             "Codrota" :cod,
             "Campo": campo,
+            "CodVendedor": codvendedor,
             "ValorProdutos": _to_float_safe(valor),
+            "Desconto": _to_float_safe(desconto),
+            "Valor_liquido": _to_float_safe(valor_liquido),
         })
     return out
 
@@ -197,7 +203,7 @@ class IndicadoresView(APIView):
 
         
         rotas_codigos = rotas_info.get("rotas") if rotas_info else None
-        print(">>> ENTROU NO TESTE buscar_vendido", data_inicio, data_fim, rotas_codigos)
+        print(">>> ROTAS X VENDEDOR", rotas_info)
 
 
         try:
@@ -205,6 +211,84 @@ class IndicadoresView(APIView):
            ret_vendido = buscar_vendido(data_inicio, data_fim, rotas=rotas_codigos)
            if isinstance(ret_vendido, dict):
                     det = ret_vendido.get("detalhamento") or []
+                    # 1) mapa rota -> vendedor (regra gerência)
+                    # OBS: por decisão de gerência, IGNORAMOS CodVendedor que venha no buscar_vendido.
+                    rota_to_vendedor = {}
+                    for row in (rotas_info.get("detalhado") or []):
+                        try:
+                            cod_rota = int(str(row.get("CodRota")).strip())
+                            cod_vend = int(str(row.get("CodVendedor")).strip())
+                            rota_to_vendedor[cod_rota] = cod_vend
+                        except (TypeError, ValueError):
+                            pass
+
+                    # 2) soma valor_liquido por vendedor dono da rota
+                    liquido_por_vendedor = {}
+                    rotas_por_vendedor = {}
+
+                    for row in (ret_vendido.get("detalhamento") or []):
+                        try:
+                            cod_rota_raw = row.get("CodCampo", row.get("Codrota", row.get("CodRota")))
+                            cod_rota = int(str(cod_rota_raw).strip())
+                        except (TypeError, ValueError):
+                            continue
+
+                        cod_vend = rota_to_vendedor.get(cod_rota)
+                        if cod_vend is None:
+                            continue
+
+                        valor_prod = _to_float_safe(row.get("ValorProdutos"))
+                        desconto = _to_float_safe(row.get("Desconto"))
+                        valor_liquido = valor_prod - desconto
+
+                        liquido_por_vendedor[cod_vend] = liquido_por_vendedor.get(cod_vend, 0.0) + valor_liquido
+                        rotas_por_vendedor.setdefault(cod_vend, []).append({
+                            "CodRota": cod_rota,
+                            "Campo": (row.get("Campo") or "").strip(),
+                            "Valor_liquido": round(valor_liquido, 2),
+                        })
+
+                    # 3) transforma em lista (pra retornar depois)
+                    lista_liquido_por_vendedor = [
+                        {
+                            "CodVendedor": vend,
+                            "Valor_liquido_total": round(total, 2),
+                            "Rotas": rotas_por_vendedor.get(vend, []),
+                        }
+                        for vend, total in liquido_por_vendedor.items()
+                    ]
+                    lista_liquido_por_vendedor.sort(key=lambda x: x["Valor_liquido_total"], reverse=True)
+
+                    print(">>> [DEBUG] liquido_por_vendedor total_vendedores =", len(lista_liquido_por_vendedor))
+                    print(">>> [DEBUG] amostra liquido_por_vendedor =", lista_liquido_por_vendedor[:5])
+
+                    logger.warning(
+                        "[DEBUG] liquido_por_vendedor total=%s amostra=%s",
+                        len(lista_liquido_por_vendedor),
+                        str(lista_liquido_por_vendedor[:5])[:800]
+                    )
+
+                    # 3) transforma em lista (pra retornar depois)
+                    lista_liquido_por_vendedor = [
+                        {
+                            "CodVendedor": vend,
+                            "Valor_liquido_total": round(total, 2),
+                            "Rotas": rotas_por_vendedor.get(vend, []),
+                        }
+                        for vend, total in liquido_por_vendedor.items()
+                    ]
+
+                    # (opcional) ordenar por maior valor
+                    lista_liquido_por_vendedor.sort(key=lambda x: x["Valor_liquido_total"], reverse=True)
+
+                    # 4) print/log pra inspecionar
+                    print(">>> [DEBUG] liquido_por_vendedor total_vendedores =", len(lista_liquido_por_vendedor))
+                    print(">>> [DEBUG] amostra liquido_por_vendedor =", lista_liquido_por_vendedor[:5])
+
+                    # se quiser também em logger:
+                    logger.warning("[DEBUG] liquido_por_vendedor total=%s amostra=%s",
+                                len(lista_liquido_por_vendedor),
+                                str(lista_liquido_por_vendedor[:5])[:800])
 
                     amostra = {
                         "peso_realizado": _to_float_safe(ret_vendido.get("peso_realizado")),
