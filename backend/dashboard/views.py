@@ -159,6 +159,69 @@ def _to_int_list(seq):
             pass
     return out
 
+def _calc_liquido_por_vendedor_por_rotas(ret_vendido: dict, rota_to_vendedor: dict):
+    """
+    ret_vendido: retorno do buscar_vendido (dict com 'detalhamento')
+    rota_to_vendedor: dict {CodRota(int): CodVendedor(int)} (escopo do rotas_info['detalhado'])
+
+    Retorna:
+      {
+        "valor_total": float,
+        "por_vendedor": [
+            {"CodVendedor": int, "Valor_liquido_total": float, "Rotas": [...]},
+            ...
+        ]
+      }
+    """
+    det = (ret_vendido or {}).get("detalhamento") or []
+
+    liquido_por_vendedor = {}
+    rotas_por_vendedor = {}
+
+    for row in det:
+        # buscar_vendido pode vir com Codrota/CodRota ou CodCampo (dependendo do seu service)
+        cod_rota_raw = row.get("Codrota", row.get("CodRota", row.get("CodCampo")))
+        try:
+            cod_rota = int(str(cod_rota_raw).strip())
+        except (TypeError, ValueError):
+            continue
+
+        cod_vend = rota_to_vendedor.get(cod_rota)
+        if cod_vend is None:
+            continue  # rota fora do escopo do usuário
+
+        try:
+            cod_vend = int(str(cod_vend).strip())
+        except (TypeError, ValueError):
+            continue
+
+        valor_prod = _to_float_safe(row.get("ValorProdutos"))
+        desconto = _to_float_safe(row.get("Desconto"))
+        valor_liquido = valor_prod - desconto
+
+        liquido_por_vendedor[cod_vend] = liquido_por_vendedor.get(cod_vend, 0.0) + valor_liquido
+
+        rotas_por_vendedor.setdefault(cod_vend, []).append({
+            "CodRota": cod_rota,
+            "Campo": (row.get("Campo") or "").strip(),
+            "Valor_liquido": round(valor_liquido, 2),
+        })
+
+    por_vendedor = [
+        {
+            "CodVendedor": vend,
+            "Valor_liquido_total": round(total, 2),
+            "Rotas": rotas_por_vendedor.get(vend, []),
+        }
+        for vend, total in liquido_por_vendedor.items()
+    ]
+    por_vendedor.sort(key=lambda x: x["Valor_liquido_total"], reverse=True)
+
+    valor_total = round(sum(x["Valor_liquido_total"] for x in por_vendedor), 2)
+
+    return {"valor_total": valor_total, "por_vendedor": por_vendedor}
+
+
 
 class IndicadoresView(APIView):
     
@@ -205,124 +268,6 @@ class IndicadoresView(APIView):
         rotas_codigos = rotas_info.get("rotas") if rotas_info else None
         print(">>> ROTAS X VENDEDOR", rotas_info)
 
-
-        try:
-           logger.warning("[TEST buscar_vendido] ENTROU NO BLOCO")
-           ret_vendido = buscar_vendido(data_inicio, data_fim, rotas=rotas_codigos)
-           if isinstance(ret_vendido, dict):
-                    det = ret_vendido.get("detalhamento") or []
-                    # 1) mapa rota -> vendedor (regra gerência)
-                    # OBS: por decisão de gerência, IGNORAMOS CodVendedor que venha no buscar_vendido.
-                    rota_to_vendedor = {}
-                    for row in (rotas_info.get("detalhado") or []):
-                        try:
-                            cod_rota = int(str(row.get("CodRota")).strip())
-                            cod_vend = int(str(row.get("CodVendedor")).strip())
-                            rota_to_vendedor[cod_rota] = cod_vend
-                        except (TypeError, ValueError):
-                            pass
-
-                    # 2) soma valor_liquido por vendedor dono da rota
-                    liquido_por_vendedor = {}
-                    rotas_por_vendedor = {}
-
-                    for row in (ret_vendido.get("detalhamento") or []):
-                        try:
-                            cod_rota_raw = row.get("CodCampo", row.get("Codrota", row.get("CodRota")))
-                            cod_rota = int(str(cod_rota_raw).strip())
-                        except (TypeError, ValueError):
-                            continue
-
-                        cod_vend = rota_to_vendedor.get(cod_rota)
-                        if cod_vend is None:
-                            continue
-
-                        valor_prod = _to_float_safe(row.get("ValorProdutos"))
-                        desconto = _to_float_safe(row.get("Desconto"))
-                        valor_liquido = valor_prod - desconto
-
-                        liquido_por_vendedor[cod_vend] = liquido_por_vendedor.get(cod_vend, 0.0) + valor_liquido
-                        rotas_por_vendedor.setdefault(cod_vend, []).append({
-                            "CodRota": cod_rota,
-                            "Campo": (row.get("Campo") or "").strip(),
-                            "Valor_liquido": round(valor_liquido, 2),
-                        })
-
-                    # 3) transforma em lista (pra retornar depois)
-                    lista_liquido_por_vendedor = [
-                        {
-                            "CodVendedor": vend,
-                            "Valor_liquido_total": round(total, 2),
-                            "Rotas": rotas_por_vendedor.get(vend, []),
-                        }
-                        for vend, total in liquido_por_vendedor.items()
-                    ]
-                    lista_liquido_por_vendedor.sort(key=lambda x: x["Valor_liquido_total"], reverse=True)
-
-                    print(">>> [DEBUG] liquido_por_vendedor total_vendedores =", len(lista_liquido_por_vendedor))
-                    print(">>> [DEBUG] amostra liquido_por_vendedor =", lista_liquido_por_vendedor[:5])
-
-                    logger.warning(
-                        "[DEBUG] liquido_por_vendedor total=%s amostra=%s",
-                        len(lista_liquido_por_vendedor),
-                        str(lista_liquido_por_vendedor[:5])[:800]
-                    )
-
-                    # 3) transforma em lista (pra retornar depois)
-                    lista_liquido_por_vendedor = [
-                        {
-                            "CodVendedor": vend,
-                            "Valor_liquido_total": round(total, 2),
-                            "Rotas": rotas_por_vendedor.get(vend, []),
-                        }
-                        for vend, total in liquido_por_vendedor.items()
-                    ]
-
-                    # (opcional) ordenar por maior valor
-                    lista_liquido_por_vendedor.sort(key=lambda x: x["Valor_liquido_total"], reverse=True)
-
-                    # 4) print/log pra inspecionar
-                    print(">>> [DEBUG] liquido_por_vendedor total_vendedores =", len(lista_liquido_por_vendedor))
-                    print(">>> [DEBUG] amostra liquido_por_vendedor =", lista_liquido_por_vendedor[:5])
-
-                    # se quiser também em logger:
-                    logger.warning("[DEBUG] liquido_por_vendedor total=%s amostra=%s",
-                                len(lista_liquido_por_vendedor),
-                                str(lista_liquido_por_vendedor[:5])[:800])
-
-                    amostra = {
-                        "peso_realizado": _to_float_safe(ret_vendido.get("peso_realizado")),
-                        "venda_realizada": _to_float_safe(ret_vendido.get("venda_realizada")),
-                        "detalhamento": _resumo_detalhamento(det),  # <-- só Campo + ValorProdutos
-                    }
-
-                    logger.warning(
-                        "[IndicadoresView][TEST buscar_vendido] de=%s ate=%s rotas=%s keys=%s amostra=%s",
-                        data_inicio,
-                        data_fim,
-                        rotas_codigos if rotas_codigos is not None else "sem_filtro",
-                        list(ret_vendido.keys()),  # mantém keys=['peso_realizado','venda_realizada','detalhamento']
-                        amostra,                   # <-- log limpo
-                    )
-           else:
-            logger.warning(
-                        "[IndicadoresView][TEST buscar_vendido] de=%s ate=%s rotas=%s tipo=%s amostra=%s",
-                        data_inicio,
-                        data_fim,
-                        rotas_codigos if rotas_codigos is not None else "sem_filtro",
-                        type(ret_vendido).__name__,
-                        str(ret_vendido)[:600],
-                    )
-        except Exception:
-            logger.exception(
-                "[IndicadoresView][TEST buscar_vendido] ERRO de=%s ate=%s rotas=%s",
-                data_inicio,
-                data_fim,
-                rotas_codigos if rotas_codigos is not None else "sem_filtro",
-            )
-
-
-       
         # 🔧 PRIORIDADE: supervisor/gerente > vendedor
         if getattr(ctx, "is_supervisor", False):
             # supervisor/gerente: usa o escopo calculado no serviço (NÃO pode cair no escopo "mesma supervisão")
@@ -483,6 +428,7 @@ class IndicadoresView(APIView):
         # somatórios
         venda_realizada = sum(_to_float(it.get("ValorLiquido")) for it in lista)
         peso_realizado  = sum(_to_float(it.get("PesoTotal"))    for it in lista)
+        venda_ano_anterior_rotas = None
 
         # ===========================================
         # VENDAS DO MESMO PERÍODO NO ANO ANTERIOR  
@@ -525,6 +471,59 @@ class IndicadoresView(APIView):
             # mês passado ou outro: usa o mês completo (como antes)
             aa_ini = _ajusta_data_aa(de_dt)
             aa_fim = _ajusta_data_aa(ate_dt)
+        
+# ===========================================
+        # ANO ANTERIOR POR ROTAS (buscar_vendido)
+        # ===========================================
+        
+
+        try:
+            # 1) mapa rota -> vendedor (regra gerência)
+            rota_to_vendedor = {}
+            for row in (rotas_info.get("detalhado") or []):
+                try:
+                    cod_rota = int(str(row.get("CodRota")).strip())
+                    cod_vend = int(str(row.get("CodVendedor")).strip())
+                    rota_to_vendedor[cod_rota] = cod_vend
+                except (TypeError, ValueError):
+                    pass
+
+            aa_ini_str = aa_ini.strftime("%Y-%m-%d")
+            aa_fim_str = aa_fim.strftime("%Y-%m-%d")
+
+            ret_vendido_aa_rotas = buscar_vendido(aa_ini_str, aa_fim_str, rotas=rotas_codigos)
+
+            if isinstance(ret_vendido_aa_rotas, dict):
+                calc = _calc_liquido_por_vendedor_por_rotas(ret_vendido_aa_rotas, rota_to_vendedor)
+
+                venda_ano_anterior_rotas = {
+                    "de": aa_ini_str,
+                    "ate": aa_fim_str,
+                    "valor_total": calc["valor_total"],
+                    "por_vendedor": calc["por_vendedor"],
+                    # se quiser debugar/inspecionar:
+                    # "keys": list(ret_vendido_aa_rotas.keys()),
+                }
+
+                logger.warning(
+                    "[AA_ROTAS][buscar_vendido] de=%s ate=%s rotas=%s valor_total=%s amostra=%s",
+                    aa_ini_str,
+                    aa_fim_str,
+                    rotas_codigos if rotas_codigos is not None else "sem_filtro",
+                    venda_ano_anterior_rotas["valor_total"],
+                    str((venda_ano_anterior_rotas["por_vendedor"] or [])[:3])[:800],
+                )
+            else:
+                logger.warning(
+                    "[AA_ROTAS][buscar_vendido] retorno inesperado tipo=%s amostra=%s",
+                    type(ret_vendido_aa_rotas).__name__,
+                    str(ret_vendido_aa_rotas)[:600],
+                )
+
+        except Exception:
+            logger.exception("[AA_ROTAS][buscar_vendido] erro ao calcular ano anterior por rotas")
+            venda_ano_anterior_rotas = None
+
 
         res_aa  = buscar_vendas_por_vendedor(aa_ini.strftime("%Y-%m-%d"), aa_fim.strftime("%Y-%m-%d"))
         print(
@@ -651,7 +650,7 @@ class IndicadoresView(APIView):
                     area["venda_ano_anterior_area"] = 0.0
                     area["venda_realizada_area"] = 0.0
                     continue
-
+                
                 # =========
                 # ATUAL (período consultado)
                 # =========
@@ -932,6 +931,7 @@ class IndicadoresView(APIView):
             "Ruptura_TotalValor": ruptura_agregado,
             "Positivacao_Realizado": positivacao_agregado,
         }
+        vendido["venda_ano_anterior_rotas"] = venda_ano_anterior_rotas
 
         return Response({
             "objetivo": objetivo,
