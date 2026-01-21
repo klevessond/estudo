@@ -28,7 +28,7 @@ from dashboard.services.usuarios.funcionario_service import listar_funcionarios,
 import logging
 from decimal import Decimal
 from dashboard.roles import get_role_context  
-from dashboard.services.indicadores.info_service import Todos_Vendedores
+from dashboard.services.indicadores.info_service import Todos_Vendedores, obter_cod_supervisor
 from dashboard.services.indicadores.ruptura_service import buscar_ruptura
 from dashboard.db_conn import query_all
 
@@ -430,6 +430,48 @@ class IndicadoresView(APIView):
         peso_realizado  = sum(_to_float(it.get("PesoTotal"))    for it in lista)
         venda_ano_anterior_rotas = None
 
+
+        # ==============================================================================
+        # 🔧 REGRA ESPECÍFICA: TIME DO SUPERVISOR 228 (Apenas para o Ano Anterior)
+        # ==============================================================================
+        vendedores_aa_set = vendedores_set.copy()
+        
+        cod_logado = getattr(ctx, "cod_funcionario", None)
+        eh_time_228 = False
+
+        if cod_logado:
+            # 1. É o próprio supervisor 228?
+            if str(cod_logado) == '228':
+                eh_time_228 = True
+            # 2. Se não, verifica se o supervisor dele é o 228
+            else:
+                cod_chefe = obter_cod_supervisor(int(cod_logado))
+                if cod_chefe and str(cod_chefe) == '228':
+                    eh_time_228 = True
+
+        if eh_time_228:
+            # Busca todos do banco para aplicar o filtro customizado
+            todos_dados = Todos_Vendedores().get("detalhamento", [])
+            
+            custom_aa = set()
+            for v in todos_dados:
+                try:
+                    c_func = int(v.get("CodFuncionario"))
+                    c_ug   = int(v.get("unidgestora") or 0)
+                    
+                    # Filtro: UnidGestora = 1 AND CodFuncionario NOT IN (1, 4)
+                    if c_ug == 1 and c_func not in (1, 4):
+                        custom_aa.add(c_func)
+                except (TypeError, ValueError):
+                    continue
+            
+            vendedores_aa_set = custom_aa
+            
+            logger.info(
+                f"[IndicadoresView] Regra Time 228 (Logado: {cod_logado}) aplicada p/ Ano Anterior. "
+                f"Vendedores filtrados: {len(vendedores_aa_set)}"
+            )
+
         # ===========================================
         # VENDAS DO MESMO PERÍODO NO ANO ANTERIOR  
         # ===========================================
@@ -472,7 +514,7 @@ class IndicadoresView(APIView):
             aa_ini = _ajusta_data_aa(de_dt)
             aa_fim = _ajusta_data_aa(ate_dt)
         
-# ===========================================
+        # ===========================================
         # ANO ANTERIOR POR ROTAS (buscar_vendido)
         # ===========================================
         
@@ -539,8 +581,8 @@ class IndicadoresView(APIView):
             f"  IDs filtrados: {sorted(vendedores_set) if vendedores_set else 'N/A'}"
             )
 
-        if vendedores_set:
-            lista_aa = [it for it in lista_aa if _to_int(it.get("codcampo")) in vendedores_set]
+        if vendedores_aa_set: 
+            lista_aa = [it for it in lista_aa if _to_int(it.get("codcampo")) in vendedores_aa_set]
             codigos_considerados = sorted(
                                                 {_to_int(it.get("codcampo")) for it in lista_aa if _to_int(it.get("codcampo")) is not None}
                                             )
@@ -550,6 +592,16 @@ class IndicadoresView(APIView):
                     f"  Registros considerados: {len(lista_aa)}"
                     f"  Códigos vendedores: {codigos_considerados}"
                 )
+            # === ADICIONE ESTE BLOCO PARA LOGAR ===
+        print("\n=== DEBUG: VENDAS ANO ANTERIOR POR VENDEDOR ===")
+        for item in lista_aa:
+            cod = item.get("codcampo")
+            nome = item.get("Campo")
+            valor = item.get("ValorLiquido")
+            print(f"Vendedor: {cod} - {nome} | Valor AA: R$ {valor}")
+        print("===============================================\n")
+        # ======================================
+
         venda_ano_anterior = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa) or 1.0  # evita div/0
         print(f"[DEBUG][VENDA ANO ANTERIOR] {venda_ano_anterior}")
 
@@ -596,10 +648,10 @@ class IndicadoresView(APIView):
         lista_aa_mes = res_aa_mes.get("vendas_por_vendedor", []) or []
 
         # aplica o MESMO filtro de escopo de vendedores
-        if vendedores_set:
+        if vendedores_aa_set:
             lista_aa_mes = [
                 it for it in lista_aa_mes
-                if _to_int(it.get("codcampo")) in vendedores_set
+                if _to_int(it.get("codcampo")) in vendedores_aa_set
             ]
 
         # índice por vendedor do MÊS COMPLETO do ANO ANTERIOR
