@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ObjetivoMensal,Profile
+from .models import ObjetivoMensal,Profile,ObjetivoMixNivel
 from django.contrib.auth.models import User
 
 
@@ -80,3 +80,9 @@ class MeSerializer(serializers.ModelSerializer):
         if p.cobrador: roles.append("cobrador")
         if obj.is_superuser: roles.append("admin")
         return roles
+
+
+class ObjetivoMixNivelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ObjetivoMixNivel
+        fields = ['id', 'mes_referencia', 'nivel', 'codigo_alvo', 'objetivo_mix']

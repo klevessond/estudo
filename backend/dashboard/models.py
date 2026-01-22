@@ -81,3 +81,43 @@ def create_user_profile(sender, instance, created, **kwargs):
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):
     instance.profile.save()
+
+# No final de models.py
+
+class ObjetivoMixNivel(models.Model):
+    """
+    Tabela polimórfica para armazenar metas de Mix (não-aditivas) por hierarquia.
+    Ex: A meta da empresa NÃO é a soma das metas dos vendedores.
+    """
+    NIVEL_CHOICES = [
+        ('EMPRESA', 'Empresa (Geral)'),
+        ('SUPERVISOR', 'Supervisor'),
+        ('UNID_GESTORA', 'Unidade Gestora'),
+    ]
+
+    # Data de referência (sempre dia 01 do mês)
+    mes_referencia = models.DateField(db_index=True)
+    
+    # Define o escopo da meta
+    nivel = models.CharField(max_length=20, choices=NIVEL_CHOICES, db_index=True)
+    
+    # O código ID do alvo:
+    # - Se nivel='EMPRESA' -> 0 (ou 1)
+    # - Se nivel='SUPERVISOR' -> CodSupervisor (do ERP)
+    # - Se nivel='UNID_GESTORA' -> UnidGestora (do ERP)
+    codigo_alvo = models.IntegerField(default=0, db_index=True)
+    
+    # O valor da meta de Mix (Quantidade de SKUs distintos)
+    objetivo_mix = models.PositiveIntegerField()
+
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        # Garante performance e unicidade (ex: Supervisor 241 só pode ter 1 meta em Jan/2026)
+        unique_together = ['mes_referencia', 'nivel', 'codigo_alvo']
+        verbose_name = 'Objetivo de Mix por Nível'
+        verbose_name_plural = 'Objetivos de Mix por Nível'
+        db_table = "objetivo_mix_nivel"
+
+    def __str__(self):
+        return f"{self.mes_referencia} | {self.nivel} {self.codigo_alvo} | Mix: {self.objetivo_mix}"

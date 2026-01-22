@@ -7,8 +7,8 @@ from django.db.models import Sum
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import ObjetivoMensal,ObjetivoMensalVendedor
-from .serializers import ObjetivoMensalSerializer, CustomUserSerializer,MeSerializer
+from .models import ObjetivoMensal,ObjetivoMensalVendedor,ObjetivoMixNivel
+from .serializers import ObjetivoMensalSerializer, CustomUserSerializer,MeSerializer,ObjetivoMixNivelSerializer
 from datetime import datetime,date
 from decimal import Decimal
 from collections import defaultdict
@@ -1699,15 +1699,20 @@ def me(request):
     return Response(MeSerializer(request.user).data)
 
 class TodosVendedoresView(APIView):
-    #permission_classes = [IsAuthenticated]  # opcional, se você quiser autenticação
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Chama o serviço que busca todos os vendedores
-        vendedores = Todos_Vendedores()
+        # Verifica se o front pediu apenas ativos
+        apenas_ativos_param = request.query_params.get('ativos')
         
-        # Retorna o JSON já com a chave 'resultado' (ou qualquer chave que seu frontend espera)
-        return Response(vendedores)
+        # Converte string 'true'/'1' para boolean
+        somente_ativos = apenas_ativos_param in ['true', 'True', '1']
 
+        # Chama o serviço passando o flag
+        vendedores = Todos_Vendedores(somente_ativos=somente_ativos)
+        
+        return Response(vendedores)
+        
 class RupturaView(APIView):
     # permission_classes = [IsAuthenticated]  # habilite se quiser proteger
     def get(self, request):
@@ -1841,3 +1846,78 @@ class ResumoSegmentoAreaVendaView(APIView):
             # mantém o payload antigo para compatibilidade, se você ainda precisar
             "resultado": rows,
         })
+
+
+class ObjetivoMixNivelView(APIView):
+    # permission_classes = [IsAuthenticated] # Habilite conforme sua segurança
+
+    def get(self, request):
+        """
+        GET /objetivos-mix-nivel/?mes=YYYY-MM-DD
+        Retorna todas as metas hierárquicas daquele mês.
+        """
+        mes_str = request.query_params.get('mes')
+        if not mes_str:
+            return Response({"error": "Parâmetro 'mes' (YYYY-MM-DD) obrigatório."}, status=400)
+
+        # Ajusta para o dia 01 para garantir consistência
+        try:
+            data_ref = datetime.strptime(mes_str, "%Y-%m-%d").date().replace(day=1)
+        except ValueError:
+            return Response({"error": "Formato de data inválido."}, status=400)
+
+        # Busca no banco
+        metas = ObjetivoMixNivel.objects.filter(mes_referencia=data_ref)
+        serializer = ObjetivoMixNivelSerializer(metas, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        """
+        POST /objetivos-mix-nivel/
+        Payload esperado:
+        {
+            "mes_referencia": "2026-01-01",
+            "metas": [
+                {"nivel": "EMPRESA", "codigo_alvo": 0, "objetivo_mix": 500},
+                {"nivel": "SUPERVISOR", "codigo_alvo": 241, "objetivo_mix": 150},
+                {"nivel": "UNID_GESTORA", "codigo_alvo": 1, "objetivo_mix": 300}
+            ]
+        }
+        """
+        data = request.data
+        mes_str = data.get("mes_referencia")
+        metas_list = data.get("metas", [])
+
+        if not mes_str or not isinstance(metas_list, list):
+            return Response({"error": "Payload inválido. Informe 'mes_referencia' e lista 'metas'."}, status=400)
+
+        try:
+            data_ref = datetime.strptime(mes_str, "%Y-%m-%d").date().replace(day=1)
+        except ValueError:
+            return Response({"error": "Data inválida."}, status=400)
+
+        response_data = []
+        
+        with transaction.atomic():
+            for item in metas_list:
+                nivel = item.get("nivel")
+                codigo = item.get("codigo_alvo", 0)
+                valor = item.get("objetivo_mix", 0)
+
+                if not nivel: 
+                    continue
+
+                obj, created = ObjetivoMixNivel.objects.update_or_create(
+                    mes_referencia=data_ref,
+                    nivel=nivel,
+                    codigo_alvo=codigo,
+                    defaults={"objetivo_mix": valor}
+                )
+                response_data.append({
+                    "nivel": nivel, 
+                    "codigo": codigo, 
+                    "mix": valor, 
+                    "status": "created" if created else "updated"
+                })
+
+        return Response({"message": "Metas de Mix processadas com sucesso.", "detalhes": response_data})
