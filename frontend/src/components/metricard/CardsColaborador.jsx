@@ -191,19 +191,6 @@ const alocado = colaborador.alocado || 0;
           )}
         </div>
 
-          <div className="card" style={{ background: '#fff0f3' }}>
-            <div className="card-title">Positivação:</div>
-            <div>{qtdClientes} / {obrotaTotal.toLocaleString('pt-BR')}</div>
-            <div className="progress-container">
-              <div
-                className={`progress-bar ${getProgressClass(porcentagemPositivacao)}`}
-                style={{ width: `${Math.min(porcentagemPositivacao, 100)}%` }}
-              />
-            </div>
-            <div>Objetivo: {obrotaTotal.toLocaleString('pt-BR')} clientes</div>
-            <div>Progresso: {porcentagemPositivacao.toFixed(1)}%</div>
-          </div>
-
           <div className="card" style={{ background: '#eafae1' }}>
             <div className="card-title">Peso Vendido:</div>
             {pesototalvendido.toLocaleString('pt-BR')} kg
@@ -228,6 +215,19 @@ const alocado = colaborador.alocado || 0;
             </div>
             <div>Objetivo: {objetivoMix} itens</div>
             <div>Progresso: {porcentagemMix.toFixed(1)}%</div>
+          </div>
+
+                    <div className="card" style={{ background: '#fff0f3' }}>
+            <div className="card-title">Positivação:</div>
+            <div>{qtdClientes} / {obrotaTotal.toLocaleString('pt-BR')}</div>
+            <div className="progress-container">
+              <div
+                className={`progress-bar ${getProgressClass(porcentagemPositivacao)}`}
+                style={{ width: `${Math.min(porcentagemPositivacao, 100)}%` }}
+              />
+            </div>
+            <div>Objetivo: {obrotaTotal.toLocaleString('pt-BR')} clientes</div>
+            <div>Progresso: {porcentagemPositivacao.toFixed(1)}%</div>
           </div>
         </div>
       )}
