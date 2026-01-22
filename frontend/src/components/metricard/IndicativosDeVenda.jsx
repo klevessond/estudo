@@ -395,7 +395,10 @@ const IndicadoresCards = ({
   onVendedoresPermitidosTabelaChange,
 }) => {
   const [loading, setLoading] = useState(false);
-
+// === ✅ COLE AQUI (NOVO CÓDIGO) ===
+  const [valorRotasAnoAnterior, setValorRotasAnoAnterior] = useState(0); 
+  const [valorRotasAnoAnteriorFmt, setValorRotasAnoAnteriorFmt] = useState(null); 
+  const [evolucaoRotas, setEvolucaoRotas] = useState(null);
   // --- estados exibidos nos cards/gauges ---
   const [peso, setPeso] = useState(null);
   const [pesoPercentual, setPesoPercentual] = useState(null);
@@ -768,6 +771,8 @@ setAlocacaoVariacao(
         dlog('payload bruto /Indicadores:', data);
 
         const objetivos = [];
+        const rotasTotal = Number(data?.vendas?.venda_ano_anterior_rotas?.valor_total || 0);
+        setValorRotasAnoAnterior(rotasTotal);
         
 
         if (Array.isArray(data.objetivo?.detalhamento)) {
@@ -874,6 +879,35 @@ setAlocacaoVariacao(
 
     fetchIndicadores();
   }, [periodoSelecionado, onObjetivosRecebidos]);
+
+  // === CÁLCULO ESPECÍFICO PARA O CARD "ROTAS" (GERÊNCIA) ===
+
+  useEffect(() => {
+  // 1. Definição do Realizado Atual (Considera PDV se estiver ativo)
+  const atualTotal = Number(vendaRealizadaBase || 0) + 
+                     (usarPDV ? Number(pdvSelecionadoAtual || 0) : 0);
+
+  // 2. Definição da Base Anterior (Usa o campo "Rotas" + PDV Ano Anterior se ativo)
+  const baseRotasTotal = Number(valorRotasAnoAnterior || 0) + 
+                         (usarPDV ? Number(vendaPDVAnoAnterior || 0) : 0);
+
+  // 3. Cálculo do Percentual de Evolução
+  // (Atual - Anterior) / Anterior * 100
+  const perc = baseRotasTotal > 0 ? ((atualTotal - baseRotasTotal) / baseRotasTotal) * 100 : 0;
+
+  // 4. Formatação para exibição
+  setValorRotasAnoAnteriorFmt(
+    baseRotasTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  );
+  setEvolucaoRotas(`${perc.toFixed(2)}%`);
+
+}, [
+  vendaRealizadaBase, 
+  valorRotasAnoAnterior, 
+  usarPDV, 
+  pdvSelecionadoAtual, 
+  vendaPDVAnoAnterior
+]);
 
   useEffect(() => {
   if (!rawData) return;
@@ -1441,6 +1475,24 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
             percentage={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'}
             subtitle2="Evo % vs Ano Ant."
             className="card-objetivo"
+          />
+
+                    {/* === NOVO CARD DUPLICADO PARA GERÊNCIA (ROTAS) === */}
+          <Card
+            title="Evolução (Visão Rotas)" 
+            value={objetivoFinanceiro ?? '...'}
+            subtitle="Objetivo Financeiro"
+            title2={
+              <>
+                Vendas Ano Ant. (Rotas):
+                <br />
+                {valorRotasAnoAnteriorFmt ?? '--'}
+              </>
+            }
+            percentage={evolucaoRotas ?? '...'}
+            subtitle2="Evo % vs Rotas"
+            className="card-objetivo" // Pode criar uma classe CSS nova se quiser mudar a cor, ex: "card-objetivo-rotas"
+            icon={null} // Ou adicione um ícone específico se desejar
           />
 
           <Card
