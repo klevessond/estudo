@@ -597,7 +597,7 @@ const IndicadoresCards = ({
     const posReal = Number(linha?.QtdClientes || 0);
     const objPos = Number(
       m?.objetivo_positivacao ??
-        data?.objetoivo?.objetivo_positivacao ??
+        data?.objetivo?.objetivo_positivacao ??
         data?.objetivo?.objetivo_positivacao ??
         0
     );
@@ -1367,17 +1367,33 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
   setPesoPercentual(`${(obj.objetivo_peso > 0 ? (pesoReal / obj.objetivo_peso) * 100 : 0).toFixed(2)}%`);
   setPesoVariacao((pesoReal - obj.objetivo_peso).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
 
+ 
   // 4) MIX
-  setObjetivoMix(String(obj.objetivo_mix || 0));
+  // Se não tem filtro (selecionadas vazio), usa a Meta da Empresa que vem no payload principal.
+  // Se tem filtro, usa a soma das áreas selecionadas (obj.objetivo_mix).
+  let metaMixFinal = 0;
+
+  if (!selecionadas || selecionadas.length === 0) {
+     // Sem filtro: Meta Geral da Empresa (vinda do backend já correta)
+     metaMixFinal = Number(data.objetivo?.objetivo_mix || 0);
+  } else {
+     // Com filtro: Soma das metas dos supervisores selecionados
+     metaMixFinal = Number(obj.objetivo_mix || 0);
+  }
+
+  setObjetivoMix(String(metaMixFinal));
+  
   const mixReal = Number(filtrado?.realizado_mix?.realizado ?? 0);
-  setMixPercentual(`${(obj.objetivo_mix > 0 ? (mixReal / obj.objetivo_mix) * 100 : 0).toFixed(2)}%`);
-  setMixVariacao(String(mixReal - obj.objetivo_mix));
+  
+  setMixPercentual(`${(metaMixFinal > 0 ? (mixReal / metaMixFinal) * 100 : 0).toFixed(2)}%`);
+  setMixVariacao(String(mixReal - metaMixFinal));
 
   // 5) Positivação
   const posReal = Number(filtrado?.positivacao?.realizado ?? 0);
   setPositivadoObjetivo(obj.objetivo_positivacao.toLocaleString('pt-BR'));
   setPositivadoPercentual(`${(obj.objetivo_positivacao > 0 ? (posReal / obj.objetivo_positivacao) * 100 : 0).toFixed(2)}%`);
   setPositivadoVariacao((posReal - obj.objetivo_positivacao).toLocaleString('pt-BR'));
+  
 };
 
   return (

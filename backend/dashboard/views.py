@@ -311,67 +311,113 @@ class IndicadoresView(APIView):
             "objetivo_peso":        round(float(objetivo_mensal_data.get("objetivo_peso") or 0), 2),
             "objetivo_positivacao": round(float(objetivo_mensal_data.get("objetivo_positivacao") or 0), 2),
         }
+        
+        # ------------------------------------------------------------------
+        # 🆕 LÓGICA DE MIX HIERÁRQUICO (Empresa/Supervisor)
+        # ------------------------------------------------------------------
+        mix_empresa_val = 0
+        mix_supervisores_map = {} # { 'cod_supervisor_str': valor }
+
+        try:
+            # Define data de referência (dia 01 do mês)
+            dt_ref = datetime.strptime(data_inicio, "%Y-%m-%d").date().replace(day=1)
+            
+            # Busca todas as metas de nível para o mês
+            mix_nivel_qs = ObjetivoMixNivel.objects.filter(mes_referencia=dt_ref)
+            
+            for m in mix_nivel_qs:
+                if m.nivel == 'EMPRESA':
+                    mix_empresa_val = m.objetivo_mix
+                elif m.nivel == 'SUPERVISOR':
+                    mix_supervisores_map[str(m.codigo_alvo)] = m.objetivo_mix
+
+            # --- AJUSTE DO OBJETIVO PRINCIPAL (Card de Mix) ---
+            # Se for Gerente/Admin, a meta geral padrão é a da EMPRESA
+            eh_gerente_rotas = rotas_info.get("e_gerente", False)
+
+            # Verifica se é Gerente pelo Profile (ctx) OU pelas Rotas (ERP)
+            if getattr(ctx, "is_gerente", False) or getattr(ctx, "is_admin", False) or eh_gerente_rotas:
+                # Se for Gerente/Admin, a meta geral padrão é a da EMPRESA
+                if mix_empresa_val > 0:
+                    objetivo["objetivo_mix"] = mix_empresa_val
+            
+            # Se for Supervisor, a meta geral dele é a SUA meta de nível
+            elif getattr(ctx, "is_supervisor", False):
+                cod_sup = str(ctx.cod_funcionario)
+                if cod_sup in mix_supervisores_map:
+                    objetivo["objetivo_mix"] = mix_supervisores_map[cod_sup]
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar ObjetivoMixNivel: {e}")
+
+        # ------------------------------------------------------------------
+        
+        
         objetivos_vendedores = get_objetivos_vendedores_por_mes(data_inicio)
+
+
+
         # == agrega objetivos por área de supervisão (para gerente) ===
-        def _agregar_objetivos_por_area(areas_supervisao, objetivos_vendedores):
+        def _agregar_objetivos_por_area(areas_supervisao, objetivos_vendedores, mix_map):
             """
-            Para cada área de supervisão, soma os objetivos de todos os vendedores
-            daquela área e adiciona no próprio dict:
-              - objetivo_financeiro_area
-              - objetivo_peso_area
-              - objetivo_mix_area
-              - objetivo_positivacao_area
+            Soma Financeiro/Peso/Positivação dos vendedores.
+            PARA MIX: Usa a meta do Supervisor (mix_map) se existir, senão soma (fallback).
             """
-            if not areas_supervisao or not objetivos_vendedores:
+            if not areas_supervisao:
                 return areas_supervisao
 
-            # Mapa vendedor_id -> objetivos
+            # Mapa auxiliar de objetivos individuais
             obj_by_vendedor = {}
             for o in objetivos_vendedores or []:
                 try:
                     vend_id = int(str(o.get("vendedor_id")).strip())
-                except (TypeError, ValueError):
+                    obj_by_vendedor[vend_id] = {
+                        "financeiro": float(o.get("objetivo_financeiro") or 0),
+                        "peso":       float(o.get("objetivo_peso") or 0),
+                        "mix":        float(o.get("objetivo_mix") or 0),
+                        "pos":        float(o.get("objetivo_positivacao") or 0),
+                    }
+                except (ValueError, TypeError):
                     continue
 
-                obj_by_vendedor[vend_id] = {
-                    "financeiro": float(o.get("objetivo_financeiro") or 0),
-                    "peso":       float(o.get("objetivo_peso") or 0),
-                    "mix":        float(o.get("objetivo_mix") or 0),
-                    "pos":        float(o.get("objetivo_positivacao") or 0),
-                }
-
-            # Percorre as áreas e agrega os objetivos dos vendedores daquela área
             for area in areas_supervisao:
                 soma_fin  = 0.0
                 soma_peso = 0.0
-                soma_mix  = 0.0
+                soma_mix_vendedores = 0.0
                 soma_pos  = 0.0
 
                 for vend in area.get("vendedores") or []:
                     try:
                         vend_id = int(str(vend).strip())
-                    except (TypeError, ValueError):
-                        continue
-
-                    obj = obj_by_vendedor.get(vend_id)
-                    if not obj:
-                        continue
-
-                    soma_fin  += obj["financeiro"]
-                    soma_peso += obj["peso"]
-                    soma_mix  += obj["mix"]
-                    soma_pos  += obj["pos"]
+                        obj = obj_by_vendedor.get(vend_id)
+                        if obj:
+                            soma_fin  += obj["financeiro"]
+                            soma_peso += obj["peso"]
+                            soma_mix_vendedores += obj["mix"]
+                            soma_pos  += obj["pos"]
+                    except: pass
 
                 area["objetivo_financeiro_area"]  = round(soma_fin, 2)
                 area["objetivo_peso_area"]        = round(soma_peso, 2)
-                area["objetivo_mix_area"]         = round(soma_mix, 2)
                 area["objetivo_positivacao_area"] = round(soma_pos, 2)
+                
+                # 🔥 AQUI: Se existe meta para este supervisor, usa ela. 
+                # Caso contrário, usa a soma dos vendedores.
+                cod_sup = str(area.get("cod_supervisor"))
+                if cod_sup in mix_map:
+                    area["objetivo_mix_area"] = mix_map[cod_sup]
+                else:
+                    area["objetivo_mix_area"] = round(soma_mix_vendedores, 2)
 
             return areas_supervisao
 
         # Se for supervisor-gerente, já devolve as áreas com os objetivos agregados
         if grupos_supervisao:
-            grupos_supervisao = _agregar_objetivos_por_area(grupos_supervisao, objetivos_vendedores)
+            grupos_supervisao = _agregar_objetivos_por_area(
+            grupos_supervisao, 
+            objetivos_vendedores, 
+            mix_supervisores_map  # <--- Adicione este argumento
+        )
 
         # variáveis locais
         objetivo_financeiro   = objetivo["financeiro"]
@@ -991,6 +1037,10 @@ class IndicadoresView(APIView):
             "evolucao": {
                 "valor_ano_anterior": round(venda_ano_anterior, 2),
                 "percentual": round(evolucao_percentual)  # positivo/negativo
+            },
+            "objetivos_mix_hierarquico": {
+                "empresa": mix_empresa_val,
+                "supervisores": mix_supervisores_map
             },
             "pre-venda": {
                 "valor_prevenda": round(valor_prevenda, 2),
@@ -1712,7 +1762,7 @@ class TodosVendedoresView(APIView):
         vendedores = Todos_Vendedores(somente_ativos=somente_ativos)
         
         return Response(vendedores)
-        
+
 class RupturaView(APIView):
     # permission_classes = [IsAuthenticated]  # habilite se quiser proteger
     def get(self, request):

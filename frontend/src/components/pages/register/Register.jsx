@@ -221,7 +221,7 @@ const RegisterObjetivosVendedores = () => {
               style={{ marginLeft: 10, padding: 5, width: 100 }}
               placeholder="Ex: 500"
             />
-            <small style={{display:'block', color:'#666'}}>Não é soma dos vendedores</small>
+            <small style={{display:'block', color:'#666'}}></small>
           </div>
           <div style={{ opacity: 0.7 }}>
             <div>Total Financeiro (Soma): <strong>R$ {Number(totalFin).toLocaleString('pt-BR')}</strong></div>
