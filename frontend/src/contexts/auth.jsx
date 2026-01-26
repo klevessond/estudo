@@ -81,14 +81,23 @@ export const AuthProvider = ({ children }) => {
   const roles = useMemo(() => getVisibleRoles(me), [me]);
   const value = useMemo(
     () => ({
-      me,
+      // Dados
+      user: me,       // Mapeia 'me' para 'user'
+      me,             // Mantém 'me' disponível também
       roles,
       loading,
-      is: (role) => roles.includes(role),
-      can: (anyOf) => anyOf.some((r) => roles.includes(r)),
+      signed: !!me,   // Define se está logado
+
+      // Funções
+      signIn: login,  // Mapeia 'login' para 'signIn'
       login,
+      signOut: logout,// Mapeia 'logout' para 'signOut'
       logout,
       refresh,
+
+      // Helpers
+      is: (role) => roles.includes(role),
+      can: (anyOf) => anyOf.some((r) => roles.includes(r)),
     }),
     [me, roles, loading]
   );

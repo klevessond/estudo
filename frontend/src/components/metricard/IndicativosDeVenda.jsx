@@ -4,6 +4,7 @@ import ReactSpeedometer from 'react-d3-speedometer';
 import api from '../../api';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 import Select from 'react-select';
+import { useAuth } from '../../contexts/auth';
 
 
 const dlog = (...args) => console.log('[IndicativosDeVenda]', ...args);
@@ -394,6 +395,10 @@ const IndicadoresCards = ({
   onPDVResumoChange,
   onVendedoresPermitidosTabelaChange,
 }) => {
+  const { user } = useAuth();
+
+  console.log('[DEBUG] User Context:', user);
+  
   const [loading, setLoading] = useState(false);
 // === ✅ COLE AQUI (NOVO CÓDIGO) ===
   const [valorRotasAnoAnterior, setValorRotasAnoAnterior] = useState(0); 
@@ -858,7 +863,7 @@ setAlocacaoVariacao(
             );
 
             // visão padrão conforme o tipo de usuário
-            if (gerente) {
+            if (gerente || user?.supervisor) {
               // gerente: visão área (todos os vendedores)
               setSomarArea(true);
               applyAreaFromRaw(data);
@@ -878,7 +883,7 @@ setAlocacaoVariacao(
 
 
     fetchIndicadores();
-  }, [periodoSelecionado, onObjetivosRecebidos]);
+  }, [periodoSelecionado, onObjetivosRecebidos,user]);
 
   // === CÁLCULO ESPECÍFICO PARA O CARD "ROTAS" (GERÊNCIA) ===
 

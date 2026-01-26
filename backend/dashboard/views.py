@@ -1921,7 +1921,23 @@ def funcionario_detail(request, cod_funcionario):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def me(request):
-    return Response(MeSerializer(request.user).data)
+    # 1. Serializa os dados básicos (username, email, etc)
+    user_data = MeSerializer(request.user).data
+    
+    # 2. Obtém o contexto de papéis (mesma lógica que gerou seu log no backend)
+    ctx = get_role_context(request.user)
+    
+    # 3. Injeta as permissões e códigos explicitamente no JSON de resposta
+    user_data['cod_funcionario'] = ctx.cod_funcionario
+    user_data['cod_unid_gestora'] = ctx.cod_unid_gestora
+    
+    # Flags booleanas diretas para facilitar o frontend
+    user_data['supervisor'] = getattr(ctx, "is_supervisor", False)
+    user_data['gerente'] = getattr(ctx, "is_gerente", False)
+    user_data['vendedor'] = getattr(ctx, "is_vendedor", False)
+    user_data['admin'] = getattr(ctx, "is_admin", False)
+    
+    return Response(user_data)
 
 class TodosVendedoresView(APIView):
     # permission_classes = [IsAuthenticated]
