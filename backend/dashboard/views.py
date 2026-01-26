@@ -1037,24 +1037,25 @@ class IndicadoresView(APIView):
         vendido["venda_ano_anterior_rotas"] = venda_ano_anterior_rotas
 
 
-        # =========================================================
-        # 🟢 INICIO DO BLOCO: PROJEÇÃO INTEGRADA & PDV (FINAL)
+# =========================================================
+        # 🟢 INICIO DO BLOCO: PROJEÇÃO INTEGRADA & PDV (FINAL - DETALHADO)
         # =========================================================
         
-        # 1. Busca Dados Externos (PDV e Positivação)
+        # 1. Busca Dados Externos
         dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
         dados_positivacao = buscar_positivacao_por_rota(data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores)
         
-        # 2. Valores Totais Gerais da Empresa
+        # 2. Valores Totais Gerais
         venda_pdv_total = float(dados_pdv.get("valor_pdv") or 0)
         peso_pdv_total = float(dados_pdv.get("peso_pdv") or 0)
         pos_realizado_geral = float(dados_positivacao.get("positivacao_realizado_geral") or 0)
 
-        # Totais Combinados (Rotas + PDV)
+        # Totais Combinados
+        # CORREÇÃO AQUI: Usamos 'venda_realizada' e 'peso_realizado' que já existem no seu código
         venda_total_empresa = venda_realizada + venda_pdv_total
         peso_total_empresa = peso_realizado + peso_pdv_total
 
-        # 3. Criação de Mapas para Busca Rápida (Vendedor ID -> Valor)
+        # 3. Mapas
         pdv_map = defaultdict(lambda: {"fin": 0.0, "peso": 0.0})
         for item in dados_pdv.get("detalhado", []):
             try:
@@ -1068,13 +1069,11 @@ class IndicadoresView(APIView):
         for item in dados_positivacao.get("detalhado", []):
             try:
                 c_func = int(item.get("CodFuncionario") or 0)
-                # Verifica se o campo é 'ClientesPositivadosRota' (padrão) ou 'Realizado'
                 qtd = float(item.get("ClientesPositivadosRota") or item.get("Realizado") or 0)
                 if c_func > 0:
                     pos_map[c_func] += qtd
             except: continue
 
-        # Mapa Metas
         meta_map = {}
         for o in objetivos_vendedores or []:
             try:
@@ -1086,7 +1085,7 @@ class IndicadoresView(APIView):
                 }
             except: continue
 
-        # 4. Configuração do Calendário
+        # 4. Calendário
         try:
             dt_ref_fim = datetime.strptime(data_fim, "%Y-%m-%d").date()
             dias_info = get_dias_uteis_info(data_base=dt_ref_fim)
@@ -1094,77 +1093,96 @@ class IndicadoresView(APIView):
             dias_info = {"totais": 22, "decorridos": 1, "restantes": 21}
 
         # 5. Cálculo das Projeções GERAIS (Empresa)
+        # Nota: Passamos meta 0 para Rotas e PDV isolados apenas para obter a projeção linear (run rate)
+        # CORREÇÃO AQUI: Usando 'venda_realizada'
+        projecao_financeira_rotas_geral = calcular_matematica_projecao(venda_realizada, 0, dias_info)
+        projecao_financeira_pdv_geral = calcular_matematica_projecao(venda_pdv_total, 0, dias_info)
+        
+        # Projeção Total (Com a meta real)
         projecao_financeira_geral = calcular_matematica_projecao(venda_total_empresa, objetivo_financeiro, dias_info)
+        
+        # Outras dimensões
         projecao_peso_geral = calcular_matematica_projecao(peso_total_empresa, objetivo_peso, dias_info)
         projecao_positivacao_geral = calcular_matematica_projecao(pos_realizado_geral, objetivo_positivacao, dias_info)
 
-        # [LOG EMPRESA] - Adicionado conforme solicitado
+        # [LOG EMPRESA DETALHADO]
         logger.info("========================================")
         logger.info(f"--- [PROJEÇÃO EMPRESA] ---")
         logger.info(f"Calendário: {dias_info['decorridos']} decorridos / {dias_info['totais']} totais")
-        logger.info(f"Realizado Geral: R$ {venda_total_empresa:,.2f} (Meta: {objetivo_financeiro:,.2f})")
-        logger.info(f"Projeção Final: R$ {projecao_financeira_geral['projecao_final']:,.2f}")
-        logger.info(f"Falta para Meta: R$ {projecao_financeira_geral['falta_para_meta']:,.2f}")
-        logger.info(f"Necessário/Dia: R$ {projecao_financeira_geral['meta_diaria_necessaria']:,.2f}")
+        logger.info("FINANCEIRO (Rotas vs PDV):")
+        logger.info(f"   Rotas: Realizado R$ {venda_realizada:,.2f} -> Projeção R$ {projecao_financeira_rotas_geral['projecao_final']:,.2f}")
+        logger.info(f"   PDV:   Realizado R$ {venda_pdv_total:,.2f} -> Projeção R$ {projecao_financeira_pdv_geral['projecao_final']:,.2f}")
+        logger.info(f"   TOTAL: Realizado R$ {venda_total_empresa:,.2f} -> Projeção R$ {projecao_financeira_geral['projecao_final']:,.2f}")
+        logger.info("CORREÇÃO (Total):")
+        logger.info(f"   Meta: {objetivo_financeiro:,.2f} | Falta: {projecao_financeira_geral['falta_para_meta']:,.2f}")
+        logger.info(f"   Necessário/Dia: R$ {projecao_financeira_geral['meta_diaria_necessaria']:,.2f}")
         logger.info("========================================")
 
-        # 6. Loop de Projeção INDIVIDUAL (Injeta dados em cada vendedor da lista)
+        # 6. Loop de Projeção INDIVIDUAL
         for vend in lista:
             try:
                 vid = int(vend.get("codcampo") or 0)
                 nome_vend = vend.get("Campo")
                 
-                # A) Recupera Realizado (Rotas)
+                # Valores Realizados
                 val_rotas = float(vend.get("ValorLiquido") or 0)
                 peso_rotas = float(vend.get("PesoTotal") or 0)
                 
-                # B) Recupera PDV e Positivação (Mapas)
                 val_pdv = pdv_map[vid]["fin"]
                 peso_pdv = pdv_map[vid]["peso"]
-                val_pos = pos_map[vid] 
+                val_pos = pos_map[vid]
 
-                # C) Totais Combinados
                 total_fin = val_rotas + val_pdv
                 total_peso = peso_rotas + peso_pdv
-                
-                # D) Recupera Metas Individuais
+
+                # Metas
                 metas = meta_map.get(vid, {"fin": 0, "peso": 0, "pos": 0})
 
-                # E) Calcula Projeções (Matemática)
-                proj_fin = calcular_matematica_projecao(total_fin, metas["fin"], dias_info)
-                proj_peso = calcular_matematica_projecao(total_peso, metas["peso"], dias_info)
-                proj_pos = calcular_matematica_projecao(val_pos, metas["pos"], dias_info)
+                # --- CÁLCULOS SEPARADOS ---
+                # 1. Projeção só de Rotas
+                p_rotas_only = calcular_matematica_projecao(val_rotas, 0, dias_info)
+                # 2. Projeção só de PDV
+                p_pdv_only = calcular_matematica_projecao(val_pdv, 0, dias_info)
+                # 3. Projeção Total (com a meta do vendedor)
+                p_fin_total = calcular_matematica_projecao(total_fin, metas["fin"], dias_info)
+                
+                p_peso = calcular_matematica_projecao(total_peso, metas["peso"], dias_info)
+                p_pos = calcular_matematica_projecao(val_pos, metas["pos"], dias_info)
 
-                # --- INJEÇÃO NO JSON PARA O FRONTEND (DADOS INDIVIDUAIS) ---
+                # --- INJEÇÃO NO JSON ---
+                vend["projecao"] = p_fin_total # Principal (Total)
                 
-                # 1. Objeto Projeção Financeira Principal
-                vend["projecao"] = proj_fin 
+                # Valores Realizados Segregados
+                vend["venda_rotas"] = val_rotas
+                vend["venda_pdv"] = val_pdv
+                vend["venda_total_geral"] = total_fin
                 
-                # 2. Dados de Valor Segregados
-                vend["venda_rotas"] = val_rotas          # Valor vindo do ERP
-                vend["venda_pdv"] = val_pdv              # Valor vindo do PDV
-                vend["venda_total_geral"] = total_fin    # Soma usada na projeção
+                # Valores Projetados Segregados (NOVO)
+                vend["projecao_financeira_rotas"] = p_rotas_only
+                vend["projecao_financeira_pdv"] = p_pdv_only
+
+                # Métricas de Correção
+                vend["falta_para_meta"] = p_fin_total["falta_para_meta"]
+                vend["meta_diaria_necessaria"] = p_fin_total["meta_diaria_necessaria"]
+                vend["venda_media_diaria_atual"] = p_fin_total["velocidade_diaria"]
                 
-                # 3. Atalhos para Facilitar o Frontend (Estes campos estarão na raiz do vendedor)
-                vend["falta_para_meta"] = proj_fin["falta_para_meta"]
-                vend["meta_diaria_necessaria"] = proj_fin["meta_diaria_necessaria"]
-                vend["venda_media_diaria_atual"] = proj_fin["velocidade_diaria"]
-                
-                # 4. Objeto Detalhado com Peso e Positivação
+                # Detalhado
                 vend["projecoes_detalhadas"] = {
-                    "financeiro": proj_fin,
-                    "peso": proj_peso,
-                    "positivacao": proj_pos
+                    "financeiro_total": p_fin_total,
+                    "financeiro_rotas": p_rotas_only,
+                    "financeiro_pdv": p_pdv_only,
+                    "peso": p_peso,
+                    "positivacao": p_pos
                 }
 
-                # [LOG VENDEDOR] - Amostra (Loga se tiver venda ou meta)
+                # [LOG VENDEDOR]
                 if total_fin > 0 or metas['fin'] > 0:
                     logger.info(
-                        f"-> [CALC VEND {vid}] {nome_vend}: "
-                        f"Realizado R$ {total_fin:.0f} (Rotas {val_rotas:.0f} + PDV {val_pdv:.0f}) | "
-                        f"Meta R$ {metas['fin']:.0f} | "
-                        f"Falta R$ {proj_fin['falta_para_meta']:.0f} | "
-                        f"Precisa R$ {proj_fin['meta_diaria_necessaria']:.0f}/dia"
+                        f"-> [CALC {vid}] {nome_vend}: "
+                        f"ROTAS(R${val_rotas:.0f} -> Proj {p_rotas_only['projecao_final']:.0f}) + "
+                        f"PDV(R${val_pdv:.0f} -> Proj {p_pdv_only['projecao_final']:.0f}) | "
+                        f"Média Total: R$ {p_fin_total['velocidade_diaria']:.0f}/dia | "
+                        f"Falta: {p_fin_total['falta_para_meta']:.0f}"
                     )
 
             except Exception as e:
@@ -1226,8 +1244,9 @@ class IndicadoresView(APIView):
             },
             "projecao_empresa": {
                 "dias_uteis": dias_info,
-                # Use as variáveis com sufixo _geral aqui 👇
                 "financeiro": projecao_financeira_geral,
+                "financeiro_rotas": projecao_financeira_rotas_geral,
+                "financeiro_pdv": projecao_financeira_pdv_geral,
                 "peso": projecao_peso_geral,
                 "positivacao": projecao_positivacao_geral,
                 "detalhes_valores": {
