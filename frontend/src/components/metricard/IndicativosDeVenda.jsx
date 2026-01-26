@@ -325,18 +325,7 @@ const getValorAnoAnteriorTexto = (
 
 /* ========= COMPONENTES DE APRESENTAÇÃO ========= */
 
-const Card = ({
-  title,
-  title2,
-  value,
-  value2,
-  subtitle,
-  subtitle2,
-  percentage,
-  variation,
-  icon,
-  className,
-}) => (
+const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, variation, icon, className, onDetailClick }) => (
   <div className={`indicativo-card ${className || ''}`}>
     <div className="card-header">
       <h2>{title}</h2>
@@ -357,9 +346,131 @@ const Card = ({
       {percentage && <p className="card-percentage">{percentage}</p>}
       {subtitle2 && <p className="card-subtitle">{subtitle2}</p>}
     </div>
-    {variation && <p className="card-variation"> {variation} Desvio</p>}
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        {variation && <p className="card-variation"> {variation} Desvio</p>}
+        {/* 👇 O BOTÃO DE DETALHAR ENTRA AQUI 👇 */}
+        {onDetailClick && (
+            <button 
+                onClick={onDetailClick} 
+                style={{ 
+                    background: 'none', border: 'none', color: '#007bff', 
+                    cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline',
+                    padding: 0, marginLeft: 'auto'
+                }}
+            >
+                Detalhar 🔍
+            </button>
+        )}
+    </div>
   </div>
 );
+
+/* ========= NOVO COMPONENTE: MODAL DE PROJEÇÃO ========= */
+const ProjectionModal = ({ onClose, data, usarPDV }) => {
+    if (!data) return null;
+
+    const proj = data.projecao_empresa || {};
+    const fin = proj.financeiro || {};
+    const rotas = proj.financeiro_rotas || {};
+    const pdv = proj.financeiro_pdv || {};
+    // Verifica flag do backend E switch do frontend
+    const temPDV = proj.tem_pdv && usarPDV; 
+    const mix = proj.mix || {};
+
+    // Estilos inline para simplicidade
+    const overlayStyle = {
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', 
+        alignItems: 'center', justifyContent: 'center', zIndex: 1000
+    };
+    const contentStyle = {
+        backgroundColor: '#fff', padding: '20px', borderRadius: '8px',
+        width: '90%', maxWidth: '600px', boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
+    };
+    const tableStyle = { width: '100%', borderCollapse: 'collapse', marginTop: '10px' };
+    const thStyle = { borderBottom: '2px solid #eee', textAlign: 'left', padding: '8px', fontSize: '0.9rem' };
+    const tdStyle = { borderBottom: '1px solid #eee', padding: '8px', fontSize: '0.9rem' };
+
+    return (
+        <div style={overlayStyle} onClick={onClose}>
+            <div style={contentStyle} onClick={e => e.stopPropagation()}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px'}}>
+                    <h3 style={{margin:0}}>Detalhes da Projeção (Geral)</h3>
+                    <button onClick={onClose} style={{border:'none', background:'none', fontSize:'1.5rem', cursor:'pointer'}}>&times;</button>
+                </div>
+
+                <h4 style={{marginTop:0, color:'#555'}}>Financeiro</h4>
+                <table style={tableStyle}>
+                    <thead>
+                        <tr>
+                            <th style={thStyle}>Origem</th>
+                            <th style={thStyle}>Realizado</th>
+                            <th style={thStyle}>Projeção</th>
+                            <th style={thStyle}>Objetivo</th>
+                            <th style={thStyle}>% Ating. Proj.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style={tdStyle}><strong>Rotas</strong></td>
+                            <td style={tdStyle}>{fmtMoeda(proj.detalhes_valores?.rotas)}</td>
+                            <td style={tdStyle}>{fmtMoeda(rotas.projecao_final)}</td>
+                            <td style={tdStyle}>-</td>
+                            <td style={tdStyle}>-</td>
+                        </tr>
+                        {temPDV && (
+                            <tr>
+                                <td style={tdStyle}><strong>PDV</strong></td>
+                                <td style={tdStyle}>{fmtMoeda(proj.detalhes_valores?.pdv)}</td>
+                                <td style={tdStyle}>{fmtMoeda(pdv.projecao_final)}</td>
+                                <td style={tdStyle}>-</td>
+                                <td style={tdStyle}>-</td>
+                            </tr>
+                        )}
+                        <tr style={{backgroundColor: '#f0f8ff'}}>
+                            <td style={tdStyle}><strong>TOTAL</strong></td>
+                            <td style={tdStyle}><strong>{fmtMoeda(proj.detalhes_valores?.total)}</strong></td>
+                            <td style={tdStyle}><strong>{fmtMoeda(fin.projecao_final)}</strong></td>
+                            <td style={tdStyle}>{fmtMoeda(data.objetivo?.financeiro)}</td>
+                            <td style={tdStyle}><strong>{fmtNum2(fin.atingimento_projetado)}%</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4 style={{marginTop:'20px', color:'#555'}}>Outros Indicadores</h4>
+                <table style={tableStyle}>
+                    <thead>
+                        <tr>
+                            <th style={thStyle}>Indicador</th>
+                            <th style={thStyle}>Realizado</th>
+                            <th style={thStyle}>Objetivo</th>
+                            <th style={thStyle}>% Realizado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style={tdStyle}>Mix</td>
+                            <td style={tdStyle}>{mix.realizado}</td>
+                            <td style={tdStyle}>{mix.objetivo}</td>
+                            <td style={tdStyle}>{fmtNum2(mix.percentual)}%</td>
+                        </tr>
+                        <tr>
+                            <td style={tdStyle}>Peso (Kg/Ton)</td>
+                            <td style={tdStyle}>{fmtNum2(data.realizado_peso?.realizado)}</td>
+                            <td style={tdStyle}>{fmtNum2(data.objetivo?.objetivo_peso)}</td>
+                            <td style={tdStyle}>{fmtNum2(data.realizado_peso?.percentual)}%</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div style={{marginTop: '15px', fontSize: '0.8rem', color: '#666', textAlign:'right'}}>
+                    * Projeção linear baseada em {proj.dias_uteis?.decorridos}/{proj.dias_uteis?.totais} dias úteis.
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const Gauge = ({ label, percent }) => {
   const val =
@@ -398,7 +509,11 @@ const IndicadoresCards = ({
   const { user } = useAuth();
 
   console.log('[DEBUG] User Context:', user);
-  
+
+  const [showProjectionModal, setShowProjectionModal] = useState(false);
+  const [projecaoPercentual, setProjecaoPercentual] = useState(null);
+  const [projecaoRotasValor, setProjecaoRotasValor] = useState(null);
+
   const [loading, setLoading] = useState(false);
 // === ✅ COLE AQUI (NOVO CÓDIGO) ===
   const [valorRotasAnoAnterior, setValorRotasAnoAnterior] = useState(0); 
@@ -644,6 +759,22 @@ const IndicadoresCards = ({
     if (!data) return;
     setDataEscopoAtual(data);
 
+    const projData = data.projecao_empresa || {};
+    const fin = projData.financeiro || {};
+    const rotas = projData.financeiro_rotas || {};
+    
+    if (fin.atingimento_projetado) {
+        setProjecaoPercentual(`${fmtNum2(fin.atingimento_projetado)}%`);
+    } else {
+        setProjecaoPercentual('--');
+    }
+
+    if (rotas.projecao_final) {
+        setProjecaoRotasValor(fmtMoeda(rotas.projecao_final));
+    } else {
+        setProjecaoRotasValor('--');
+    }
+
     const realizadoFinanceiro = data.realizado_financeiro || {};
     const valorVendaGrupo = Number(realizadoFinanceiro.valor || 0);
     const percentualVendaGrupo = Number(
@@ -811,6 +942,15 @@ setAlocacaoVariacao(
 
         if (onObjetivosRecebidos) onObjetivosRecebidos(objetivosUnificados);
 
+            const finProj = data.projecao_empresa?.financeiro || {};
+            const rotasProj = data.projecao_empresa?.financeiro_rotas || {};
+            
+            if (finProj.atingimento_projetado) {
+                setProjecaoPercentual(`${fmtNum2(finProj.atingimento_projetado)}%`);
+            }
+            if (rotasProj.projecao_final) {
+                setProjecaoRotasValor(fmtMoeda(rotasProj.projecao_final));
+            }
             setRawData(data);
             setDataEscopoAtual(data);
 
@@ -1403,6 +1543,13 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
 
   return (
     <div style={{ position: 'relative' }}>
+      {showProjectionModal && (
+        <ProjectionModal 
+            onClose={() => setShowProjectionModal(false)} 
+            data={rawData} 
+            usarPDV={usarPDV} 
+        />
+      )}
       {loading && (
         <div className="overlay-loader">
           <div className="spinner"></div>
@@ -1554,15 +1701,16 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
           />
 
           <Card
-            title="Evolução (reservado)"
-            value=""
-            subtitle=""
-            value2=""
-            title2=""
-            percentage=""
+            title="Projeção"
+            value={projecaoPercentual ?? '--'}
+            subtitle="Tendência de Atingimento"
+            title2="Projeção Rotas (R$)"
+            value2={projecaoRotasValor ?? '--'}
+            percentage="" 
             subtitle2=""
             variation=""
-            className="card-evolucao"
+            className="card-evolucao" 
+            onDetailClick={() => setShowProjectionModal(true)} // Abre o pop-up
           />
 
           <Card
