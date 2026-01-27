@@ -759,22 +759,6 @@ const IndicadoresCards = ({
     if (!data) return;
     setDataEscopoAtual(data);
 
-    const projData = data.projecao_empresa || {};
-    const fin = projData.financeiro || {};
-    const rotas = projData.financeiro_rotas || {};
-    
-    if (fin.atingimento_projetado) {
-        setProjecaoPercentual(`${fmtNum2(fin.atingimento_projetado)}%`);
-    } else {
-        setProjecaoPercentual('--');
-    }
-
-    if (rotas.projecao_final) {
-        setProjecaoRotasValor(fmtMoeda(rotas.projecao_final));
-    } else {
-        setProjecaoRotasValor('--');
-    }
-
     const realizadoFinanceiro = data.realizado_financeiro || {};
     const valorVendaGrupo = Number(realizadoFinanceiro.valor || 0);
     const percentualVendaGrupo = Number(
@@ -942,15 +926,6 @@ setAlocacaoVariacao(
 
         if (onObjetivosRecebidos) onObjetivosRecebidos(objetivosUnificados);
 
-            const finProj = data.projecao_empresa?.financeiro || {};
-            const rotasProj = data.projecao_empresa?.financeiro_rotas || {};
-            
-            if (finProj.atingimento_projetado) {
-                setProjecaoPercentual(`${fmtNum2(finProj.atingimento_projetado)}%`);
-            }
-            if (rotasProj.projecao_final) {
-                setProjecaoRotasValor(fmtMoeda(rotasProj.projecao_final));
-            }
             setRawData(data);
             setDataEscopoAtual(data);
 
@@ -1343,6 +1318,46 @@ setAlocacaoVariacao(
     );
     setCaptadoProjPercentFmt(`${percProj.toFixed(2)}%`);
   }, [usarPDV, vendaRealizadaBase, captadoBase, objetivoFinanceiro]);
+// === NOVO useEffect: Recalcula Projeção ao mudar dados ou toggle de PDV ===
+  useEffect(() => {
+    if (!dataEscopoAtual) return;
+    
+    const projData = dataEscopoAtual.projecao_empresa || {};
+    const fin = projData.financeiro || {};
+    const rotas = projData.financeiro_rotas || {};
+    // Pega o objetivo financeiro atual do escopo
+    const objetivo = Number(dataEscopoAtual.objetivo?.financeiro || 0);
+
+    let atingimento = 0;
+    
+    // LÓGICA DE CORREÇÃO:
+    if (usarPDV) {
+        // Se PDV está ligado, usa a projeção TOTAL (que inclui PDV se houver)
+        atingimento = fin.atingimento_projetado;
+    } else {
+        // Se PDV está desligado, usa apenas a projeção de ROTAS
+        // e calcula a % manualmente contra o objetivo
+        const valProj = rotas.projecao_final || 0;
+        if (objetivo > 0) {
+            atingimento = (valProj / objetivo) * 100;
+        }
+    }
+
+    if (atingimento) {
+        setProjecaoPercentual(`${fmtNum2(atingimento)}%`);
+    } else {
+        setProjecaoPercentual('--');
+    }
+
+    // O valor em Reais (secundário) sempre mostra Rotas puras para referência, ou mude se preferir
+    if (rotas.projecao_final) {
+        setProjecaoRotasValor(fmtMoeda(rotas.projecao_final));
+    } else {
+        setProjecaoRotasValor('--');
+    }
+
+  }, [dataEscopoAtual, usarPDV]); // Recalcula sempre que os dados ou o switch mudam
+
 
   // ====== alternância de escopo ======
   const handleToggleArea = () => {
