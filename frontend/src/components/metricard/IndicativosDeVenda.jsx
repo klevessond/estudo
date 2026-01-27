@@ -370,14 +370,48 @@ const ProjectionModal = ({ onClose, data, usarPDV }) => {
     if (!data) return null;
 
     const proj = data.projecao_empresa || {};
-    const fin = proj.financeiro || {};
     const rotas = proj.financeiro_rotas || {};
     const pdv = proj.financeiro_pdv || {};
-    // Verifica flag do backend E switch do frontend
-    const temPDV = proj.tem_pdv && usarPDV; 
     const mix = proj.mix || {};
+    
+    // Verifica se deve considerar PDV (Flag do Backend + Switch do Frontend)
+    const temPDVAtivo = proj.tem_pdv && usarPDV; 
 
-    // Estilos inline para simplicidade
+    // --- 1. Valores Unitários (Realizado e Projeção) ---
+    const realizadoRotas = Number(proj.detalhes_valores?.rotas || 0);
+    const projecaoRotas  = Number(rotas.projecao_final || 0);
+    
+    const realizadoPDV   = Number(proj.detalhes_valores?.pdv || 0);
+    const projecaoPDV    = Number(pdv.projecao_final || 0);
+
+    // --- 2. Definição do Objetivo ---
+    // O objetivo do Supervisor é considerado o objetivo da Rota
+    const objetivoRotas = Number(data.objetivo?.financeiro || 0);
+
+    // --- 3. Totais Dinâmicos (Respeitando o Switch) ---
+    const totalRealizado = temPDVAtivo 
+        ? realizadoRotas + realizadoPDV 
+        : realizadoRotas;
+
+    const totalProjecao = temPDVAtivo 
+        ? projecaoRotas + projecaoPDV 
+        : projecaoRotas;
+
+    // --- 4. Cálculos de Percentual de Atingimento ---
+    
+    // % da Rota (Projeção Rota / Objetivo Rota)
+    let percAtingimentoRotas = 0;
+    if (objetivoRotas > 0) {
+        percAtingimentoRotas = (projecaoRotas / objetivoRotas) * 100;
+    }
+
+    // % do Total (Projeção Total / Objetivo Rota) -> PDV ajuda a bater a meta
+    let percAtingimentoTotal = 0;
+    if (objetivoRotas > 0) {
+        percAtingimentoTotal = (totalProjecao / objetivoRotas) * 100;
+    }
+
+    // Estilos inline
     const overlayStyle = {
         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', 
@@ -411,28 +445,33 @@ const ProjectionModal = ({ onClose, data, usarPDV }) => {
                         </tr>
                     </thead>
                     <tbody>
+                        {/* LINHA ROTAS: Agora exibe Objetivo e % */}
                         <tr>
                             <td style={tdStyle}><strong>Rotas</strong></td>
-                            <td style={tdStyle}>{fmtMoeda(proj.detalhes_valores?.rotas)}</td>
-                            <td style={tdStyle}>{fmtMoeda(rotas.projecao_final)}</td>
-                            <td style={tdStyle}>-</td>
-                            <td style={tdStyle}>-</td>
+                            <td style={tdStyle}>{fmtMoeda(realizadoRotas)}</td>
+                            <td style={tdStyle}>{fmtMoeda(projecaoRotas)}</td>
+                            <td style={tdStyle}>{fmtMoeda(objetivoRotas)}</td>
+                            <td style={tdStyle}>{fmtNum2(percAtingimentoRotas)}%</td>
                         </tr>
-                        {temPDV && (
+                        
+                        {/* LINHA PDV: Exibe apenas se tiver dados E switch ligado */}
+                        {temPDVAtivo && (
                             <tr>
                                 <td style={tdStyle}><strong>PDV</strong></td>
-                                <td style={tdStyle}>{fmtMoeda(proj.detalhes_valores?.pdv)}</td>
-                                <td style={tdStyle}>{fmtMoeda(pdv.projecao_final)}</td>
+                                <td style={tdStyle}>{fmtMoeda(realizadoPDV)}</td>
+                                <td style={tdStyle}>{fmtMoeda(projecaoPDV)}</td>
                                 <td style={tdStyle}>-</td>
                                 <td style={tdStyle}>-</td>
                             </tr>
                         )}
+
+                        {/* LINHA TOTAL: Soma dinâmica e comparação com a meta */}
                         <tr style={{backgroundColor: '#f0f8ff'}}>
                             <td style={tdStyle}><strong>TOTAL</strong></td>
-                            <td style={tdStyle}><strong>{fmtMoeda(proj.detalhes_valores?.total)}</strong></td>
-                            <td style={tdStyle}><strong>{fmtMoeda(fin.projecao_final)}</strong></td>
-                            <td style={tdStyle}>{fmtMoeda(data.objetivo?.financeiro)}</td>
-                            <td style={tdStyle}><strong>{fmtNum2(fin.atingimento_projetado)}%</strong></td>
+                            <td style={tdStyle}><strong>{fmtMoeda(totalRealizado)}</strong></td>
+                            <td style={tdStyle}><strong>{fmtMoeda(totalProjecao)}</strong></td>
+                            <td style={tdStyle}>{fmtMoeda(objetivoRotas)}</td>
+                            <td style={tdStyle}><strong>{fmtNum2(percAtingimentoTotal)}%</strong></td>
                         </tr>
                     </tbody>
                 </table>
@@ -455,7 +494,7 @@ const ProjectionModal = ({ onClose, data, usarPDV }) => {
                             <td style={tdStyle}>{fmtNum2(mix.percentual)}%</td>
                         </tr>
                         <tr>
-                            <td style={tdStyle}>Peso (Kg/Ton)</td>
+                            <td style={tdStyle}>Peso (Ton)</td>
                             <td style={tdStyle}>{fmtNum2(data.realizado_peso?.realizado)}</td>
                             <td style={tdStyle}>{fmtNum2(data.objetivo?.objetivo_peso)}</td>
                             <td style={tdStyle}>{fmtNum2(data.realizado_peso?.percentual)}%</td>
