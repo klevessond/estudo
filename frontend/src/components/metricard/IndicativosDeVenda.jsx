@@ -374,44 +374,26 @@ const ProjectionModal = ({ onClose, data, usarPDV }) => {
     const pdv = proj.financeiro_pdv || {};
     const mix = proj.mix || {};
     
-    // Verifica se deve considerar PDV (Flag do Backend + Switch do Frontend)
+    // Lista de vendedores com suas projeções (vem do backend no campo 'vendas')
+    const vendedores = data.vendas?.vendas_por_vendedor || [];
+
+    // Verifica se deve considerar PDV
     const temPDVAtivo = proj.tem_pdv && usarPDV; 
 
-    // --- 1. Valores Unitários (Realizado e Projeção) ---
+    // --- Totais Gerais (Mantidos) ---
     const realizadoRotas = Number(proj.detalhes_valores?.rotas || 0);
     const projecaoRotas  = Number(rotas.projecao_final || 0);
-    
     const realizadoPDV   = Number(proj.detalhes_valores?.pdv || 0);
     const projecaoPDV    = Number(pdv.projecao_final || 0);
-
-    // --- 2. Definição do Objetivo ---
-    // O objetivo do Supervisor é considerado o objetivo da Rota
     const objetivoRotas = Number(data.objetivo?.financeiro || 0);
 
-    // --- 3. Totais Dinâmicos (Respeitando o Switch) ---
-    const totalRealizado = temPDVAtivo 
-        ? realizadoRotas + realizadoPDV 
-        : realizadoRotas;
+    const totalRealizado = temPDVAtivo ? realizadoRotas + realizadoPDV : realizadoRotas;
+    const totalProjecao = temPDVAtivo ? projecaoRotas + projecaoPDV : projecaoRotas;
 
-    const totalProjecao = temPDVAtivo 
-        ? projecaoRotas + projecaoPDV 
-        : projecaoRotas;
+    let percAtingimentoRotas = objetivoRotas > 0 ? (projecaoRotas / objetivoRotas) * 100 : 0;
+    let percAtingimentoTotal = objetivoRotas > 0 ? (totalProjecao / objetivoRotas) * 100 : 0;
 
-    // --- 4. Cálculos de Percentual de Atingimento ---
-    
-    // % da Rota (Projeção Rota / Objetivo Rota)
-    let percAtingimentoRotas = 0;
-    if (objetivoRotas > 0) {
-        percAtingimentoRotas = (projecaoRotas / objetivoRotas) * 100;
-    }
-
-    // % do Total (Projeção Total / Objetivo Rota) -> PDV ajuda a bater a meta
-    let percAtingimentoTotal = 0;
-    if (objetivoRotas > 0) {
-        percAtingimentoTotal = (totalProjecao / objetivoRotas) * 100;
-    }
-
-    // Estilos inline
+    // --- Estilos ---
     const overlayStyle = {
         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', 
@@ -419,89 +401,119 @@ const ProjectionModal = ({ onClose, data, usarPDV }) => {
     };
     const contentStyle = {
         backgroundColor: '#fff', padding: '20px', borderRadius: '8px',
-        width: '90%', maxWidth: '600px', boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
+        width: '95%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto',
+        boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
     };
-    const tableStyle = { width: '100%', borderCollapse: 'collapse', marginTop: '10px' };
-    const thStyle = { borderBottom: '2px solid #eee', textAlign: 'left', padding: '8px', fontSize: '0.9rem' };
-    const tdStyle = { borderBottom: '1px solid #eee', padding: '8px', fontSize: '0.9rem' };
+    const tableStyle = { width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '0.85rem' };
+    const thStyle = { borderBottom: '2px solid #ddd', textAlign: 'left', padding: '8px', backgroundColor: '#f9f9f9' };
+    const tdStyle = { borderBottom: '1px solid #eee', padding: '6px' };
+    const trSubStyle = { fontSize: '0.8rem', color: '#555', backgroundColor: '#fafafa' };
 
     return (
         <div style={overlayStyle} onClick={onClose}>
             <div style={contentStyle} onClick={e => e.stopPropagation()}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px'}}>
-                    <h3 style={{margin:0}}>Detalhes da Projeção (Geral)</h3>
+                    <h3 style={{margin:0}}>Detalhes da Projeção</h3>
                     <button onClick={onClose} style={{border:'none', background:'none', fontSize:'1.5rem', cursor:'pointer'}}>&times;</button>
                 </div>
 
-                <h4 style={{marginTop:0, color:'#555'}}>Financeiro</h4>
-                <table style={tableStyle}>
-                    <thead>
-                        <tr>
-                            <th style={thStyle}>Origem</th>
-                            <th style={thStyle}>Realizado</th>
-                            <th style={thStyle}>Projeção</th>
-                            <th style={thStyle}>Objetivo</th>
-                            <th style={thStyle}>% Ating. Proj.</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {/* LINHA ROTAS: Agora exibe Objetivo e % */}
-                        <tr>
-                            <td style={tdStyle}><strong>Rotas</strong></td>
-                            <td style={tdStyle}>{fmtMoeda(realizadoRotas)}</td>
-                            <td style={tdStyle}>{fmtMoeda(projecaoRotas)}</td>
-                            <td style={tdStyle}>{fmtMoeda(objetivoRotas)}</td>
-                            <td style={tdStyle}>{fmtNum2(percAtingimentoRotas)}%</td>
-                        </tr>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                    {/* COLUNA 1: DADOS GERAIS */}
+                    <div>
+                        <h4 style={{marginTop:0, color:'#007bff'}}>🏢 Visão Geral (Empresa/Equipe)</h4>
+                        <table style={tableStyle}>
+                            <thead>
+                                <tr>
+                                    <th style={thStyle}>Origem</th>
+                                    <th style={thStyle}>Realizado</th>
+                                    <th style={thStyle}>Projeção</th>
+                                    <th style={thStyle}>Meta</th>
+                                    <th style={thStyle}>% Proj.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style={tdStyle}><strong>Rotas</strong></td>
+                                    <td style={tdStyle}>{fmtMoeda(realizadoRotas)}</td>
+                                    <td style={tdStyle}>{fmtMoeda(projecaoRotas)}</td>
+                                    <td style={tdStyle}>{fmtMoeda(objetivoRotas)}</td>
+                                    <td style={tdStyle}>{fmtNum2(percAtingimentoRotas)}%</td>
+                                </tr>
+                                {temPDVAtivo && (
+                                    <tr>
+                                        <td style={tdStyle}><strong>PDV</strong></td>
+                                        <td style={tdStyle}>{fmtMoeda(realizadoPDV)}</td>
+                                        <td style={tdStyle}>{fmtMoeda(projecaoPDV)}</td>
+                                        <td style={tdStyle}>-</td>
+                                        <td style={tdStyle}>-</td>
+                                    </tr>
+                                )}
+                                <tr style={{backgroundColor: '#e3f2fd'}}>
+                                    <td style={tdStyle}><strong>TOTAL</strong></td>
+                                    <td style={tdStyle}><strong>{fmtMoeda(totalRealizado)}</strong></td>
+                                    <td style={tdStyle}><strong>{fmtMoeda(totalProjecao)}</strong></td>
+                                    <td style={tdStyle}><strong>{fmtMoeda(objetivoRotas)}</strong></td>
+                                    <td style={tdStyle}><strong>{fmtNum2(percAtingimentoTotal)}%</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
                         
-                        {/* LINHA PDV: Exibe apenas se tiver dados E switch ligado */}
-                        {temPDVAtivo && (
-                            <tr>
-                                <td style={tdStyle}><strong>PDV</strong></td>
-                                <td style={tdStyle}>{fmtMoeda(realizadoPDV)}</td>
-                                <td style={tdStyle}>{fmtMoeda(projecaoPDV)}</td>
-                                <td style={tdStyle}>-</td>
-                                <td style={tdStyle}>-</td>
-                            </tr>
-                        )}
+                        <div style={{marginTop: '15px'}}>
+                           <strong>KPIs Gerais:</strong> Mix Proj: {fmtNum2(mix.projecao?.atingimento_projetado)}% | 
+                           Peso Proj: {fmtNum2(data.projecao_empresa?.peso?.atingimento_projetado)}% |
+                           Pos Proj: {fmtNum2(data.projecao_empresa?.positivacao?.atingimento_projetado)}%
+                        </div>
+                    </div>
 
-                        {/* LINHA TOTAL: Soma dinâmica e comparação com a meta */}
-                        <tr style={{backgroundColor: '#f0f8ff'}}>
-                            <td style={tdStyle}><strong>TOTAL</strong></td>
-                            <td style={tdStyle}><strong>{fmtMoeda(totalRealizado)}</strong></td>
-                            <td style={tdStyle}><strong>{fmtMoeda(totalProjecao)}</strong></td>
-                            <td style={tdStyle}>{fmtMoeda(objetivoRotas)}</td>
-                            <td style={tdStyle}><strong>{fmtNum2(percAtingimentoTotal)}%</strong></td>
-                        </tr>
-                    </tbody>
-                </table>
+                    {/* COLUNA 2 ou LINHA ABAIXO: VENDEDORES */}
+                    <div>
+                         <h4 style={{marginTop:0, color:'#28a745'}}>👤 Projeção por Vendedor</h4>
+                         <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #eee' }}>
+                            <table style={tableStyle}>
+                                <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                                    <tr>
+                                        <th style={thStyle}>Vendedor</th>
+                                        <th style={thStyle}>Fin. Proj (R$)</th>
+                                        <th style={thStyle}>% Meta</th>
+                                        <th style={thStyle}>Diário Nec.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {vendedores.map((v) => {
+                                        const p = v.projecoes_detalhadas?.financeiro_total || {};
+                                        const pMix = v.projecoes_detalhadas?.mix || {};
+                                        const pPeso = v.projecoes_detalhadas?.peso || {};
+                                        const pPos = v.projecoes_detalhadas?.positivacao || {};
+                                        
+                                        return (
+                                            <React.Fragment key={v.codcampo}>
+                                                <tr style={{borderTop: '2px solid #eee'}}>
+                                                    <td style={tdStyle}><strong>{v.codcampo} - {v.Campo}</strong></td>
+                                                    <td style={tdStyle}>{fmtMoeda(p.projecao_final)}</td>
+                                                    <td style={{...tdStyle, color: p.atingimento_projetado >= 100 ? 'green' : 'red'}}>
+                                                        <strong>{fmtNum2(p.atingimento_projetado)}%</strong>
+                                                    </td>
+                                                    <td style={tdStyle}>{fmtMoeda(p.meta_diaria_necessaria)}</td>
+                                                </tr>
+                                                {/* Detalhes extras em linha menor */}
+                                                <tr style={trSubStyle}>
+                                                    <td colSpan={4} style={{padding: '4px 8px'}}>
+                                                        <div style={{display:'flex', gap:'15px', flexWrap:'wrap'}}>
+                                                            <span>⚖️ Peso: {fmtNum2(pPeso.projecao_final)} ({fmtNum2(pPeso.atingimento_projetado)}%)</span>
+                                                            <span>📦 Mix: {fmtNum2(pMix.projecao_final)} ({fmtNum2(pMix.atingimento_projetado)}%)</span>
+                                                            <span>🏪 Pos: {fmtNum2(pPos.projecao_final)} ({fmtNum2(pPos.atingimento_projetado)}%)</span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                         </div>
+                    </div>
+                </div>
 
-                <h4 style={{marginTop:'20px', color:'#555'}}>Outros Indicadores</h4>
-                <table style={tableStyle}>
-                    <thead>
-                        <tr>
-                            <th style={thStyle}>Indicador</th>
-                            <th style={thStyle}>Realizado</th>
-                            <th style={thStyle}>Objetivo</th>
-                            <th style={thStyle}>% Realizado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td style={tdStyle}>Mix</td>
-                            <td style={tdStyle}>{mix.realizado}</td>
-                            <td style={tdStyle}>{mix.objetivo}</td>
-                            <td style={tdStyle}>{fmtNum2(mix.percentual)}%</td>
-                        </tr>
-                        <tr>
-                            <td style={tdStyle}>Peso (Ton)</td>
-                            <td style={tdStyle}>{fmtNum2(data.realizado_peso?.realizado)}</td>
-                            <td style={tdStyle}>{fmtNum2(data.objetivo?.objetivo_peso)}</td>
-                            <td style={tdStyle}>{fmtNum2(data.realizado_peso?.percentual)}%</td>
-                        </tr>
-                    </tbody>
-                </table>
-                
                 <div style={{marginTop: '15px', fontSize: '0.8rem', color: '#666', textAlign:'right'}}>
                     * Projeção linear baseada em {proj.dias_uteis?.decorridos}/{proj.dias_uteis?.totais} dias úteis.
                 </div>
@@ -552,6 +564,10 @@ const IndicadoresCards = ({
   const [showProjectionModal, setShowProjectionModal] = useState(false);
   const [projecaoPercentual, setProjecaoPercentual] = useState(null);
   const [projecaoRotasValor, setProjecaoRotasValor] = useState(null);
+  const [projPercentFin, setProjPercentFin] = useState('--');
+  const [projPercentPeso, setProjPercentPeso] = useState('--');
+  const [projPercentMix, setProjPercentMix] = useState('--');
+  const [projPercentPos, setProjPercentPos] = useState('--');
 
   const [loading, setLoading] = useState(false);
 // === ✅ COLE AQUI (NOVO CÓDIGO) ===
@@ -1397,6 +1413,102 @@ setAlocacaoVariacao(
 
   }, [dataEscopoAtual, usarPDV]); // Recalcula sempre que os dados ou o switch mudam
 
+// === NOVO useEffect: Recalcula Projeção (4 Indicadores) ===
+  useEffect(() => {
+    if (!dataEscopoAtual) return;
+    
+    // 1. Define a fonte de dados padrão (Geral/Empresa/Supervisão)
+    let projData = dataEscopoAtual.projecao_empresa || {};
+    let objetivos = dataEscopoAtual.objetivo || {};
+
+    // 2. Lógica de Substituição para Visão Individual (Vendedor)
+    // Se o botão "Soma da Área" estiver DESLIGADO e tivermos um usuário logado
+    if (!somarArea && user?.cod_funcionario) {
+        const userCod = String(user.cod_funcionario);
+        
+        // Procura a linha do vendedor logado nos dados detalhados
+        const linhaVendedor = dataEscopoAtual.vendas?.vendas_por_vendedor?.find(
+            (v) => String(v.codcampo) === userCod
+        );
+
+        // Se encontrou, usa as projeções detalhadas dele
+        if (linhaVendedor && linhaVendedor.projecoes_detalhadas) {
+            const d = linhaVendedor.projecoes_detalhadas;
+            
+            // Sobrescreve o objeto de projeção com os dados do indivíduo
+            projData = {
+                financeiro: d.financeiro_total,        // Total (Rotas + PDV)
+                financeiro_rotas: d.financeiro_rotas,  // Só Rotas
+                financeiro_pdv: d.financeiro_pdv,      // Só PDV
+                
+                // Nota: O backend atualmente manda o peso total em 'd.peso'. 
+                // Usamos ele para ambos os casos se não houver distinção específica no backend.
+                peso: d.peso,       
+                peso_rotas: d.peso, 
+
+                mix: { projecao: d.mix },       // Objeto de projeção do Mix
+                positivacao: d.positivacao      // Objeto de projeção da Positivação
+            };
+
+            // Atualiza os Objetivos para usar os do Vendedor (Minha Visão)
+            const mv = dataEscopoAtual.minha_visao;
+            if (mv && String(mv.cod_funcionario) === userCod) {
+                objetivos = {
+                    financeiro: mv.objetivo_financeiro,
+                    objetivo_peso: mv.objetivo_peso,
+                    objetivo_mix: mv.objetivo_mix,
+                    objetivo_positivacao: mv.objetivo_positivacao
+                };
+            }
+        }
+    }
+
+    // --- Helpers de extração (Mantidos) ---
+    const getProjPercent = (objProjTotal, objProjRotas, goal, isPdvOn) => {
+        let atingimento = 0;
+        const goalNum = Number(goal || 0);
+
+        if (isPdvOn) {
+            // Se PDV ON: usa o atingimento total calculado no backend (já inclui PDV)
+            atingimento = objProjTotal?.atingimento_projetado || 0;
+        } else {
+            // Se PDV OFF: usa a projeção apenas de Rotas e divide pela meta
+            const valProj = objProjRotas?.projecao_final || 0;
+            if (goalNum > 0) {
+                atingimento = (valProj / goalNum) * 100;
+            }
+        }
+        return atingimento;
+    };
+
+    // 1. Financeiro
+    const pFin = getProjPercent(
+        projData.financeiro, 
+        projData.financeiro_rotas, 
+        objetivos.financeiro, 
+        usarPDV
+    );
+    setProjPercentFin(pFin ? `${fmtNum2(pFin)}%` : '--');
+
+    // 2. Peso
+    const pPeso = getProjPercent(
+        projData.peso, 
+        projData.peso_rotas, 
+        objetivos.objetivo_peso, 
+        usarPDV
+    );
+    setProjPercentPeso(pPeso ? `${fmtNum2(pPeso)}%` : '--');
+
+    // 3. Mix (Usa a projeção direta do objeto)
+    const pMix = projData.mix?.projecao?.atingimento_projetado || 0;
+    setProjPercentMix(pMix ? `${fmtNum2(pMix)}%` : '--');
+
+    // 4. Positivação (Usa a projeção direta do objeto)
+    const pPos = projData.positivacao?.atingimento_projetado || 0;
+    setProjPercentPos(pPos ? `${fmtNum2(pPos)}%` : '--');
+
+  }, [dataEscopoAtual, usarPDV, somarArea, user]); // Adicionado somarArea e user nas dependências
+
 
   // ====== alternância de escopo ======
   const handleToggleArea = () => {
@@ -1755,16 +1867,32 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
           />
 
           <Card
-            title="Projeção"
-            value={projecaoPercentual ?? '--'}
-            subtitle="Tendência de Atingimento"
-            title2="Projeção Rotas (R$)"
-            value2={projecaoRotasValor ?? '--'}
+            title="Projeção (Tendência)"
+            // Usamos o 'value' para renderizar o bloco customizado com os 4 indicadores
+            value={
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.85rem', marginTop: '5px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Fin:</span> <strong>{projPercentFin}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Peso:</span> <strong>{projPercentPeso}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Mix:</span> <strong>{projPercentMix}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Pos:</span> <strong>{projPercentPos}</strong>
+                    </div>
+                </div>
+            }
+            subtitle="" // Remove subtítulo padrão
+            title2=""   // Remove título secundário
+            value2=""   // Remove valor secundário (R$)
             percentage="" 
             subtitle2=""
             variation=""
             className="card-evolucao" 
-            onDetailClick={() => setShowProjectionModal(true)} // Abre o pop-up
+            onDetailClick={() => setShowProjectionModal(true)}
           />
 
           <Card
