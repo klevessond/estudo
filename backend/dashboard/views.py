@@ -569,7 +569,6 @@ class IndicadoresView(APIView):
         # ANO ANTERIOR POR ROTAS (buscar_vendido)
         # ===========================================
         
-
         try:
             # 1) mapa rota -> vendedor (regra gerência)
             rota_to_vendedor = {}
@@ -594,18 +593,37 @@ class IndicadoresView(APIView):
                     "ate": aa_fim_str,
                     "valor_total": calc["valor_total"],
                     "por_vendedor": calc["por_vendedor"],
-                    # se quiser debugar/inspecionar:
-                    # "keys": list(ret_vendido_aa_rotas.keys()),
                 }
 
-                logger.warning(
-                    "[AA_ROTAS][buscar_vendido] de=%s ate=%s rotas=%s valor_total=%s amostra=%s",
-                    aa_ini_str,
-                    aa_fim_str,
-                    rotas_codigos if rotas_codigos is not None else "sem_filtro",
-                    venda_ano_anterior_rotas["valor_total"],
-                    str((venda_ano_anterior_rotas["por_vendedor"] or [])[:3])[:800],
-                )
+                # --- MONTAGEM DO LOG FORMATADO ---
+                log_lines = []
+                log_lines.append(f"\n{'='*60}")
+                log_lines.append(f"[AA_ROTAS][buscar_vendido] RESUMO")
+                log_lines.append(f"Periodo: {aa_ini_str} ate {aa_fim_str}")
+                log_lines.append(f"Total Geral: R$ {calc['valor_total']:,.2f}")
+                log_lines.append(f"{'-'*60}")
+
+                # Itera sobre cada vendedor para mostrar suas rotas
+                # (Se a lista for muito grande, você pode usar um slice, ex: calc['por_vendedor'][:5])
+                for v in calc["por_vendedor"]: 
+                    cod_v = v.get('CodVendedor')
+                    total_v = v.get('Valor_liquido_total', 0)
+                    log_lines.append(f"👤 Vendedor {cod_v} | Total: R$ {total_v:,.2f}")
+                    
+                    rotas_v = v.get('Rotas', [])
+                    for r in rotas_v:
+                        cod_r = r.get('CodRota')
+                        campo_r = r.get('Campo')
+                        val_r = r.get('Valor_liquido', 0)
+                        log_lines.append(f"   └── Rota {cod_r} ({campo_r}): R$ {val_r:,.2f}")
+                    
+                    log_lines.append(f"{'.'*60}") # Separador entre vendedores
+
+                log_lines.append(f"{'='*60}\n")
+                
+                # Exibe o log formatado
+                logger.info("\n".join(log_lines))
+
             else:
                 logger.warning(
                     "[AA_ROTAS][buscar_vendido] retorno inesperado tipo=%s amostra=%s",
@@ -1084,7 +1102,9 @@ class IndicadoresView(APIView):
                 meta_map[vid] = {
                     "fin": float(o.get("objetivo_financeiro") or 0),
                     "peso": float(o.get("objetivo_peso") or 0),
-                    "pos": float(o.get("objetivo_positivacao") or 0)
+                    "pos": float(o.get("objetivo_positivacao") or 0),
+                    "mix": float(o.get("objetivo_mix") or 0)
+                    
                 }
             except: continue
 
@@ -1096,23 +1116,29 @@ class IndicadoresView(APIView):
             dias_info = {"totais": 22, "decorridos": 1, "restantes": 21}
 
         # 5. Cálculo das Projeções GERAIS (Empresa)
+        # Financeiro
         proj_rotas_geral = calcular_matematica_projecao(venda_realizada, 0, dias_info)
+        projecao_financeira_geral = calcular_matematica_projecao(venda_total_empresa, objetivo_financeiro, dias_info)
         
         if tem_pdv:
             proj_pdv_geral = calcular_matematica_projecao(venda_pdv_total, 0, dias_info)
         else:
-            # Objeto zerado padrão se não tiver PDV
             proj_pdv_geral = {
                 "projecao_final": 0.0, "velocidade_diaria": 0.0, 
                 "falta_para_meta": 0.0, "meta_diaria_necessaria": 0.0, 
                 "atingimento_projetado": 0.0
             }
-        
-        # Projeção Total (Com a meta real)
-        projecao_financeira_geral = calcular_matematica_projecao(venda_total_empresa, objetivo_financeiro, dias_info)
-        
-        # Outras dimensões
+
+        # Peso (Rotas vs Total)
+        # Calcula projeção só de rotas para quando o PDV estiver desligado no front
+        proj_peso_rotas_geral = calcular_matematica_projecao(peso_realizado, 0, dias_info)
+        # Projeção Total (Rotas + PDV) contra a meta
         projecao_peso_geral = calcular_matematica_projecao(peso_total_empresa, objetivo_peso, dias_info)
+        
+        # Mix (Geral)
+        projecao_mix_geral = calcular_matematica_projecao(mix_realizado, objetivo_mix, dias_info)
+
+        # Positivação (Geral)
         projecao_positivacao_geral = calcular_matematica_projecao(pos_realizado_geral, objetivo_positivacao, dias_info)
 
         # [LOG EMPRESA DETALHADO]
@@ -1121,8 +1147,6 @@ class IndicadoresView(APIView):
         logger.info(f"Calendário: {dias_info['decorridos']} decorridos / {dias_info['totais']} totais")
         logger.info("FINANCEIRO (Rotas vs PDV):")
         logger.info(f"   Rotas: Realizado R$ {venda_realizada:,.2f} -> Projeção R$ {proj_rotas_geral['projecao_final']:,.2f}")
-        if tem_pdv:
-            logger.info(f"   PDV:   Realizado R$ {venda_pdv_total:,.2f} -> Projeção R$ {proj_pdv_geral['projecao_final']:,.2f}")
         logger.info(f"   TOTAL: Realizado R$ {venda_total_empresa:,.2f} -> Projeção R$ {projecao_financeira_geral['projecao_final']:,.2f}")
         logger.info("========================================")
 
@@ -1134,6 +1158,7 @@ class IndicadoresView(APIView):
                 # Valores Realizados
                 val_rotas = float(vend.get("ValorLiquido") or 0)
                 peso_rotas = float(vend.get("PesoTotal") or 0)
+                val_mix = float(vend.get("Mix") or 0)  # <--- Recupera Mix realizado
                 
                 val_pdv = pdv_map[vid]["fin"]
                 peso_pdv = pdv_map[vid]["peso"]
@@ -1142,8 +1167,8 @@ class IndicadoresView(APIView):
                 total_fin = val_rotas + val_pdv
                 total_peso = peso_rotas + peso_pdv
 
-                # Metas
-                metas = meta_map.get(vid, {"fin": 0, "peso": 0, "pos": 0})
+                # Metas (agora com Mix)
+                metas = meta_map.get(vid, {"fin": 0, "peso": 0, "pos": 0, "mix": 0})
 
                 # --- CÁLCULOS SEPARADOS ---
                 p_rotas_only = calcular_matematica_projecao(val_rotas, 0, dias_info)
@@ -1154,10 +1179,19 @@ class IndicadoresView(APIView):
                 else:
                     p_pdv_only = {"projecao_final": 0, "velocidade_diaria": 0, "atingimento_projetado": 0}
 
-                # Projeção Total
+                # Projeções Totais
                 p_fin_total = calcular_matematica_projecao(total_fin, metas["fin"], dias_info)
                 p_peso = calcular_matematica_projecao(total_peso, metas["peso"], dias_info)
                 p_pos = calcular_matematica_projecao(val_pos, metas["pos"], dias_info)
+                p_mix = calcular_matematica_projecao(val_mix, metas["mix"], dias_info) # <--- Projeção de Mix
+
+                # --- LOGS DETALHADOS (RESTAURADOS) ---
+                logger.info(f"--- [PROJEÇÃO VENDEDOR {vid}] {vend.get('Campo')} ---")
+                logger.info(f"   FINANCEIRO: Real R$ {total_fin:,.2f} | Meta R$ {metas['fin']:,.2f} | Proj R$ {p_fin_total['projecao_final']:,.2f} ({p_fin_total['atingimento_projetado']:.2f}%)")
+                logger.info(f"               Diário Atual: R$ {p_fin_total['velocidade_diaria']:,.2f} | Necessário: R$ {p_fin_total['meta_diaria_necessaria']:,.2f}")
+                logger.info(f"   PESO:       Real {total_peso:,.2f} | Meta {metas['peso']:,.2f} | Proj {p_peso['projecao_final']:,.2f}")
+                logger.info(f"   MIX:        Real {val_mix} | Meta {metas['mix']} | Proj {p_mix['projecao_final']:.2f}")
+                logger.info(f"   POSITIV.:   Real {val_pos} | Meta {metas['pos']} | Proj {p_pos['projecao_final']:.2f}")
 
                 # --- INJEÇÃO NO JSON ---
                 vend["projecao"] = p_fin_total 
@@ -1178,12 +1212,12 @@ class IndicadoresView(APIView):
                     "financeiro_rotas": p_rotas_only,
                     "financeiro_pdv": p_pdv_only,
                     "peso": p_peso,
-                    "positivacao": p_pos
+                    "positivacao": p_pos,
+                    "mix": p_mix # <--- Opcional: incluir mix no JSON também
                 }
 
             except Exception as e:
                 logger.error(f"Erro projecao vendedor {vend.get('codcampo')}: {e}")
-
         # =========================================================
         # 🔴 FIM DO BLOCO DE PROJEÇÃO
         # =========================================================
@@ -1245,11 +1279,13 @@ class IndicadoresView(APIView):
                 "financeiro_rotas": proj_rotas_geral, 
                 "financeiro_pdv": proj_pdv_geral,
                 "peso": projecao_peso_geral,
+                "peso_rotas": proj_peso_rotas_geral,
                 "positivacao": projecao_positivacao_geral,
                 "mix": {
                     "realizado": mix_realizado,
                     "objetivo": objetivo_mix,
-                    "percentual": percentual_mix
+                    "percentual": percentual_mix,
+                    "projecao": projecao_mix_geral
                 },
                 "detalhes_valores": {
                     "rotas": venda_realizada, # Certifique-se que esta variável existe (ou venda_realizada_rotas)
