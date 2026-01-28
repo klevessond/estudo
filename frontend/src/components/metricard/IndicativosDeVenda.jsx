@@ -1628,8 +1628,85 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
   //     - vazio: aplica visão geral
   //     - selecionado: aplica filtrado
   const filtrado = !selecionadas || selecionadas.length === 0
+  
     ? data
     : filtrarPorSupervisao(data, selecionadas);
+  // Se tivermos filtro ativo, somamos as projeções individuais para substituir o 'projecao_empresa' global.
+  if (selecionadas && selecionadas.length > 0) {
+      const listaVend = filtrado.vendas?.vendas_por_vendedor || [];
+      
+      // Acumuladores
+      let sumFinProj = 0, sumFinObj = 0, sumFinMetaDia = 0;
+      let sumRotasProj = 0, sumPdvProj = 0;
+      let sumPesoProj = 0, sumMixProj = 0, sumPosProj = 0;
+
+      listaVend.forEach(v => {
+          const d = v.projecoes_detalhadas || {};
+          
+          // Somatórios Financeiro
+          if(d.financeiro_total) {
+              sumFinProj += (d.financeiro_total.projecao_final || 0);
+              sumFinMetaDia += (d.financeiro_total.meta_diaria_necessaria || 0);
+          }
+          if(d.financeiro_rotas) sumRotasProj += (d.financeiro_rotas.projecao_final || 0);
+          if(d.financeiro_pdv) sumPdvProj += (d.financeiro_pdv.projecao_final || 0);
+
+          // Outros KPIs
+          if(d.peso) sumPesoProj += (d.peso.projecao_final || 0);
+          if(d.mix) sumMixProj += (d.mix.projecao_final || 0);
+          if(d.positivacao) sumPosProj += (d.positivacao.projecao_final || 0);
+      });
+
+      // Recalcula objetivos da área selecionada
+      const objArea = calcGerenteObjetivosFromEscopo(data, selecionadas);
+      
+      // Constrói novo objeto de projeção para a área filtrada
+      const newProjEmpresa = {
+          ...data.projecao_empresa, 
+          financeiro: {
+              ...data.projecao_empresa?.financeiro,
+              projecao_final: sumFinProj,
+              atingimento_projetado: objArea.objetivo_financeiro > 0 ? (sumFinProj / objArea.objetivo_financeiro) * 100 : 0,
+              meta_diaria_necessaria: sumFinMetaDia
+          },
+          financeiro_rotas: {
+              ...data.projecao_empresa?.financeiro_rotas,
+              projecao_final: sumRotasProj
+          },
+          financeiro_pdv: {
+              ...data.projecao_empresa?.financeiro_pdv,
+              projecao_final: sumPdvProj
+          },
+          peso: {
+              ...data.projecao_empresa?.peso,
+              projecao_final: sumPesoProj,
+              atingimento_projetado: objArea.objetivo_peso > 0 ? (sumPesoProj / objArea.objetivo_peso) * 100 : 0
+          },
+          mix: {
+              ...data.projecao_empresa?.mix,
+              projecao: {
+                  ...data.projecao_empresa?.mix?.projecao,
+                  atingimento_projetado: objArea.objetivo_mix > 0 ? (sumMixProj / objArea.objetivo_mix) * 100 : 0
+              }
+          },
+          positivacao: {
+              ...data.projecao_empresa?.positivacao,
+              atingimento_projetado: objArea.objetivo_positivacao > 0 ? (sumPosProj / objArea.objetivo_positivacao) * 100 : 0
+          },
+          // Ajusta detalhes valores para o Modal
+          detalhes_valores: {
+              rotas: sumAreas(filtrado.vendas?.vendas_por_vendedor, "venda_rotas"),
+              pdv: sumAreas(filtrado.vendas?.vendas_por_vendedor, "venda_pdv"),
+              total: sumAreas(filtrado.vendas?.vendas_por_vendedor, "venda_total_geral")
+          }
+      };
+
+      // Sobrescreve no objeto filtrado
+      filtrado.projecao_empresa = newProjEmpresa;
+  }
+
+  setDataEscopoAtual(filtrado);
+  applyAreaFromRaw(filtrado, selecionadas);
 
   setDataEscopoAtual(filtrado);
   applyAreaFromRaw(filtrado, selecionadas);
@@ -1643,6 +1720,29 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
   // venda realizada no card (base)
   setVendaRealizadaBase(atual);
   setVendaRealizada(fmtMoeda(atual));
+  // ✅ CORREÇÃO: "Vendas Ano Ant. (Rotas)" deve ser a soma da supervisão selecionada
+  // =================================================================
+  let rotasAA_Filtrado = 0;
+  if (!selecionadas || selecionadas.length === 0) {
+      // Sem filtro: usa o totalzão que veio do backend
+      rotasAA_Filtrado = Number(data?.vendas?.venda_ano_anterior_rotas?.valor_total || 0);
+  } else {
+      // Com filtro: soma manual dos vendedores do AA (baseado no detalhamento que vem do backend)
+      
+      // 1. Pega IDs dos vendedores atualmente filtrados
+      const idsPermitidos = new Set();
+      (filtrado.vendas?.vendas_por_vendedor || []).forEach(v => idsPermitidos.add(Number(v.codcampo)));
+      
+      // 2. Itera sobre a lista detalhada do AA
+      const listaAA = data?.vendas?.venda_ano_anterior_rotas?.por_vendedor || [];
+      listaAA.forEach(item => {
+          if (idsPermitidos.has(Number(item.CodVendedor))) {
+              rotasAA_Filtrado += Number(item.Valor_liquido_total || 0);
+          }
+      });
+  }
+  setValorRotasAnoAnterior(rotasAA_Filtrado);
+  // =================================================================
 
   // base do ano anterior (para evolução / texto)
   setValorAnoAnteriorBase(aa);
@@ -1712,7 +1812,7 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
       {showProjectionModal && (
         <ProjectionModal 
             onClose={() => setShowProjectionModal(false)} 
-            data={rawData} 
+            data={dataEscopoAtual || rawData}
             usarPDV={usarPDV} 
         />
       )}
