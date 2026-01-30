@@ -773,3 +773,46 @@ def buscar_resumo_segmento_area_venda(
         ORDER BY AreaVenda.AreaVenda, Funcionario.Funcionario, Segmento.Segmento;
     """
     return query_all(sql)
+
+
+def buscar_mix_agregado(
+    data_inicio: str | date,
+    data_fim: str | date,
+    cod_vendedores: Optional[Iterable[int]] = None
+) -> int:
+    """
+    Calcula o Mix (Quantidade de SKUs distintos positivados) de forma AGREGADA
+    para um conjunto de vendedores.
+    Ex: Se Vend A vendeu item X e Vend B vendeu item X, conta como 1 no mix da equipe.
+    """
+    di, df = _validar_data(data_inicio), _validar_data(data_fim)
+    p1, p2 = _dt_bounds(di, df)
+
+    vend_filter_sql = ""
+    if cod_vendedores:
+        v = [int(x) for x in cod_vendedores if x is not None]
+        v = list(dict.fromkeys(v))
+        if v:
+            vend_filter_sql = f" AND PV.CodVendedor IN ({','.join(map(str, v))}) "
+
+    sql = f"""
+        DECLARE @P1 datetime2 = '{p1:%Y-%m-%d %H:%M:%S}';
+        DECLARE @P2 datetime2 = '{p2:%Y-%m-%d %H:%M:%S}';
+
+        SELECT COUNT(DISTINCT PVI.CodMaterial) as MixAgregado
+        FROM PedidoVendaItens PVI
+        INNER JOIN PedidoVenda PV ON PV.CodPedidoVenda = PVI.CodPedidoVenda
+        INNER JOIN NaturezaOperacao NOP ON PV.CodNaturezaOperacao = NOP.CodNaturezaOperacao
+        INNER JOIN Material M ON PVI.CodMaterial = M.CodMaterial
+        WHERE PV.Status = 0
+          AND (NOP.Venda = 1 or NOP.Bonificacao=1)
+          AND PV.UnidGestora IN (select UnidGestora from unidadegestora)
+          AND PV.DataVenda >= @P1
+          AND PV.DataVenda < @P2
+          AND M.EmbRetornavel = 0
+          {vend_filter_sql}
+    """
+    rows = query_all(sql)
+    if rows and rows[0].get("MixAgregado"):
+        return int(rows[0]["MixAgregado"])
+    return 0

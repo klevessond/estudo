@@ -1708,8 +1708,6 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
   setDataEscopoAtual(filtrado);
   applyAreaFromRaw(filtrado, selecionadas);
 
-  setDataEscopoAtual(filtrado);
-  applyAreaFromRaw(filtrado, selecionadas);
 
   // (B) AGORA: sobrescreve somente o que precisa ser "por escopo_rotas":
   //     - Venda Realizada (card)
@@ -1782,20 +1780,43 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
   // 4) MIX
   // Se não tem filtro (selecionadas vazio), usa a Meta da Empresa que vem no payload principal.
   // Se tem filtro, usa a soma das áreas selecionadas (obj.objetivo_mix).
-  let metaMixFinal = 0;
+  let metaMixFinal = 0; // <--- ESTA LINHA É ESSENCIAL
 
   if (!selecionadas || selecionadas.length === 0) {
      // Sem filtro: Meta Geral da Empresa (vinda do backend já correta)
      metaMixFinal = Number(data.objetivo?.objetivo_mix || 0);
   } else {
-     // Com filtro: Soma das metas dos supervisores selecionados
+     // Com filtro: Soma das metas dos supervisores selecionados (calculado anteriormente em 'obj')
      metaMixFinal = Number(obj.objetivo_mix || 0);
   }
 
   setObjetivoMix(String(metaMixFinal));
   
-  const mixReal = Number(filtrado?.realizado_mix?.realizado ?? 0);
+  // Cálculo do Realizado (usando a nova lógica de área ou fallback)
+  let mixReal = 0;
+
+  if (selecionadas && selecionadas.length > 0) {
+      // Tenta pegar o mix calculado no backend para as áreas selecionadas
+      const areasObj = data?.escopo_rotas?.areas_supervisao || [];
+      const idsSel = selecionadas.map(s => String(s.value));
+      
+      // Filtra as áreas selecionadas
+      const areasFiltradas = areasObj.filter(a => idsSel.includes(String(a.cod_area_supervisao)));
+      
+      // Soma o mix das áreas (valor agregado vindo do backend)
+      mixReal = areasFiltradas.reduce((acc, area) => acc + (area.mix_realizado_area || 0), 0);
+      
+      // Fallback: se o backend não mandou 'mix_realizado_area', usa a soma simples dos vendedores
+      if (mixReal === 0 && areasFiltradas.length > 0) {
+           mixReal = Number(filtrado?.realizado_mix?.realizado ?? 0);
+      }
+  } else {
+      // Sem filtro: usa o total da empresa (que vem no payload principal)
+      mixReal = Number(data.realizado_mix?.realizado || 0);
+  }
   
+  // Atualiza os estados do Card
+  setMixRealizado(String(mixReal));
   setMixPercentual(`${(metaMixFinal > 0 ? (mixReal / metaMixFinal) * 100 : 0).toFixed(2)}%`);
   setMixVariacao(String(mixReal - metaMixFinal));
 
