@@ -1788,7 +1788,7 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
         </div>
       ) : (
         <div className="indicativos-container">
-          <Card
+          {/*<Card
             title="Objetivo & Evolução"
             value={objetivoFinanceiro ?? '...'}
             subtitle="Objetivo Financeiro"
@@ -1809,7 +1809,7 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
             percentage={evolucao_venda_vendapdv ?? evolucaoAnoAnterior ?? '...'}
             subtitle2="Evo % vs Ano Ant."
             className="card-objetivo"
-          />
+          />*/}
 
                     {/* === NOVO CARD DUPLICADO PARA GERÊNCIA (ROTAS) === */}
           <Card
