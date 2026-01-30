@@ -591,7 +591,7 @@ def buscar_vendas_por_vendedor(
                    LEFT JOIN Material M ON PVI.CodMaterial = M.CodMaterial
                    LEFT JOIN NaturezaOperacao NOP ON PV.CodNaturezaOperacao = NOP.CodNaturezaOperacao
                    WHERE PV.Status = 0
-                     AND NOP.Venda = 1
+                     AND (NOP.Venda = 1 OR NOP.Bonificacao = 1)
                      AND PV.UnidGestora IN (1, 2, 3, 4, 5, 6, 8, 9, 10)
                      AND PV.DataVenda >= @P1
                      AND PV.DataVenda <  @P2
@@ -774,7 +774,6 @@ def buscar_resumo_segmento_area_venda(
     """
     return query_all(sql)
 
-
 def buscar_mix_agregado(
     data_inicio: str | date,
     data_fim: str | date,
@@ -783,7 +782,6 @@ def buscar_mix_agregado(
     """
     Calcula o Mix (Quantidade de SKUs distintos positivados) de forma AGREGADA
     para um conjunto de vendedores.
-    Ex: Se Vend A vendeu item X e Vend B vendeu item X, conta como 1 no mix da equipe.
     """
     di, df = _validar_data(data_inicio), _validar_data(data_fim)
     p1, p2 = _dt_bounds(di, df)
@@ -805,7 +803,7 @@ def buscar_mix_agregado(
         INNER JOIN NaturezaOperacao NOP ON PV.CodNaturezaOperacao = NOP.CodNaturezaOperacao
         INNER JOIN Material M ON PVI.CodMaterial = M.CodMaterial
         WHERE PV.Status = 0
-          AND (NOP.Venda = 1 or NOP.Bonificacao=1)
+          AND (NOP.Venda = 1 OR NOP.Bonificacao = 1) -- Ajuste Bonificação
           AND PV.UnidGestora IN (select UnidGestora from unidadegestora)
           AND PV.DataVenda >= @P1
           AND PV.DataVenda < @P2

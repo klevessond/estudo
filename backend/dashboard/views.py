@@ -445,7 +445,6 @@ class IndicadoresView(APIView):
             except Exception:
                 return 0.0
 
-        # lista/set de vendedores p/ filtro
         vendedores_list = vendedores or []
         vendedores_set = { _to_int(v) for v in vendedores_list if _to_int(v) is not None }
         # 🔧 REGRA 228/4: LISTA ESPECÍFICA PARA O MIX
@@ -786,26 +785,17 @@ class IndicadoresView(APIView):
                 
                 # MIX AGREGADO DA ÁREA (Distinto)
                 # =========
-                m# AQUI TAMBÉM APLICAMOS A REGRA DO VENDEDOR 4 SE NECESSÁRIO
-                # =========
-                
-                # Cria lista de mix específica para esta área (cópia)
                 area_vendedores_mix = list(area_vendedores)
-                
                 # Aplica a regra do 228/4 também aqui
                 try:
-                    cod_logado_str = str(ctx.cod_funcionario)
-                    if cod_logado_str in ['228', '4']:
+                    if str(ctx.cod_funcionario) in ['228', '4']:
                         if 4 not in area_vendedores_mix:
                             area_vendedores_mix.append(4)
-                except Exception: 
-                    pass
-
-                # Chama a função nova passando a lista ajustada
+                except: pass
                 mix_area = buscar_mix_agregado(
                     data_inicio,
                     data_fim,
-                    cod_vendedores=area_vendedores_mix # <--- USA A LISTA COM O 4
+                    cod_vendedores=area_vendedores_mix 
                 )
                 area["mix_realizado_area"] = mix_area
                 
@@ -856,7 +846,7 @@ class IndicadoresView(APIView):
         variacao_positivacao = positivacao_realizado_geral  - objetivo_positivacao
 
         # MIX (área)
-        dados_mix = buscar_venda_mix(data_inicio, data_fim, cod_vendedores=vendedores_mix_list)
+        dados_mix = buscar_venda_mix(data_inicio, data_fim, cod_vendedores=vendedores)
         mix_realizado = dados_mix["mix_realizado"]
         
         # Pré-venda (área)
@@ -968,7 +958,7 @@ class IndicadoresView(APIView):
         variacao_prevenda = valor_alocado - objetivo_financeiro
 
         # === RUPTURA (Captado) (área) ===
-        vendedores_list_int = _to_int_list(vendedores)
+        vendedores_list_int = [_to_int(v) for v in (vendedores or []) if _to_int(v) is not None]
         if not vendedores_list_int:
             ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=None)
         elif len(vendedores_list_int) == 1:
