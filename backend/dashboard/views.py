@@ -2063,15 +2063,58 @@ class RegisterView(APIView):
 
 class FuncionariosListView(APIView):
     def get(self, request):
+        from django.db.models import Q  # Importação necessária para filtros OR
+        
         search = request.query_params.get('search', '')
-        funcionarios = listar_funcionarios(search=search)
-        users = User.objects.filter(username__icontains=search).values(
+        
+        # 1. Identifica o Papel do Usuário
+        ctx = get_role_context(request.user)
+        is_gerente = getattr(ctx, "is_gerente", False) or request.user.is_superuser
+        is_supervisor = getattr(ctx, "is_supervisor", False)
+        is_vendedor = getattr(ctx, "is_vendedor", False)
+
+        # 2. Query Base de Usuários
+        users_qs = User.objects.filter(username__icontains=search)
+
+        # 3. Aplica Filtros de Permissão
+        if is_gerente:
+            # Gerente vê todos -> Não aplica filtro extra
+            pass
+            
+        elif is_supervisor:
+            # Supervisor vê: Ele mesmo + Vendedores da sua equipe
+            rotas_info = buscar_rotas_usuario(ctx)
+            vendedores_ids = rotas_info.get("vendedores", []) if rotas_info else []
+            
+            # Converte para string para garantir match com o campo do Profile
+            vendedores_ids_str = [str(v) for v in vendedores_ids if v is not None]
+            
+            users_qs = users_qs.filter(
+                Q(pk=request.user.pk) |  # Ele mesmo
+                Q(profile__cod_funcionario__in=vendedores_ids_str)  # Sua equipe
+            ).distinct()
+
+        elif is_vendedor:
+            # Vendedor vê apenas a si mesmo
+            users_qs = users_qs.filter(pk=request.user.pk)
+            
+        else:
+            # Fallback (outros perfis): vê apenas a si mesmo por segurança
+            users_qs = users_qs.filter(pk=request.user.pk)
+
+        # 4. Monta a Resposta
+        users = users_qs.values(
             'id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff'
         )
+        
+        # Lista de funcionários do ERP (para cadastro de novos)
+        # Mantemos aberta para busca, mas a edição (acima) já está restrita
+        funcionarios = listar_funcionarios(search=search)
+        
         return Response({
             "funcionarios_sql": funcionarios,
             "usuarios_django": list(users)
-            })
+        })
 
 class UsuarioDetailView(APIView):
     def get(self, request, user_id):
