@@ -1228,6 +1228,9 @@ setAlocacaoVariacao(
         const res = await api.get('/indicadores/pdv/', { params: { de, ate } });
         const data = res.data || {};
 
+        console.log('[DEBUG PDV] Payload Recebido do Backend:', data);
+        console.log('[DEBUG PDV] UG do Usuário:', data.unid_gestora_usuario);
+        console.log('[DEBUG PDV] Detalhado AA (Ano Anterior):', data.detalhado_aa_por_unid_gestora);
         console.log('[IndicadoresPDV][RAW]', data);
 
         const ug =

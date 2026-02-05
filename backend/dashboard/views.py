@@ -482,6 +482,48 @@ class IndicadoresView(APIView):
         if not eh_gerente and vendedores_set:
             lista = [it for it in lista if _to_int(it.get("codcampo")) in vendedores_set]
 
+            # =========================================================
+            existing_ids = set()
+            for it in lista:
+                cid = _to_int(it.get("codcampo"))
+                if cid is not None:
+                    existing_ids.add(cid)
+            
+            missing_ids = vendedores_set - existing_ids
+            
+            if missing_ids:
+                # Mapa de nomes para usar no fallback (tenta pegar dos objetivos)
+                name_map = {}
+                for o in (objetivos_vendedores or []):
+                     try:
+                         vid = int(str(o.get("vendedor_id")).strip())
+                         name_map[vid] = o.get("nome_vendedor")
+                     except: pass
+                
+                for mid in missing_ids:
+                    # Tenta achar o nome, senão usa o ID
+                    nome = name_map.get(mid, f"Vendedor {mid}")
+                    
+                    # Cria o objeto "zerado". 
+                    # NOTA: O Ano Anterior e as Projeções serão calculados/preenchidos
+                    # nos passos seguintes do código (linhas abaixo), pois inserimos isso NO INÍCIO.
+                    lista.append({
+                        "codcampo": str(mid),
+                        "Campo": nome,
+                        "ValorLiquido": 0.0,
+                        "PesoTotal": 0.0,
+                        "Mix": 0,
+                        "QtdClientes": 0,
+                        "PreVenda_Valor": 0.0,
+                        "Ruptura_TotalValor": 0.0,
+                        "Positivacao_Realizado": 0.0,
+                        # Inicializa AA com 0, mas o bloco "ANO ANTERIOR" logo abaixo vai atualizar isso
+                        "Ano_anterior_QtdClientes": 0,
+                        "Ano_anterior_ValorLiquido": 0,
+                        "Ano_anterior_PesoTotal": 0,
+                        "Ano_anterior_Mix": 0
+                    })
+
 
         # somatórios
         venda_realizada = sum(_to_float(it.get("ValorLiquido")) for it in lista)
@@ -1662,20 +1704,97 @@ class VendasPorVendedorView(APIView):
             except Exception:
                 return None
 
+# --- 1. PREPARA O FILTRO (Restaurado) ---
         vendedores_set = set()
         if vendedores:
-            vendedores_set = {
-                to_int(v)
-                for v in vendedores
-                if to_int(v) is not None
-            }
+            vendedores_set = {to_int(v) for v in vendedores if to_int(v) is not None}
+            print(f"[DEBUG] vendedores_set gerado para filtro: {vendedores_set}")
 
-        print(f"[DEBUG] vendedores_set gerado para filtro: {vendedores_set}")
         print("----------------------------")
 
-        # === BUSCA PRINCIPAL NO BANCO ===
+        # --- 2. BUSCA DADOS NO BANCO (Restaurado - AQUI estava o erro) ---
         resultado = buscar_vendas_por_vendedor(data_inicio, data_fim)
+        lista = resultado.get("vendas_por_vendedor", []) or []
 
+        print(f"[DEBUG] Total bruto retornado por buscar_vendas_por_vendedor: {len(lista)} vendedores")
+
+        # === 3. APLICA FILTRO + PREENCHIMENTO (Gap Filling) ===
+        if vendedores_set:
+            lista_filtrada = [
+                item for item in lista
+                if to_int(item.get("codcampo")) in vendedores_set
+            ]
+            
+            # --- FIX: Gap Filling (Vendedores sem venda mas no escopo) ---
+            existing_ids = {to_int(it.get("codcampo")) for it in lista_filtrada if to_int(it.get("codcampo")) is not None}
+            missing_ids = vendedores_set - existing_ids
+            
+            if missing_ids:
+                print(f"[DEBUG] Gap Filling Tabela: Adicionando {len(missing_ids)} vendedores sem venda: {missing_ids}")
+                
+                # --- BUSCA ROBUSTA DE NOMES ---
+                name_map = {}
+                
+                # Tentativa 1: Todos_Vendedores (Dados Comerciais)
+                try:
+                    todos = Todos_Vendedores().get("detalhamento", [])
+                    for v in todos:
+                        # Tenta pegar código e nome com variações de chave
+                        c = v.get("CodFuncionario") or v.get("cod_funcionario")
+                        n = v.get("Funcionario") or v.get("Nome") or v.get("nome")
+                        if c and n:
+                            try:
+                                # Salva como INT e STRING para garantir o match
+                                name_map[int(c)] = n.strip()
+                                name_map[str(c).strip()] = n.strip()
+                            except: pass
+                except Exception as e:
+                    print(f"[DEBUG] Erro ao carregar Todos_Vendedores: {e}")
+
+                # Tentativa 2: listar_funcionarios (Dados de Cadastro - Fallback)
+                if len(name_map) < len(missing_ids):
+                    try:
+                        from dashboard.services.usuarios.funcionario_service import listar_funcionarios
+                        funcs = listar_funcionarios()
+                        for f in funcs:
+                            c = f.get("codigo") or f.get("id")
+                            n = f.get("nome") or f.get("usuario")
+                            if c and n:
+                                try:
+                                    name_map[int(c)] = n.strip()
+                                    name_map[str(c).strip()] = n.strip()
+                                except: pass
+                    except Exception as e:
+                        print(f"[DEBUG] Erro ao carregar listar_funcionarios: {e}")
+
+                # Preenchimento
+                for mid in missing_ids:
+                    # Busca o nome no mapa (tenta como int e str)
+                    nome = name_map.get(mid) or name_map.get(str(mid)) or f"Vendedor {mid}"
+                    
+                    lista_filtrada.append({
+                        "codcampo": str(mid),
+                        "Campo": nome, # Agora deve vir o nome correto!
+                        "ValorLiquido": 0.0,
+                        "PesoTotal": 0.0,
+                        "Mix": 0,
+                        "QtdClientes": 0,
+                        "PreVenda_Valor": 0.0,
+                        "Ruptura_TotalValor": 0.0,
+                        "Positivacao_Realizado": 0.0,
+                        "Ano_anterior_QtdClientes": 0,
+                        "Ano_anterior_ValorLiquido": 0,
+                        "Ano_anterior_PesoTotal": 0,
+                        "Ano_anterior_Mix": 0
+                    })
+
+            print(
+                f"[DEBUG] Filtro APLICADO → de {len(lista)} foram mantidos "
+                f"{len(lista_filtrada)} vendedores (com gap filling)."
+            )
+            resultado["vendas_por_vendedor"] = lista_filtrada
+            
+        # Atualiza a lista final
         lista = resultado.get("vendas_por_vendedor", [])
         print(f"[DEBUG] Total bruto retornado por buscar_vendas_por_vendedor: {len(lista)} vendedores")
 
