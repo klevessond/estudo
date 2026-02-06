@@ -121,3 +121,17 @@ class ObjetivoMixNivel(models.Model):
 
     def __str__(self):
         return f"{self.mes_referencia} | {self.nivel} {self.codigo_alvo} | Mix: {self.objetivo_mix}"
+
+    
+class Feriado(models.Model):
+    data = models.DateField(unique=True, help_text="Data do feriado")
+    descricao = models.CharField(max_length=100, help_text="Nome do feriado (ex: Natal)")
+
+    class Meta:
+        db_table = "feriados"
+        ordering = ['data']
+        verbose_name = "Feriado"
+        verbose_name_plural = "Feriados"
+
+    def __str__(self):
+        return f"{self.data.strftime('%d/%m/%Y')} - {self.descricao}"

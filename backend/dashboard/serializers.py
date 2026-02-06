@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ObjetivoMensal,Profile,ObjetivoMixNivel
+from .models import ObjetivoMensal,Profile,ObjetivoMixNivel,Feriado
 from django.contrib.auth.models import User
 
 
@@ -12,6 +12,9 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = ['phone', 'cod_funcionario', 'cod_unid_gestora', 'entregador', 'supervisor', 'transportador', 'transportador_aux', 'vendedor', 'cobrador']
+        extra_kwargs = {
+            'cod_funcionario': {'validators': []}
+        }
 
 class CustomUserSerializer(serializers.ModelSerializer):
     profile = ProfileSerializer()
@@ -20,6 +23,25 @@ class CustomUserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'password', 'profile']
         extra_kwargs = {'password': {'write_only': True, 'required': False}}
+    
+    def validate(self, data):
+        profile_data = data.get('profile', {})
+        cod_funcionario = profile_data.get('cod_funcionario')
+
+        if cod_funcionario:
+            # Busca se existe algum perfil com esse código
+            existe = Profile.objects.filter(cod_funcionario=cod_funcionario)
+            
+            # Se for uma edição (self.instance existe), exclui o próprio usuário da busca
+            if self.instance:
+                existe = existe.exclude(user=self.instance)
+            
+            if existe.exists():
+                raise serializers.ValidationError({
+                    "profile": {"cod_funcionario": "Este Código de Funcionário já está em uso por outro usuário."}
+                })
+        
+        return data
 
     def update(self, instance, validated_data):
         profile_data = validated_data.pop('profile', {})
@@ -86,3 +108,9 @@ class ObjetivoMixNivelSerializer(serializers.ModelSerializer):
     class Meta:
         model = ObjetivoMixNivel
         fields = ['id', 'mes_referencia', 'nivel', 'codigo_alvo', 'objetivo_mix']
+
+
+class FeriadoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Feriado
+        fields = ['id', 'data', 'descricao']

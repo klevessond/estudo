@@ -7,8 +7,8 @@ from django.db.models import Sum
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import ObjetivoMensal,ObjetivoMensalVendedor,ObjetivoMixNivel
-from .serializers import ObjetivoMensalSerializer, CustomUserSerializer,MeSerializer,ObjetivoMixNivelSerializer
+from .models import ObjetivoMensal,ObjetivoMensalVendedor,ObjetivoMixNivel,Feriado
+from .serializers import ObjetivoMensalSerializer, CustomUserSerializer,MeSerializer,ObjetivoMixNivelSerializer,FeriadoSerializer
 from datetime import datetime,date
 from decimal import Decimal
 from collections import defaultdict
@@ -42,6 +42,62 @@ from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 # Create your views here.
+
+
+
+# Em dashboard/views.py
+
+class FeriadoView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # Função auxiliar para verificar permissão
+    def tem_permissao(self, request):
+        # Admin (Superuser) sempre pode
+        if request.user.is_superuser:
+            return True
+        
+        # Verifica se é gerente pelo contexto
+        ctx = get_role_context(request.user)
+        is_gerente = getattr(ctx, "is_gerente", False)
+        
+        return is_gerente
+
+    def get(self, request):
+        # Opcional: Se quiser que TODOS vejam a lista, remova este if.
+        # Se quiser que APENAS gerente veja a tela, mantenha.
+        if not self.tem_permissao(request):
+            return Response({"error": "Acesso restrito a gerentes."}, status=status.HTTP_403_FORBIDDEN)
+
+        ano = request.query_params.get('ano')
+        qs = Feriado.objects.all()
+        if ano:
+            qs = qs.filter(data__year=ano)
+        
+        serializer = FeriadoSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        # Bloqueia cadastro
+        if not self.tem_permissao(request):
+            return Response({"error": "Apenas gerentes podem cadastrar feriados."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = FeriadoSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        # Bloqueia exclusão
+        if not self.tem_permissao(request):
+            return Response({"error": "Apenas gerentes podem excluir feriados."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            feriado = Feriado.objects.get(pk=pk)
+            feriado.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Feriado.DoesNotExist:
+            return Response({"error": "Feriado não encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
 
 
@@ -481,6 +537,48 @@ class IndicadoresView(APIView):
         # Só mantém o filtro em memória para quem NÃO é gerente
         if not eh_gerente and vendedores_set:
             lista = [it for it in lista if _to_int(it.get("codcampo")) in vendedores_set]
+
+            # =========================================================
+            existing_ids = set()
+            for it in lista:
+                cid = _to_int(it.get("codcampo"))
+                if cid is not None:
+                    existing_ids.add(cid)
+            
+            missing_ids = vendedores_set - existing_ids
+            
+            if missing_ids:
+                # Mapa de nomes para usar no fallback (tenta pegar dos objetivos)
+                name_map = {}
+                for o in (objetivos_vendedores or []):
+                     try:
+                         vid = int(str(o.get("vendedor_id")).strip())
+                         name_map[vid] = o.get("nome_vendedor")
+                     except: pass
+                
+                for mid in missing_ids:
+                    # Tenta achar o nome, senão usa o ID
+                    nome = name_map.get(mid, f"Vendedor {mid}")
+                    
+                    # Cria o objeto "zerado". 
+                    # NOTA: O Ano Anterior e as Projeções serão calculados/preenchidos
+                    # nos passos seguintes do código (linhas abaixo), pois inserimos isso NO INÍCIO.
+                    lista.append({
+                        "codcampo": str(mid),
+                        "Campo": nome,
+                        "ValorLiquido": 0.0,
+                        "PesoTotal": 0.0,
+                        "Mix": 0,
+                        "QtdClientes": 0,
+                        "PreVenda_Valor": 0.0,
+                        "Ruptura_TotalValor": 0.0,
+                        "Positivacao_Realizado": 0.0,
+                        # Inicializa AA com 0, mas o bloco "ANO ANTERIOR" logo abaixo vai atualizar isso
+                        "Ano_anterior_QtdClientes": 0,
+                        "Ano_anterior_ValorLiquido": 0,
+                        "Ano_anterior_PesoTotal": 0,
+                        "Ano_anterior_Mix": 0
+                    })
 
 
         # somatórios
@@ -1662,20 +1760,97 @@ class VendasPorVendedorView(APIView):
             except Exception:
                 return None
 
+# --- 1. PREPARA O FILTRO (Restaurado) ---
         vendedores_set = set()
         if vendedores:
-            vendedores_set = {
-                to_int(v)
-                for v in vendedores
-                if to_int(v) is not None
-            }
+            vendedores_set = {to_int(v) for v in vendedores if to_int(v) is not None}
+            print(f"[DEBUG] vendedores_set gerado para filtro: {vendedores_set}")
 
-        print(f"[DEBUG] vendedores_set gerado para filtro: {vendedores_set}")
         print("----------------------------")
 
-        # === BUSCA PRINCIPAL NO BANCO ===
+        # --- 2. BUSCA DADOS NO BANCO (Restaurado - AQUI estava o erro) ---
         resultado = buscar_vendas_por_vendedor(data_inicio, data_fim)
+        lista = resultado.get("vendas_por_vendedor", []) or []
 
+        print(f"[DEBUG] Total bruto retornado por buscar_vendas_por_vendedor: {len(lista)} vendedores")
+
+        # === 3. APLICA FILTRO + PREENCHIMENTO (Gap Filling) ===
+        if vendedores_set:
+            lista_filtrada = [
+                item for item in lista
+                if to_int(item.get("codcampo")) in vendedores_set
+            ]
+            
+            # --- FIX: Gap Filling (Vendedores sem venda mas no escopo) ---
+            existing_ids = {to_int(it.get("codcampo")) for it in lista_filtrada if to_int(it.get("codcampo")) is not None}
+            missing_ids = vendedores_set - existing_ids
+            
+            if missing_ids:
+                print(f"[DEBUG] Gap Filling Tabela: Adicionando {len(missing_ids)} vendedores sem venda: {missing_ids}")
+                
+                # --- BUSCA ROBUSTA DE NOMES ---
+                name_map = {}
+                
+                # Tentativa 1: Todos_Vendedores (Dados Comerciais)
+                try:
+                    todos = Todos_Vendedores().get("detalhamento", [])
+                    for v in todos:
+                        # Tenta pegar código e nome com variações de chave
+                        c = v.get("CodFuncionario") or v.get("cod_funcionario")
+                        n = v.get("Funcionario") or v.get("Nome") or v.get("nome")
+                        if c and n:
+                            try:
+                                # Salva como INT e STRING para garantir o match
+                                name_map[int(c)] = n.strip()
+                                name_map[str(c).strip()] = n.strip()
+                            except: pass
+                except Exception as e:
+                    print(f"[DEBUG] Erro ao carregar Todos_Vendedores: {e}")
+
+                # Tentativa 2: listar_funcionarios (Dados de Cadastro - Fallback)
+                if len(name_map) < len(missing_ids):
+                    try:
+                        from dashboard.services.usuarios.funcionario_service import listar_funcionarios
+                        funcs = listar_funcionarios()
+                        for f in funcs:
+                            c = f.get("codigo") or f.get("id")
+                            n = f.get("nome") or f.get("usuario")
+                            if c and n:
+                                try:
+                                    name_map[int(c)] = n.strip()
+                                    name_map[str(c).strip()] = n.strip()
+                                except: pass
+                    except Exception as e:
+                        print(f"[DEBUG] Erro ao carregar listar_funcionarios: {e}")
+
+                # Preenchimento
+                for mid in missing_ids:
+                    # Busca o nome no mapa (tenta como int e str)
+                    nome = name_map.get(mid) or name_map.get(str(mid)) or f"Vendedor {mid}"
+                    
+                    lista_filtrada.append({
+                        "codcampo": str(mid),
+                        "Campo": nome, # Agora deve vir o nome correto!
+                        "ValorLiquido": 0.0,
+                        "PesoTotal": 0.0,
+                        "Mix": 0,
+                        "QtdClientes": 0,
+                        "PreVenda_Valor": 0.0,
+                        "Ruptura_TotalValor": 0.0,
+                        "Positivacao_Realizado": 0.0,
+                        "Ano_anterior_QtdClientes": 0,
+                        "Ano_anterior_ValorLiquido": 0,
+                        "Ano_anterior_PesoTotal": 0,
+                        "Ano_anterior_Mix": 0
+                    })
+
+            print(
+                f"[DEBUG] Filtro APLICADO → de {len(lista)} foram mantidos "
+                f"{len(lista_filtrada)} vendedores (com gap filling)."
+            )
+            resultado["vendas_por_vendedor"] = lista_filtrada
+            
+        # Atualiza a lista final
         lista = resultado.get("vendas_por_vendedor", [])
         print(f"[DEBUG] Total bruto retornado por buscar_vendas_por_vendedor: {len(lista)} vendedores")
 
@@ -1944,15 +2119,58 @@ class RegisterView(APIView):
 
 class FuncionariosListView(APIView):
     def get(self, request):
+        from django.db.models import Q  # Importação necessária para filtros OR
+        
         search = request.query_params.get('search', '')
-        funcionarios = listar_funcionarios(search=search)
-        users = User.objects.filter(username__icontains=search).values(
+        
+        # 1. Identifica o Papel do Usuário
+        ctx = get_role_context(request.user)
+        is_gerente = getattr(ctx, "is_gerente", False) or request.user.is_superuser
+        is_supervisor = getattr(ctx, "is_supervisor", False)
+        is_vendedor = getattr(ctx, "is_vendedor", False)
+
+        # 2. Query Base de Usuários
+        users_qs = User.objects.filter(username__icontains=search)
+
+        # 3. Aplica Filtros de Permissão
+        if is_gerente:
+            # Gerente vê todos -> Não aplica filtro extra
+            pass
+            
+        elif is_supervisor:
+            # Supervisor vê: Ele mesmo + Vendedores da sua equipe
+            rotas_info = buscar_rotas_usuario(ctx)
+            vendedores_ids = rotas_info.get("vendedores", []) if rotas_info else []
+            
+            # Converte para string para garantir match com o campo do Profile
+            vendedores_ids_str = [str(v) for v in vendedores_ids if v is not None]
+            
+            users_qs = users_qs.filter(
+                Q(pk=request.user.pk) |  # Ele mesmo
+                Q(profile__cod_funcionario__in=vendedores_ids_str)  # Sua equipe
+            ).distinct()
+
+        elif is_vendedor:
+            # Vendedor vê apenas a si mesmo
+            users_qs = users_qs.filter(pk=request.user.pk)
+            
+        else:
+            # Fallback (outros perfis): vê apenas a si mesmo por segurança
+            users_qs = users_qs.filter(pk=request.user.pk)
+
+        # 4. Monta a Resposta
+        users = users_qs.values(
             'id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff'
         )
+        
+        # Lista de funcionários do ERP (para cadastro de novos)
+        # Mantemos aberta para busca, mas a edição (acima) já está restrita
+        funcionarios = listar_funcionarios(search=search)
+        
         return Response({
             "funcionarios_sql": funcionarios,
             "usuarios_django": list(users)
-            })
+        })
 
 class UsuarioDetailView(APIView):
     def get(self, request, user_id):
@@ -1983,25 +2201,46 @@ def funcionario_detail(request, cod_funcionario):
             return JsonResponse({'error': 'Funcionário não encontrado'}, status=404)
 
 
-@api_view(["GET"])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def me(request):
-    # 1. Serializa os dados básicos (username, email, etc)
-    user_data = MeSerializer(request.user).data
+    # 1. Serializa e destrava o dicionário
+    serializer = MeSerializer(request.user)
+    user_data = dict(serializer.data)
     
-    # 2. Obtém o contexto de papéis (mesma lógica que gerou seu log no backend)
-    ctx = get_role_context(request.user)
-    
-    # 3. Injeta as permissões e códigos explicitamente no JSON de resposta
-    user_data['cod_funcionario'] = ctx.cod_funcionario
-    user_data['cod_unid_gestora'] = ctx.cod_unid_gestora
-    
-    # Flags booleanas diretas para facilitar o frontend
-    user_data['supervisor'] = getattr(ctx, "is_supervisor", False)
-    user_data['gerente'] = getattr(ctx, "is_gerente", False)
-    user_data['vendedor'] = getattr(ctx, "is_vendedor", False)
-    user_data['admin'] = getattr(ctx, "is_admin", False)
-    
+    # 2. Obtém o contexto e a regra de rotas
+    try:
+        ctx = get_role_context(request.user)
+        
+        # --- A CORREÇÃO MÁGICA AQUI ---
+        # Consultamos a mesma lógica que a tela de Indicadores usa
+        rotas_info = buscar_rotas_usuario(ctx)
+        eh_gerente_por_rota = rotas_info.get("e_gerente", False)
+        # ------------------------------
+        
+    except Exception as e:
+        print(f"DEBUG: Erro ao obter contexto/rotas: {e}")
+        ctx = None
+        eh_gerente_por_rota = False
+
+    # 3. Injeta as permissões
+    if ctx:
+        user_data['cod_funcionario']  = getattr(ctx, 'cod_funcionario', None)
+        user_data['cod_unid_gestora'] = getattr(ctx, 'cod_unid_gestora', None)
+        
+        user_data['supervisor'] = getattr(ctx, "is_supervisor", False)
+        user_data['vendedor']   = getattr(ctx, "is_vendedor", False)
+        user_data['admin']      = getattr(ctx, "is_admin", False)
+        
+        # REGRA FINAL: É gerente se o contexto diz OU se as rotas dizem
+        val_gerente = getattr(ctx, "is_gerente", False) or eh_gerente_por_rota
+        
+        user_data['gerente']    = val_gerente
+        user_data['is_gerente'] = val_gerente
+    else:
+        # Fallback
+        user_data['is_gerente'] = False
+
     return Response(user_data)
 
 class TodosVendedoresView(APIView):

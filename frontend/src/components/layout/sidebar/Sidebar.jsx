@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../../contexts/auth';
 import { Link } from 'react-router-dom';
 import './Sidebar.css';
 
 const Sidebar = () => {
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const { user, roles } = useAuth();
+
+    const podeGerenciarFeriados = 
+        user?.is_superuser || 
+        user?.is_gerente === true || 
+        user?.gerente === true; // Verifica a outra chave também
 
     return (
         <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
@@ -29,7 +36,14 @@ const Sidebar = () => {
                         {isCollapsed ? '👤' : 'Usuários'}
                     </Link>
                 </li>
-            </ul>
+                {podeGerenciarFeriados && (
+                    <li>
+                    <Link to="/feriados" style={{ textDecoration: 'none', color: 'inherit' }}>
+                        {isCollapsed ? '📅' : 'Feriados'}
+                    </Link>
+                    </li>
+                )}
+                        </ul>
         </aside>
     );
 };
