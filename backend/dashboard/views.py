@@ -50,24 +50,33 @@ from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, b
 class FeriadoView(APIView):
     permission_classes = [IsAuthenticated]
 
-    # Função auxiliar para verificar permissão
     def tem_permissao(self, request):
-        # Admin (Superuser) sempre pode
+        # 1. Admin do Django sempre pode
         if request.user.is_superuser:
             return True
         
-        # Verifica se é gerente pelo contexto
+        # 2. Obtém contexto básico
         ctx = get_role_context(request.user)
-        is_gerente = getattr(ctx, "is_gerente", False)
         
-        return is_gerente
+        # 3. Verifica se é gerente pelo cadastro estático
+        if getattr(ctx, "is_gerente", False):
+            return True
+            
+        # 4. Verifica se é gerente pela Regra de Negócio (Rotas)
+        # (Esta é a parte que faltava!)
+        try:
+            rotas_info = buscar_rotas_usuario(ctx)
+            if rotas_info.get("e_gerente"):
+                return True
+        except Exception:
+            pass
+            
+        return False
 
     def get(self, request):
-        # Opcional: Se quiser que TODOS vejam a lista, remova este if.
-        # Se quiser que APENAS gerente veja a tela, mantenha.
         if not self.tem_permissao(request):
-            return Response({"error": "Acesso restrito a gerentes."}, status=status.HTTP_403_FORBIDDEN)
-
+            return Response({"error": "Acesso restrito."}, status=status.HTTP_403_FORBIDDEN)
+            
         ano = request.query_params.get('ano')
         qs = Feriado.objects.all()
         if ano:
@@ -77,9 +86,8 @@ class FeriadoView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        # Bloqueia cadastro
         if not self.tem_permissao(request):
-            return Response({"error": "Apenas gerentes podem cadastrar feriados."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Acesso restrito."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = FeriadoSerializer(data=request.data)
         if serializer.is_valid():
@@ -88,9 +96,8 @@ class FeriadoView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        # Bloqueia exclusão
         if not self.tem_permissao(request):
-            return Response({"error": "Apenas gerentes podem excluir feriados."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Acesso restrito."}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             feriado = Feriado.objects.get(pk=pk)
