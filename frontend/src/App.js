@@ -9,6 +9,7 @@ import PrivateRoute from './components/routes/PrivateRoute.jsx';
 import Register from './components/pages/register/Register.jsx';
 import RegisterUser from'./components/pages/register/RegisterUser.jsx'
 import EditarUsuario from './components/pages/register/EditarUsuario.jsx';
+import Feriados from './components/pages/register/Feriados.jsx';
 
 
 
@@ -67,6 +68,16 @@ const App = () => {
             </Layout>
           </PrivateRoute>
         }
+      />
+      <Route 
+        path="/feriados" 
+        element={
+          <PrivateRoute> {/* Se você usa proteção de rotas */}
+            <Layout>
+              <Feriados />
+            </Layout>
+          </PrivateRoute>
+        } 
       />
       </Routes>
     </Router></AuthProvider>

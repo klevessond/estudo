@@ -7,8 +7,8 @@ from django.db.models import Sum
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import ObjetivoMensal,ObjetivoMensalVendedor,ObjetivoMixNivel
-from .serializers import ObjetivoMensalSerializer, CustomUserSerializer,MeSerializer,ObjetivoMixNivelSerializer
+from .models import ObjetivoMensal,ObjetivoMensalVendedor,ObjetivoMixNivel,Feriado
+from .serializers import ObjetivoMensalSerializer, CustomUserSerializer,MeSerializer,ObjetivoMixNivelSerializer,FeriadoSerializer
 from datetime import datetime,date
 from decimal import Decimal
 from collections import defaultdict
@@ -42,6 +42,62 @@ from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 # Create your views here.
+
+
+
+# Em dashboard/views.py
+
+class FeriadoView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # Função auxiliar para verificar permissão
+    def tem_permissao(self, request):
+        # Admin (Superuser) sempre pode
+        if request.user.is_superuser:
+            return True
+        
+        # Verifica se é gerente pelo contexto
+        ctx = get_role_context(request.user)
+        is_gerente = getattr(ctx, "is_gerente", False)
+        
+        return is_gerente
+
+    def get(self, request):
+        # Opcional: Se quiser que TODOS vejam a lista, remova este if.
+        # Se quiser que APENAS gerente veja a tela, mantenha.
+        if not self.tem_permissao(request):
+            return Response({"error": "Acesso restrito a gerentes."}, status=status.HTTP_403_FORBIDDEN)
+
+        ano = request.query_params.get('ano')
+        qs = Feriado.objects.all()
+        if ano:
+            qs = qs.filter(data__year=ano)
+        
+        serializer = FeriadoSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        # Bloqueia cadastro
+        if not self.tem_permissao(request):
+            return Response({"error": "Apenas gerentes podem cadastrar feriados."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = FeriadoSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        # Bloqueia exclusão
+        if not self.tem_permissao(request):
+            return Response({"error": "Apenas gerentes podem excluir feriados."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            feriado = Feriado.objects.get(pk=pk)
+            feriado.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Feriado.DoesNotExist:
+            return Response({"error": "Feriado não encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
 
 
@@ -2145,25 +2201,46 @@ def funcionario_detail(request, cod_funcionario):
             return JsonResponse({'error': 'Funcionário não encontrado'}, status=404)
 
 
-@api_view(["GET"])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def me(request):
-    # 1. Serializa os dados básicos (username, email, etc)
-    user_data = MeSerializer(request.user).data
+    # 1. Serializa e destrava o dicionário
+    serializer = MeSerializer(request.user)
+    user_data = dict(serializer.data)
     
-    # 2. Obtém o contexto de papéis (mesma lógica que gerou seu log no backend)
-    ctx = get_role_context(request.user)
-    
-    # 3. Injeta as permissões e códigos explicitamente no JSON de resposta
-    user_data['cod_funcionario'] = ctx.cod_funcionario
-    user_data['cod_unid_gestora'] = ctx.cod_unid_gestora
-    
-    # Flags booleanas diretas para facilitar o frontend
-    user_data['supervisor'] = getattr(ctx, "is_supervisor", False)
-    user_data['gerente'] = getattr(ctx, "is_gerente", False)
-    user_data['vendedor'] = getattr(ctx, "is_vendedor", False)
-    user_data['admin'] = getattr(ctx, "is_admin", False)
-    
+    # 2. Obtém o contexto e a regra de rotas
+    try:
+        ctx = get_role_context(request.user)
+        
+        # --- A CORREÇÃO MÁGICA AQUI ---
+        # Consultamos a mesma lógica que a tela de Indicadores usa
+        rotas_info = buscar_rotas_usuario(ctx)
+        eh_gerente_por_rota = rotas_info.get("e_gerente", False)
+        # ------------------------------
+        
+    except Exception as e:
+        print(f"DEBUG: Erro ao obter contexto/rotas: {e}")
+        ctx = None
+        eh_gerente_por_rota = False
+
+    # 3. Injeta as permissões
+    if ctx:
+        user_data['cod_funcionario']  = getattr(ctx, 'cod_funcionario', None)
+        user_data['cod_unid_gestora'] = getattr(ctx, 'cod_unid_gestora', None)
+        
+        user_data['supervisor'] = getattr(ctx, "is_supervisor", False)
+        user_data['vendedor']   = getattr(ctx, "is_vendedor", False)
+        user_data['admin']      = getattr(ctx, "is_admin", False)
+        
+        # REGRA FINAL: É gerente se o contexto diz OU se as rotas dizem
+        val_gerente = getattr(ctx, "is_gerente", False) or eh_gerente_por_rota
+        
+        user_data['gerente']    = val_gerente
+        user_data['is_gerente'] = val_gerente
+    else:
+        # Fallback
+        user_data['is_gerente'] = False
+
     return Response(user_data)
 
 class TodosVendedoresView(APIView):

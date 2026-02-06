@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ObjetivoMensal,Profile,ObjetivoMixNivel
+from .models import ObjetivoMensal,Profile,ObjetivoMixNivel,Feriado
 from django.contrib.auth.models import User
 
 
@@ -108,3 +108,9 @@ class ObjetivoMixNivelSerializer(serializers.ModelSerializer):
     class Meta:
         model = ObjetivoMixNivel
         fields = ['id', 'mes_referencia', 'nivel', 'codigo_alvo', 'objetivo_mix']
+
+
+class FeriadoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Feriado
+        fields = ['id', 'data', 'descricao']
