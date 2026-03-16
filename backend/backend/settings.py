@@ -25,9 +25,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-sj#espo4*pqo%rfsgl@*zbtbu@m#u8rnk&*gsqd4^4r_!m&(qy'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1","*"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1","168.119.245.32","app.comercialdotrigo.com.br"]
 
 
 # Application definition
@@ -151,9 +151,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",  # <--- Adicione esta linha
-     "http://72.60.151.69:3000",
+    "http://168.119.245.32:3000",
+    "http://app.comercialdotrigo.com.br",
+    "https://app.comercialdotrigo.com.br",
 ]
-CSRF_TRUSTED_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000","http://72.60.151.69:3000"]
+CSRF_TRUSTED_ORIGINS = [
+"http://localhost:3000",
+"http://127.0.0.1:3000",
+"http://168.119.245.32:3000",
+"http://app.comercialdotrigo.com.br",
+"https://app.comercialdotrigo.com.br",]
 
 # OU, se quiser permitir todas as origens (não recomendado para produção):
 # CORS_ALLOW_ALL_ORIGINS = True
@@ -209,3 +216,6 @@ LOGGING = {
         "": {"handlers": ["console"], "level": "INFO"},
     },
 }
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True

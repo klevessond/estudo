@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
 from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_mix_agregado,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor,buscar_resumo_segmento_area_venda
-from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora
+from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora,buscar_cupons_por_vendedor
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 # Create your views here.
 
@@ -1888,6 +1888,19 @@ class VendasPorVendedorView(APIView):
                 continue
             valor = float(item.get("Valor", 0) or 0)
             prevenda_por_vendedor[cod_vend] += valor
+        
+        print("[DEBUG] Iniciando cálculo de cupons PDV...")
+        lista_cupons = buscar_cupons_por_vendedor(data_inicio, data_fim)
+        
+        # Cria um dicionário para facilitar a busca por código do vendedor
+        cupons_por_vendedor = {}
+        for c in lista_cupons:
+            cod_vend = to_int(c.get("CodVendedor"))
+            if cod_vend is not None:
+                cupons_por_vendedor[cod_vend] = {
+                    "quantidade": c.get("QuantidadeCupons", 0),
+                    "valor": float(c.get("ValorTotalCupons", 0) or 0)
+                }
 
         print(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
 
@@ -1895,14 +1908,18 @@ class VendasPorVendedorView(APIView):
         for vendedor in resultado.get("vendas_por_vendedor", []):
             codcampo_int = to_int(vendedor.get("codcampo"))
             valor_prevenda = prevenda_por_vendedor.get(codcampo_int, 0.0)
-
+            # Pega os cupons (se não tiver, retorna 0)
+            dados_cupom = cupons_por_vendedor.get(codcampo_int, {"quantidade": 0})
             valor_realizado = float(vendedor.get("ValorLiquido", 0) or 0)
             vendedor["pre-venda"] = round(valor_prevenda, 2)
             vendedor["alocado"] = round(valor_realizado + valor_prevenda, 2)
+            # Adiciona as novas chaves no dicionário do vendedor que vai para o FrontEnd
+            vendedor["cupons_quantidade"] = dados_cupom["quantidade"]
 
             print(
                 f"[DEBUG] Vendedor {codcampo_int}: "
                 f"ValorLiquido={valor_realizado}, prevenda={valor_prevenda}, alocado={vendedor['alocado']}"
+                f" Cupons(Qtd)={dados_cupom['quantidade']}, "
             )
 
         print("🔥 [VENDAS POR VENDEDOR] FIM")

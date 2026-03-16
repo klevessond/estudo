@@ -42,8 +42,10 @@ const Dashboard = () => {
   const [colaboradorSelecionado, setColaboradorSelecionado] = useState(null);
   const [objetivosVendedores, setObjetivosVendedores] = useState([]);
   const [periodoSelecionado, setPeriodoSelecionado] = useState(null);
-  const [usarPDV, setUsarPDV] = useState(false);
+  const [usarPDV, setUsarPDV] = useState(true);
   const [vendasColaboradores, setVendasColaboradores] = useState([]);
+  const [isPdvLoading, setIsPdvLoading] = useState(false);
+  
 
   // PDV distribuído por vendedor (para a tabela somar na linha do vendedor)
   const [pdvPorVendedor, setPdvPorVendedor] = useState([]);
@@ -147,7 +149,7 @@ const Dashboard = () => {
       }
       const ctrl = new AbortController();
       abortCtrlRef.current = ctrl;
-
+      setIsPdvLoading(true);
       try {
         console.debug('[Dashboard] chamando /indicadores/pdv-por-vendedor', { de, ate, vendParam });
 
@@ -204,6 +206,7 @@ const Dashboard = () => {
         if (abortCtrlRef.current === ctrl) {
           abortCtrlRef.current = null;
         }
+        setIsPdvLoading(false);
       }
     };
 
@@ -291,11 +294,15 @@ const Dashboard = () => {
                 <CardsColaborador
                   colaborador={colaboradorSelecionado}
                   objetivosVendedores={objetivosVendedores}
+                  periodoSelecionado={periodoSelecionado}
+                  vendedoresList={vendasColaboradores}
+                  onNavegar={(colab) => setColaboradorSelecionado(colab)}
                 />
                 {colaboradorSelecionado.colaborador}
                 {colaboradorSelecionado.colaborador?.includes('Ana Paula Silva Peixoto') && (
                   <CardsDetalhadosVendedor />
-                )}
+                )
+                }
               </>
             )}
           </section>
@@ -316,6 +323,7 @@ const Dashboard = () => {
                 usarPDV={usarPDV}
                 pdvPorVendedor={pdvPorVendedor}
                 vendedoresPermitidosTabela={vendedoresPermitidosTabela}
+                isPdvLoading={isPdvLoading} 
               />
             )}
           </section>

@@ -198,3 +198,35 @@ def buscar_pdv_comparativo(
             "peso":  s_aa["peso"],
         },
     }
+def buscar_cupons_por_vendedor(data_inicio: str, data_fim: str):
+    """
+    Retorna a contagem e o valor total de cupons ativos vendidos, 
+    agrupados por código do vendedor.
+    """
+    
+    sql = """
+        SELECT 
+            CodVendedor,
+            COUNT(CodPDVCupom) as QuantidadeCupons
+            
+        FROM PDVCupom
+        WHERE Data >= ? AND Data <= ?
+          AND Status NOT IN ('C') -- Exemplo: Ignora cupons Cancelados. Ajuste se o seu sistema usar outra letra.
+          AND CodVendedor IS NOT NULL
+        GROUP BY CodVendedor
+        ORDER BY QuantidadeCupons DESC
+    """
+    
+    # Ajustando a data final para pegar até o último segundo do dia no SQL Server
+    # Assumindo que data_inicio e data_fim venham no formato 'YYYY-MM-DD'
+    data_inicio_ajustada = f"{data_inicio} 00:00:00"
+    data_fim_ajustada = f"{data_fim} 23:59:59"
+    
+    params = [data_inicio_ajustada, data_fim_ajustada]
+    
+    try:
+        resultados = query_all(sql, params)
+        return resultados
+    except Exception as e:
+        print(f"Erro ao buscar cupons por vendedor: {e}")
+        return []

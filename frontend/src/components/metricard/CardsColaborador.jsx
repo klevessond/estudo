@@ -4,9 +4,20 @@ import './CardsColaborador.css';
 import ResumoSegmentoPies from '../Piechart/ResumoSegmentoPies';
 import ReactSpeedometer from 'react-d3-speedometer';
 
-const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado }) => {
-  const [modo, setModo] = React.useState('graficos');
+const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado, vendedoresList = [], onNavegar }) => {
+  const [modo, setModo] = React.useState('indicadores');
   if (!colaborador) return null;
+
+  const indiceAtual = vendedoresList.findIndex(
+    (v) => Number(v.codFuncionario) === Number(colaborador.codFuncionario)
+  );
+  const temAnterior = indiceAtual > 0;
+  const temProximo = indiceAtual < vendedoresList.length - 1;
+
+  const irPara = (idx) => {
+    const prox = vendedoresList[idx];
+    if (prox) onNavegar?.(prox);
+  };
 
   const codFuncionario = Number(colaborador.codFuncionario);
   const dadosColaborador = objetivosVendedores.find(
@@ -92,18 +103,73 @@ const alocado = colaborador.alocado || 0;
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <h2
-          className="card-title"
-          style={{
-            fontSize: '1.5rem',
-            color: '#0074c2',
-            borderBottom: '2px solid #0074c2',
-            paddingBottom: '0.5rem',
-            marginBottom: 0
-          }}
-        >
-          {colaborador.colaborador}
-        </h2>
+
+        {/* Setas de navegação + nome */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button
+            onClick={() => irPara(indiceAtual - 1)}
+            disabled={!temAnterior}
+            title="Vendedor anterior"
+            style={{
+              background: 'none',
+              border: '2px solid #0074c2',
+              borderRadius: '50%',
+              width: '32px',
+              height: '32px',
+              cursor: temAnterior ? 'pointer' : 'not-allowed',
+              opacity: temAnterior ? 1 : 0.3,
+              fontSize: '1rem',
+              color: '#0074c2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            ‹
+          </button>
+
+          <h2
+            className="card-title"
+            style={{
+              fontSize: '1.5rem',
+              color: '#0074c2',
+              borderBottom: '2px solid #0074c2',
+              paddingBottom: '0.5rem',
+              marginBottom: 0
+            }}
+          >
+            {colaborador.colaborador}
+            {vendedoresList.length > 0 && (
+              <span style={{ fontSize: '0.8rem', color: '#888', marginLeft: '0.5rem', fontWeight: 'normal' }}>
+                {indiceAtual + 1}/{vendedoresList.length}
+              </span>
+            )}
+          </h2>
+
+          <button
+            onClick={() => irPara(indiceAtual + 1)}
+            disabled={!temProximo}
+            title="Próximo vendedor"
+            style={{
+              background: 'none',
+              border: '2px solid #0074c2',
+              borderRadius: '50%',
+              width: '32px',
+              height: '32px',
+              cursor: temProximo ? 'pointer' : 'not-allowed',
+              opacity: temProximo ? 1 : 0.3,
+              fontSize: '1rem',
+              color: '#0074c2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            ›
+          </button>
+        </div>
         <div>
           <button
             onClick={() => setModo('indicadores')}

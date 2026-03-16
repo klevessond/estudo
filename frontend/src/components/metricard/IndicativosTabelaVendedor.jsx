@@ -32,12 +32,14 @@ const IndicativosTabelaVendedor = ({
   objetivosVendedores = [],
   usarPDV = false,
   pdvPorVendedor = [],
-  vendedoresPermitidosTabela = []
+  vendedoresPermitidosTabela = [],
+  isPdvLoading = false,
 }) => {
   const [globalFilter, setGlobalFilter] = useState('');
   const [baseData, setBaseData] = useState([]); // dados crus vindos da API
   const [data, setData] = useState([]);         // dados enriquecidos (com PDV somado quando ativo)
   const [baseDataAll, setBaseDataAll] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Guarda a assinatura do último payload emitido ao pai
   const lastEmittedSigRef = useRef('');
@@ -109,6 +111,7 @@ useEffect(() => {
   useEffect(() => {
     const fetchData = async () => {
       if (!periodoSelecionado?.de || !periodoSelecionado?.ate) return;
+      setIsLoading(true);
       try {
         const url = `/vendas-por-vendedor/?de=${periodoSelecionado.de}&ate=${periodoSelecionado.ate}`;
         const { data: json } = await api.get(url);
@@ -140,6 +143,9 @@ useEffect(() => {
       } catch (error) {
         console.error('[IndicativosTabelaVendedor] Erro ao buscar /vendas-por-vendedor:', error);
       }
+       finally {
+    setIsLoading(false); // 👈 NOVO — desativa sempre (sucesso ou erro)
+  }
     };
 
     fetchData();
@@ -261,7 +267,12 @@ useEffect(() => {
       },
       {
         accessorKey: 'faturado',
-        header: 'Faturado R$',
+        header: () => (
+          <span>
+            Faturado R$
+            {isPdvLoading && usarPDV && <span className="badge-pdv-loading">+PDV</span>}
+          </span>
+        ),
         cell: (info) => (
           <span style={{ fontWeight: 600 }}>
             {Number(info.getValue() || 0).toLocaleString('pt-BR')}
@@ -275,7 +286,12 @@ useEffect(() => {
       },
       {
         accessorKey: 'alocado',
-        header: 'Alocado R$',
+        header: () => (
+          <span>
+            Alocado R$
+            {isPdvLoading && usarPDV && <span className="badge-pdv-loading">+PDV</span>}
+          </span>
+        ),
         cell: (info) => Number(info.getValue() || 0).toLocaleString('pt-BR'),
       },
       // ✅ NOVA COLUNA: Objetivo R$
@@ -318,7 +334,7 @@ useEffect(() => {
         },
       },
     ],
-    []
+   [isPdvLoading, usarPDV]
   );
 
   const table = useReactTable({
@@ -334,7 +350,7 @@ useEffect(() => {
   });
 
   return (
-    <div className="indicativos-tabela" style={{ overflowX: 'auto', paddingBottom: '0.5rem' }}>
+    <div className="indicativos-tabela" style={{ paddingBottom: '0.5rem' }}>
       <h3 style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
         Acompanhamento de vendas por Colaboradores
       </h3>
@@ -353,17 +369,59 @@ useEffect(() => {
           border: '1px solid #ccc',
         }}
       />
+<div style={{
+  position: 'relative', // 👈 NOVO
+  maxHeight: '250px',
+  overflowY: 'auto',
+  border: '2px solid #0074c2',
+  borderRadius: '8px',
+}}>
 
-      <div
-        style={{
-          maxHeight: '250px',
-          overflowY: 'auto',
-          border: '2px solid #0074c2',
-          borderRadius: '8px',
-        }}
-      >
+  {/* 👇 NOVO — overlay inteiro é novo */}
+  {isLoading && (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      background: 'rgba(255, 255, 255, 0.85)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 10,
+      borderRadius: '6px',
+      gap: '10px',
+    }}>
+      <div style={{
+        width: '36px',
+        height: '36px',
+        border: '4px solid #e0e0e0',
+        borderTop: '4px solid #0074c2',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+      }} />
+      <span style={{ color: '#0074c2', fontWeight: 600, fontSize: '0.9rem' }}>
+        Carregando dados...
+      </span>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )}
+  {isPdvLoading && usarPDV && (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '8px',
+      padding: '6px 12px', marginBottom: '8px',
+      background: '#fffbeb', border: '1px solid #f59e0b',
+      borderRadius: '6px', fontSize: '0.82rem', color: '#92400e',
+    }}>
+      <div style={{
+        width: '13px', height: '13px',
+        border: '2px solid #f59e0b', borderTop: '2px solid transparent',
+        borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0,
+      }} />
+      Atualizando valores com vendas PDV...
+    </div>
+  )}
         <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '980px' }}>
-          <thead style={{ background: '#0074c2', color: '#fff' }}>
+          <thead style={{ background: '#0074c2', color: '#fff', position: 'sticky', top: 0, zIndex: 2 }}>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
