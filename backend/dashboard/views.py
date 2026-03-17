@@ -1568,19 +1568,30 @@ def ajustar_data_para_ano_anterior(data_str):
     
 
 class MinhaUnidGestoraView(APIView):
-    #permission_classes = [IsAuthenticated]
-
     def get(self, request):
         ctx = get_role_context(request.user)
         ug = None
         try:
             cod_func = getattr(ctx, "cod_funcionario", None)
             if cod_func is not None:
-                ug = obter_unid_gestora(int(cod_func))  # retorna str ou None
+                ug = obter_unid_gestora(int(cod_func))
         except Exception:
             ug = None
 
-        return Response({"unid_gestora_usuario": ug})
+        # Gerente vê PDV de todas as UGs dos seus vendedores
+        try:
+            rotas_info = buscar_rotas_usuario(ctx)
+            e_gerente = rotas_info.get("e_gerente", False)
+        except Exception:
+            e_gerente = False
+
+        ug_valida = ug and str(ug).strip() not in ('', '1')
+        tem_pdv = bool(e_gerente or ug_valida)
+
+        return Response({
+            "unid_gestora_usuario": ug,
+            "tem_pdv": tem_pdv,
+        })
 
 class PDVPorVendedorAPIView(APIView):
     """
