@@ -45,7 +45,7 @@ const Dashboard = () => {
   const [usarPDV, setUsarPDV] = useState(true);
   const [vendasColaboradores, setVendasColaboradores] = useState([]);
   const [isPdvLoading, setIsPdvLoading] = useState(false);
-  
+  const [temPDV, setTemPDV] = useState(false);
 
   // PDV distribuído por vendedor (para a tabela somar na linha do vendedor)
   const [pdvPorVendedor, setPdvPorVendedor] = useState([]);
@@ -83,10 +83,9 @@ const Dashboard = () => {
 
         logUG(data, { status: resp.status, duration_ms: Math.round(t1 - t0) });
 
-        const ug = data?.unid_gestora_usuario;
-        if (ug && ug !== '1' && !usarPDV) {
-          setUsarPDV(true);
-        }
+      const temPDVBackend = data?.tem_pdv ?? false;
+      setTemPDV(temPDVBackend);
+      setUsarPDV(temPDVBackend);
       } catch (err) {
         console.groupCollapsed('%c[UG][ERRO]', 'color:#b91c1c;font-weight:bold;');
         console.error(err);
@@ -239,6 +238,7 @@ const Dashboard = () => {
                   setPeriodoSelecionado({ de, ate });
                 }
               }}
+              temPDV={temPDV}
               usarPDV={usarPDV}
               onTogglePDV={() => setUsarPDV((prev) => !prev)}
             />

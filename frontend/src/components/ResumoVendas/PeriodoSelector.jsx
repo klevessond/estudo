@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './ResumoVendas.css';
 
-const PeriodoSelector = ({ defaultValue, label = 'Selecionar período:', onChange, usarPDV, onTogglePDV }) => {
+const PeriodoSelector = ({ defaultValue, label = 'Selecionar período:', onChange, usarPDV, onTogglePDV,temPDV = true }) => {
   const hoje = new Date();
   const mesCorrente = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
   const dataHoje = hoje.toISOString().split('T')[0];
@@ -73,15 +73,18 @@ const PeriodoSelector = ({ defaultValue, label = 'Selecionar período:', onChang
         </div>
       )}
       <button onClick={aplicarPeriodo} className="btn-aplicar">Aplicar</button>
-       <div className="checkbox-pdv">
-        <button 
-          className={`btn-pdv ${usarPDV ? 'ativo' : ''}`} 
-          onClick={onTogglePDV}
-        >
-          {usarPDV ? 'Remover Vendas PDV' : 'Somar Vendas PDV'}
-        </button>
-      </div>
+      {temPDV && (
+        <div className="checkbox-pdv">
+          <button
+            className={`btn-pdv ${usarPDV ? 'ativo' : ''}`}
+            onClick={onTogglePDV}
+          >
+            {usarPDV ? 'Remover Vendas PDV' : 'Somar Vendas PDV'}
+          </button>
+        </div>
+      )}
     </div>
+    
   );
 };
 
