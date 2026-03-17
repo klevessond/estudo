@@ -605,6 +605,7 @@ const IndicadoresCards = ({
   const [alocacaoPrevenda, setAlocacaoPrevenda] = useState(null);
   const [alocacaoPercentual, setAlocacaoPercentual] = useState(null);
   const [alocacaoVariacao, setAlocacaoVariacao] = useState(null);
+  const [preVendaBaseNum, setPreVendaBaseNum] = useState(0);  
 
   const [vendaRealizadaBase, setVendaRealizadaBase] = useState(null);
   const [valorPDVBase, setValorPDVBase] = useState(null);
@@ -790,6 +791,7 @@ const IndicadoresCards = ({
 
     const valorAlocado = vendaAtual + pre;
     setAlocacaoPrevenda(fmtMoeda(pre));
+    setPreVendaBaseNum(pre);
     setAlocacaoRealizada(fmtMoeda(valorAlocado));
     const percAlocado = pct(valorAlocado, objFin);
     setAlocacaoPercentual(`${percAlocado.toFixed(2)}%`);
@@ -906,6 +908,7 @@ const vendaRealizadaBaseLocal = gerente
 
 // === ALOCAÇÃO FINAL ===
 const valorAlocado = vendaRealizadaBaseLocal + prevendaBase;
+setPreVendaBaseNum(prevendaBase);
 
 setAlocacaoPrevenda(fmtMoeda(prevendaBase));
 setAlocacaoRealizada(fmtMoeda(valorAlocado));
@@ -1355,11 +1358,6 @@ setAlocacaoVariacao(
 
   // ===== Projeção de CAPTADO (apenas quando PDV estiver DESLIGADO) =====
   useEffect(() => {
-    if (usarPDV) {
-      setCaptadoProjTotalFmt(null);
-      setCaptadoProjPercentFmt(null);
-      return;
-    }
     const vendaBase = Number(vendaRealizadaBase || 0);
     const captadoNum = Number(captadoBase || 0);
     const objetivoFinNum = parseFloat(
@@ -1368,14 +1366,15 @@ setAlocacaoVariacao(
         .replace(',', '.') || '0')
     );
 
-    const totalProj = vendaBase + captadoNum;
+    const preVendaNum = Number(preVendaBaseNum || 0);
+    const totalProj = vendaBase + preVendaNum + captadoNum;
     const percProj = objetivoFinNum ? (totalProj / objetivoFinNum) * 100 : 0;
 
     setCaptadoProjTotalFmt(
       totalProj.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
     );
     setCaptadoProjPercentFmt(`${percProj.toFixed(2)}%`);
-  }, [usarPDV, vendaRealizadaBase, captadoBase, objetivoFinanceiro]);
+  }, [usarPDV, vendaRealizadaBase,preVendaBaseNum, captadoBase, objetivoFinanceiro]);
 // === NOVO useEffect: Recalcula Projeção ao mudar dados ou toggle de PDV ===
   useEffect(() => {
     if (!dataEscopoAtual) return;
@@ -2023,8 +2022,8 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
             title="Captado"
             value={captadoValor ?? '...'}
             subtitle="Valor Captado"
-            title2={!usarPDV ? 'Se vender captado' : undefined}
-            value2={!usarPDV ? captadoProjTotalFmt ?? '--' : undefined}
+            title2="Se vender captado"
+            value2={captadoProjTotalFmt ?? '--'}
             percentage={
               !usarPDV ? captadoProjPercentFmt ?? '0%' : percCaptado ?? '0%'
             }
