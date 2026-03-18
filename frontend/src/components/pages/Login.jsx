@@ -13,6 +13,8 @@ const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  const clienteID = process.env.REACT_APP_CLIENTE_ID || "desconhecido";
+
   const handleLogin = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -44,6 +46,9 @@ const Login = () => {
       <div className="login-card">
         <img src="/logo.png" alt="Logo da empresa" className="login-logo" />
         <h2>Login</h2>
+        <p style={{ fontSize: '10px', color: '#ccc', textAlign: 'center', marginTop: '-15px', marginBottom: '15px' }}>
+          Ambiente: {clienteID}
+        </p>
 
         <input
           value={username}
