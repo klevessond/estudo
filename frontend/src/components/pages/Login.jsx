@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/auth.jsx";
 import api from "../../api"; // <- usa o cliente axios centralizado (sem hardcode de host)
 import "./Login.css";
-import logo from "../../assets/logo.png";
+
 
 const Login = () => {
   const [username, setUsername] = useState("");
@@ -42,7 +42,7 @@ const Login = () => {
   return (
     <div className="login-container">
       <div className="login-card">
-        <img src={logo} alt="Logo da empresa" className="login-logo" />
+        <img src="/logo.png" alt="Logo da empresa" className="login-logo" />
         <h2>Login</h2>
 
         <input
