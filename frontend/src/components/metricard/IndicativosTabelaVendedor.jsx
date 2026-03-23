@@ -144,7 +144,7 @@ useEffect(() => {
         console.error('[IndicativosTabelaVendedor] Erro ao buscar /vendas-por-vendedor:', error);
       }
        finally {
-    setIsLoading(false); // 👈 NOVO — desativa sempre (sucesso ou erro)
+    setIsLoading(false);
   }
     };
 
@@ -205,7 +205,6 @@ useEffect(() => {
 
       return {
         ...row,
-        // ✅ incluímos o objetivo para renderizar/ordenar
         objetivoFinanceiro: objetivo,
         faturado,
         alocado,
@@ -220,7 +219,6 @@ useEffect(() => {
     setData(enriched);
 
     // ---- Proteção contra loop: só emite se mudou de verdade ----
-    // Assinatura leve: tamanho + primeiros N registros com campos críticos
     const sig =
       'len:' +
       enriched.length +
@@ -243,27 +241,36 @@ useEffect(() => {
     }
   }, [baseData, objetivoFinanceiroMap, usarPDV, pdvMap, onDadosAtualizados]);
 
-  // Colunas da tabela (sem mudar header/estilo original)
+  // Colunas da tabela — ordem: Nome, Objetivo, Faturado, A Faturar, Alocado, Cobertura, Variação, Mix
   const columns = useMemo(
     () => [
       {
         accessorKey: 'colaborador',
         header: 'Colaborador',
-        // Exibe apenas o primeiro nome
-          cell: (info) => {
-            const full = String(info.getValue() ?? '').trim();
-            if (!full) return '';
+        cell: (info) => {
+          const full = String(info.getValue() ?? '').trim();
+          if (!full) return '';
 
-            const parts = full.split(/\s+/);
+          const parts = full.split(/\s+/);
 
-            // Se começar com "FILIAL", mostra o segundo nome
-            if (parts[0].toUpperCase() === 'FILIAL' && parts.length > 1) {
-              return parts[1];
-            }
+          // Se começar com "FILIAL", mostra o segundo nome
+          if (parts[0].toUpperCase() === 'FILIAL' && parts.length > 1) {
+            return parts[1];
+          }
 
-            // Caso padrão: primeiro nome
-            return parts[0];
-          },
+          // Caso padrão: primeiro nome
+          return parts[0];
+        },
+      },
+      {
+        accessorKey: 'objetivoFinanceiro',
+        header: 'Objetivo R$',
+        cell: (info) =>
+          Number(info.getValue() || 0).toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+          }),
+        sortingFn: 'auto',
       },
       {
         accessorKey: 'faturado',
@@ -294,26 +301,6 @@ useEffect(() => {
         ),
         cell: (info) => Number(info.getValue() || 0).toLocaleString('pt-BR'),
       },
-      // ✅ NOVA COLUNA: Objetivo R$
-      {
-        accessorKey: 'objetivoFinanceiro',
-        header: 'Objetivo R$',
-        cell: (info) =>
-          Number(info.getValue() || 0).toLocaleString('pt-BR', {
-            style: 'currency',
-            currency: 'BRL',
-          }),
-        sortingFn: 'auto',
-      },
-      {
-        accessorKey: 'mix',
-        header: 'Mix (Qtd. Produtos)',
-        cell: (info) => (
-          <span style={{ fontWeight: 600 }}>
-            {Number(info.getValue() || 0)} itens
-          </span>
-        ),
-      },
       {
         accessorKey: 'percVenda',
         header: '% Cobertura',
@@ -332,6 +319,15 @@ useEffect(() => {
           const cls = v < 0 ? 'var-neg' : 'var-pos';
           return <span className={`badge ${cls}`}>{v.toLocaleString('pt-BR')}</span>;
         },
+      },
+      {
+        accessorKey: 'mix',
+        header: 'Mix (Qtd. Produtos)',
+        cell: (info) => (
+          <span style={{ fontWeight: 600 }}>
+            {Number(info.getValue() || 0)} itens
+          </span>
+        ),
       },
     ],
    [isPdvLoading, usarPDV]
@@ -370,14 +366,13 @@ useEffect(() => {
         }}
       />
 <div style={{
-  position: 'relative', // 👈 NOVO
+  position: 'relative',
   maxHeight: '250px',
   overflowY: 'auto',
   border: '2px solid #0074c2',
   borderRadius: '8px',
 }}>
 
-  {/* 👇 NOVO — overlay inteiro é novo */}
   {isLoading && (
     <div style={{
       position: 'absolute',
