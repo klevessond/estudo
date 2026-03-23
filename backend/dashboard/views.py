@@ -366,8 +366,8 @@ class IndicadoresView(APIView):
         )
         #  OBJETIVOS — tudo do SQLite agora
         objetivo_mensal_data = get_objetivo_mensal_serializado(
-            request.user, data_inicio, cod_vendedores=vendedores
-        )
+                request.user, data_inicio, data_fim=data_fim, cod_vendedores=vendedores
+            )
 
         objetivo = {
             "financeiro":           round(float(objetivo_mensal_data.get("objetivo_financeiro") or 0), 2),
@@ -383,17 +383,15 @@ class IndicadoresView(APIView):
         mix_supervisores_map = {} # { 'cod_supervisor_str': valor }
 
         try:
-            # Define data de referência (dia 01 do mês)
-            dt_ref = datetime.strptime(data_inicio, "%Y-%m-%d").date().replace(day=1)
-            
-            # Busca todas as metas de nível para o mês
-            mix_nivel_qs = ObjetivoMixNivel.objects.filter(mes_referencia=dt_ref)
+            meses_mix = _meses_no_periodo(data_inicio, data_fim)
+            mix_nivel_qs = ObjetivoMixNivel.objects.filter(mes_referencia__in=meses_mix)
             
             for m in mix_nivel_qs:
                 if m.nivel == 'EMPRESA':
-                    mix_empresa_val = m.objetivo_mix
+                    mix_empresa_val += m.objetivo_mix          # ← acumula
                 elif m.nivel == 'SUPERVISOR':
-                    mix_supervisores_map[str(m.codigo_alvo)] = m.objetivo_mix
+                    cod = str(m.codigo_alvo)
+                    mix_supervisores_map[cod] = mix_supervisores_map.get(cod, 0) + m.objetivo_mix  # ← acumula
 
             # --- AJUSTE DO OBJETIVO PRINCIPAL (Card de Mix) ---
             # Se for Gerente/Admin, a meta geral padrão é a da EMPRESA
@@ -417,7 +415,7 @@ class IndicadoresView(APIView):
         # ------------------------------------------------------------------
         
         
-        objetivos_vendedores = get_objetivos_vendedores_por_mes(data_inicio)
+        objetivos_vendedores = get_objetivos_vendedores_por_mes(data_inicio, data_fim=data_fim)
 
 
 
@@ -1516,46 +1514,72 @@ class ObjetivoMensalResumoView(APIView):
         except ObjetivoMensal.DoesNotExist:
             return Response({"detail": "Objetivo mensal não encontrado."}, status=404)
 
+def _meses_no_periodo(data_inicio: str, data_fim: str):
+    """Retorna lista de date(YYYY, MM, 1) para cada mês dentro do período."""
+    from datetime import date
+    ini = datetime.strptime(data_inicio, "%Y-%m-%d").date().replace(day=1)
+    fim = datetime.strptime(data_fim,    "%Y-%m-%d").date().replace(day=1)
+    meses = []
+    cur = ini
+    while cur <= fim:
+        meses.append(cur)
+        # avança para o próximo mês
+        if cur.month == 12:
+            cur = cur.replace(year=cur.year + 1, month=1)
+        else:
+            cur = cur.replace(month=cur.month + 1)
+    return meses
 
-def get_objetivo_mensal_serializado(user, data_inicio, cod_vendedores=None):
+
+
+def get_objetivo_mensal_serializado(user, data_inicio, data_fim=None, cod_vendedores=None):
     try:
-        # Em ambiente de teste, você quer forçar como admin
         if user.is_anonymous:
             user = User.objects.filter(is_superuser=True).first()
 
-        data_inicio_formatada = datetime.strptime(data_inicio, "%Y-%m-%d").date()
-        mes_referencia = data_inicio_formatada.replace(day=1)
+        meses = _meses_no_periodo(data_inicio, data_fim or data_inicio)
 
-        # Se veio lista de vendedores, somar objetivos dos vendedores no mês (SQLite)
         if cod_vendedores:
-            ids = [str(v) for v in cod_vendedores]  # vendedor_id é CharField
+            ids = [str(v) for v in cod_vendedores]
             agg = ObjetivoMensalVendedor.objects.filter(
-                mes_referencia=mes_referencia,
+                mes_referencia__in=meses,
                 vendedor_id__in=ids
             ).aggregate(
                 objetivo_financeiro=Sum('objetivo_financeiro'),
                 objetivo_mix=Sum('objetivo_mix'),
-                objetivo_peso=Sum('objetivo_peso'),                       # 🆕
-                objetivo_positivacao=Sum('objetivo_positivacao'),         # 🆕
+                objetivo_peso=Sum('objetivo_peso'),
+                objetivo_positivacao=Sum('objetivo_positivacao'),
             )
             return {
                 "objetivo_financeiro": float(agg.get('objetivo_financeiro') or 0),
                 "objetivo_mix": float(agg.get('objetivo_mix') or 0),
-                "objetivo_peso": float(agg.get('objetivo_peso') or 0),                     # 🆕
-                "objetivo_positivacao": float(agg.get('objetivo_positivacao') or 0),       # 🆕
+                "objetivo_peso": float(agg.get('objetivo_peso') or 0),
+                "objetivo_positivacao": float(agg.get('objetivo_positivacao') or 0),
             }
 
-        # Fallback: objetivo mensal do usuário no SQLite
-        objetivo = ObjetivoMensal.objects.get(usuario=user, mes_referencia=mes_referencia)
-        serializer = ObjetivoMensalSerializer(objetivo)
-        return serializer.data
+        # Fallback: soma todos os meses do usuário no período
+        agg = ObjetivoMensal.objects.filter(
+            usuario=user,
+            mes_referencia__in=meses
+        ).aggregate(
+            objetivo_financeiro=Sum('objetivo_financeiro'),
+            objetivo_mix=Sum('objetivo_mix'),
+            objetivo_peso=Sum('objetivo_peso'),
+            objetivo_positivacao=Sum('objetivo_positivacao'),
+        )
+        return {
+            "objetivo_financeiro": float(agg.get('objetivo_financeiro') or 0),
+            "objetivo_mix": float(agg.get('objetivo_mix') or 0),
+            "objetivo_peso": float(agg.get('objetivo_peso') or 0),
+            "objetivo_positivacao": float(agg.get('objetivo_positivacao') or 0),
+        }
 
-    except ObjetivoMensal.DoesNotExist:
+    except Exception:
         return {
             "objetivo_financeiro": 0,
             "objetivo_mix": 0,
-            "objetivo_peso": 0,             # 🆕
-            "objetivo_positivacao": 0,      # 🆕
+            "objetivo_peso": 0,
+            "objetivo_positivacao": 0,
         }
 
 def ajustar_data_para_ano_anterior(data_str):
@@ -2043,22 +2067,33 @@ class ObjetivoMensalVendedorView(APIView):
     
 
 
-def get_objetivos_vendedores_por_mes(data_inicio):
-    # Extrai o mês no formato YYYY-MM
-    mes_referencia = data_inicio
+def get_objetivos_vendedores_por_mes(data_inicio, data_fim=None):
+    meses = _meses_no_periodo(data_inicio, data_fim or data_inicio)
 
-    objetivos = ObjetivoMensalVendedor.objects.filter(mes_referencia=mes_referencia)
-    resultado = []
-    for obj in objetivos:
-        resultado.append({
-            "vendedor_id": obj.vendedor_id,
-            "nome_vendedor": obj.nome_vendedor,
-            "objetivo_financeiro": float(obj.objetivo_financeiro),
-            "objetivo_mix": float(obj.objetivo_mix),
-            "objetivo_peso": float(getattr(obj, "objetivo_peso", 0) or 0),                
-            "objetivo_positivacao": int(getattr(obj, "objetivo_positivacao", 0) or 0),     
-        })
-    return resultado
+    # Agrega por vendedor somando todos os meses do período
+    from django.db.models import Sum as DjangoSum
+    qs = (
+        ObjetivoMensalVendedor.objects
+        .filter(mes_referencia__in=meses)
+        .values('vendedor_id', 'nome_vendedor')
+        .annotate(
+            objetivo_financeiro=DjangoSum('objetivo_financeiro'),
+            objetivo_mix=DjangoSum('objetivo_mix'),
+            objetivo_peso=DjangoSum('objetivo_peso'),
+            objetivo_positivacao=DjangoSum('objetivo_positivacao'),
+        )
+    )
+    return [
+        {
+            "vendedor_id": row['vendedor_id'],
+            "nome_vendedor": row['nome_vendedor'],
+            "objetivo_financeiro": float(row['objetivo_financeiro'] or 0),
+            "objetivo_mix": float(row['objetivo_mix'] or 0),
+            "objetivo_peso": float(row['objetivo_peso'] or 0),
+            "objetivo_positivacao": int(row['objetivo_positivacao'] or 0),
+        }
+        for row in qs
+    ]
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(
