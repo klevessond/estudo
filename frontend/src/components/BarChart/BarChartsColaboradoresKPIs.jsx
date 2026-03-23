@@ -54,9 +54,16 @@ const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [] }) => {
         pct = toPct(v.mix, obj.objetivo_mix);
       }
 
+      let valorBruto = 0;
+      if (modo === 'financeiro')   valorBruto = Number(v.faturado || 0);
+      else if (modo === 'positivacao') valorBruto = Number(v.qtdClientes || 0);
+      else if (modo === 'peso')    valorBruto = Number(v.pesototalvendido || 0);
+      else if (modo === 'mix')     valorBruto = Number(v.mix || 0);
+
       return {
         nome: nomeCurto,
         Percentual: Number.isFinite(pct) ? pct : 0,
+        valorBruto,
       };
     });
 
@@ -179,7 +186,18 @@ const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [] }) => {
             <XAxis dataKey="nome" angle={-45} textAnchor="end" interval={0} height={80} />
             <YAxis domain={[0, yMax]} />
             <Tooltip
-              formatter={(value) => `${Number(value).toFixed(2)}%`}
+              formatter={(value, name, props) => {
+                const v = props.payload?.valorBruto ?? 0;
+                if (modo === 'financeiro')
+                  return [v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), 'Faturado'];
+                if (modo === 'positivacao')
+                  return [v.toLocaleString('pt-BR') + ' clientes', 'Positivação'];
+                if (modo === 'peso')
+                  return [v.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' kg', 'Peso'];
+                if (modo === 'mix')
+                  return [v.toLocaleString('pt-BR') + ' itens', 'Mix'];
+                return [value, name];
+              }}
               contentStyle={{ borderRadius: 10, boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}
             />
 

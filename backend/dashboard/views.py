@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
 from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_mix_agregado,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor,buscar_resumo_segmento_area_venda
+from dashboard.services.indicadores.vendas_service import buscar_comissoes_vendedor
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora,buscar_cupons_por_vendedor
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 # Create your views here.
@@ -198,6 +199,24 @@ def _resumo_detalhamento(det):
     return out
 
     
+
+
+class ComissoesVendedorView(APIView):
+    def get(self, request):
+        cod_vendedor = request.query_params.get("cod_vendedor")
+        if not cod_vendedor:
+            return Response({"error": "Parâmetro 'cod_vendedor' obrigatório."}, status=400)
+        try:
+            cod_vendedor = int(cod_vendedor)
+        except ValueError:
+            return Response({"error": "cod_vendedor deve ser inteiro."}, status=400)
+
+        try:
+            dados = buscar_comissoes_vendedor(cod_vendedor)
+            return Response(dados)
+        except Exception as e:
+            logger.exception("Erro em ComissoesVendedorView: cod=%s", cod_vendedor)
+            return Response({"error": str(e)}, status=500)
 
 class MinhasRotasSupervisorView(APIView):
     #permission_classes = [IsAuthenticated]
@@ -1192,18 +1211,22 @@ class IndicadoresView(APIView):
         # 1. Busca Dados Externos
         dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
         dados_positivacao = buscar_positivacao_por_rota(data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores)
-        
+       
         # 2. Valores Totais Gerais
         venda_pdv_total = float(dados_pdv.get("valor_pdv") or 0)
         peso_pdv_total = float(dados_pdv.get("peso_pdv") or 0)
         pos_realizado_geral = float(dados_positivacao.get("positivacao_realizado_geral") or 0)
-
+        
         # Totais Combinados
         venda_total_empresa = venda_realizada + venda_pdv_total
         peso_total_empresa = peso_realizado + peso_pdv_total
 
         # Verificação de PDV (Solicitação do usuário: não calcular se for zero)
         tem_pdv = venda_pdv_total > 0
+
+        # Cupons PDV — só busca se houver PDV
+        dados_cupons_pdv = buscar_cupons_por_vendedor(data_inicio, data_fim) if tem_pdv else []
+        cupons_pdv_total = sum(int(r.get("QuantidadeCupons") or 0) for r in dados_cupons_pdv)
 
         # 3. Mapas
         pdv_map = defaultdict(lambda: {"fin": 0.0, "peso": 0.0})
@@ -1224,6 +1247,15 @@ class IndicadoresView(APIView):
                 if c_func > 0:
                     pos_map[c_func] += qtd
             except: continue
+        
+        cupons_map = {}
+        for r in dados_cupons_pdv:
+            try:
+                c_func = int(r.get("CodVendedor") or 0)
+                if c_func > 0:
+                    cupons_map[c_func] = int(r.get("QuantidadeCupons") or 0)
+            except: continue
+
 
         meta_map = {}
         for o in objetivos_vendedores or []:
@@ -1292,7 +1324,9 @@ class IndicadoresView(APIView):
                 
                 val_pdv = pdv_map[vid]["fin"]
                 peso_pdv = pdv_map[vid]["peso"]
-                val_pos = pos_map[vid]
+                pos_rotas = pos_map[vid]
+                qtd_cupons_pdv = cupons_map.get(vid, 0) if tem_pdv else 0
+                val_pos = pos_rotas + qtd_cupons_pdv
 
                 total_fin = val_rotas + val_pdv
                 total_peso = peso_rotas + peso_pdv
@@ -1329,6 +1363,9 @@ class IndicadoresView(APIView):
                 vend["venda_rotas"] = val_rotas
                 vend["venda_pdv"] = val_pdv
                 vend["venda_total_geral"] = total_fin
+                vend["pos_rotas"] = pos_rotas
+                vend["pos_cupons_pdv"] = qtd_cupons_pdv
+                vend["pos_total"] = val_pos
                 
                 vend["projecao_financeira_rotas"] = p_rotas_only
                 vend["projecao_financeira_pdv"] = p_pdv_only
@@ -1382,6 +1419,9 @@ class IndicadoresView(APIView):
             },
             "positivacao": {
                 "realizado": positivacao_realizado_geral,
+                "realizado_rotas": positivacao_realizado_geral,
+                "cupons_pdv": cupons_pdv_total,
+                "realizado_total": positivacao_realizado_geral + cupons_pdv_total,
                 "percentual": percentual_positivacao,
                 "variacao": variacao_positivacao
             },

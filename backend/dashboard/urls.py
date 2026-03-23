@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import IndicadoresView, ObjetivoMensalView,ObjetivoMensalResumoView,IndicadoresPDV,VendasPorVendedorView,ObjetivoMensalVendedorView
+from .views import IndicadoresView, ObjetivoMensalView,ObjetivoMensalResumoView,IndicadoresPDV,VendasPorVendedorView,ObjetivoMensalVendedorView,ComissoesVendedorView
 from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionario_detail, me,TodosVendedoresView,RupturaView
 from .views import ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
 urlpatterns = [
@@ -25,5 +25,6 @@ urlpatterns = [
     path('objetivos-mix-nivel/', ObjetivoMixNivelView.as_view(), name='objetivos-mix-nivel'),
     path('feriados/', FeriadoView.as_view(), name='feriados-list'),
     path('feriados/<int:pk>/', FeriadoView.as_view(), name='feriados-delete'),
+    path('comissoes-vendedor/', ComissoesVendedorView.as_view(), name='comissoes-vendedor'),
 
 ]

@@ -1,13 +1,38 @@
 // CardsColaborador.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './CardsColaborador.css';
 import ResumoSegmentoPies from '../Piechart/ResumoSegmentoPies';
 import ReactSpeedometer from 'react-d3-speedometer';
+import api from '../../api';
+import { useAuth } from '../../contexts/auth';
 
-const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado, vendedoresList = [], onNavegar, projecoesPorVendedor = {}  }) => {
+const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado, vendedoresList = [], onNavegar, projecoesPorVendedor = {} }) => {
   const [modo, setModo] = React.useState('indicadores');
-  if (!colaborador) return null;
+  const { user } = useAuth();
 
+  const temComissoes = Boolean(
+    user?.gerente ||
+    (user?.supervisor && String(user?.cod_unid_gestora) === '1') ||
+    (user?.vendedor   && String(user?.cod_unid_gestora) === '1')
+  );
+
+  const [comissoes, setComissoes] = useState(null);
+  const [loadingComissoes, setLoadingComissoes] = useState(false);
+
+  // codFuncionario declarado ANTES do useEffect que o usa
+  const codFuncionario = colaborador ? Number(colaborador.codFuncionario) : null;
+
+  useEffect(() => {
+    if (modo !== 'comissoes' || !temComissoes || !codFuncionario) return;
+    setLoadingComissoes(true);
+    api.get('/comissoes-vendedor/', { params: { cod_vendedor: codFuncionario } })
+      .then((res) => setComissoes(res.data))
+      .catch(() => setComissoes(null))
+      .finally(() => setLoadingComissoes(false));
+  }, [modo, codFuncionario, temComissoes]);
+
+  // early return DEPOIS de todos os hooks
+  if (!colaborador) return null;
   const indiceAtual = vendedoresList.findIndex(
     (v) => Number(v.codFuncionario) === Number(colaborador.codFuncionario)
   );
@@ -19,7 +44,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
     if (prox) onNavegar?.(prox);
   };
 
-  const codFuncionario = Number(colaborador.codFuncionario);
+  
   const dadosColaborador = objetivosVendedores.find(
     obj => obj.codFuncionario === codFuncionario
   );
@@ -29,6 +54,10 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   const projPeso  = projecoes?.peso ?? null;
   const projMix   = projecoes?.mix ?? null;
   const projPos   = projecoes?.positivacao ?? null;
+  const posCuponsPdv  = projecoes?.pos_cupons_pdv ?? 0;
+  const posRotas  = projecoes?.pos_rotas ?? (colaborador.qtdClientes || 0);
+  const posTotal  = projecoes?.pos_total ?? (colaborador.qtdClientes || 0);
+  const temPosPdv     = posCuponsPdv > 0;
 
   const objetivoPeso = dadosColaborador?.objetivo_peso ?? 0;  
   const obrotaTotal = dadosColaborador?.objetivo_positivacao ?? 0;
@@ -190,9 +219,76 @@ const alocado = colaborador.alocado || 0;
           >
             📊 Gráficos
           </button>
+                  {temComissoes && (
+            <button
+              onClick={() => setModo('comissoes')}
+              className={modo === 'comissoes' ? 'ativo-comissoes' : ''}
+            >
+              💰 Comissões
+            </button>
+          )}
         </div>
       </div>
 
+      {modo === 'comissoes' && temComissoes && (
+        <div style={{ marginTop: '1rem' }}>
+          {loadingComissoes ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#0074c2' }}>
+              Carregando comissões...
+            </div>
+          ) : !comissoes ? (
+            <div style={{ textAlign: 'center', color: '#888' }}>Sem dados de comissão.</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                <div className="card" style={{ background: '#eafaf1', minWidth: '180px' }}>
+                  <div className="card-title">Total a Receber</div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0074c2' }}>
+                    {Number(comissoes.total_comissao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </div>
+                </div>
+                <div className="card" style={{ background: '#f0f4ff', minWidth: '180px' }}>
+                  <div className="card-title">Valor dos Pedidos</div>
+                  <div>
+                    {Number(comissoes.total_valor_pedidos).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ overflowX: 'auto', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                  <thead style={{ background: '#0074c2', color: '#fff', position: 'sticky', top: 0 }}>
+                    <tr>
+                      {['Data', 'Cliente', 'Rota', 'Nat. Operação', 'Situação Pgto', '% Comissão', 'Comissão R$', 'Valor Pedido'].map((h) => (
+                        <th key={h} style={{ padding: '8px', textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comissoes.detalhado.map((row, i) => (
+                      <tr key={row.CodPedidoVenda} style={{ background: i % 2 === 0 ? '#f9f9f9' : '#fff' }}>
+                        <td style={{ padding: '6px 8px' }}>{row.DataVenda}</td>
+                        <td style={{ padding: '6px 8px' }}>{row.Cliente}</td>
+                        <td style={{ padding: '6px 8px' }}>{row.Rota}</td>
+                        <td style={{ padding: '6px 8px' }}>{row.NaturezaOperacao}</td>
+                        <td style={{ padding: '6px 8px' }}>{row.SituacaoPagamento}</td>
+                        <td style={{ padding: '6px 8px' }}>{Number(row.ComissaoPercentual).toFixed(2)}%</td>
+                        <td style={{ padding: '6px 8px', fontWeight: 600, color: '#0074c2' }}>
+                          {Number(row.ComissaoValor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>
+                          {Number(row.ValorPedido).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      
       {modo === 'graficos' ? (
         <div className="dashboard-graficos" style={{ marginTop: '1rem' }}>
           <h3>Velocímetros de Meta</h3>
@@ -282,17 +378,30 @@ const alocado = colaborador.alocado || 0;
             <div>Progresso: {porcentagemMix.toFixed(1)}%</div>
           </div>
 
-                    <div className="card" style={{ background: '#fff0f3' }}>
+          <div className="card" style={{ background: '#fff0f3' }}>
             <div className="card-title">Positivação:</div>
-            <div>{qtdClientes} / {obrotaTotal.toLocaleString('pt-BR')}</div>
+            {temPosPdv ? (
+              <>
+                <div>Rotas: {posRotas}</div>
+                <div>PDV: {posCuponsPdv} cupons</div>
+                <div><strong>Total: {posTotal} / {obrotaTotal.toLocaleString('pt-BR')}</strong></div>
+              </>
+            ) : (
+              <div>{qtdClientes} / {obrotaTotal.toLocaleString('pt-BR')}</div>
+            )}
             <div className="progress-container">
               <div
-                className={`progress-bar ${getProgressClass(porcentagemPositivacao)}`}
-                style={{ width: `${Math.min(porcentagemPositivacao, 100)}%` }}
+                className={`progress-bar ${getProgressClass(
+                  obrotaTotal > 0 ? (posTotal / obrotaTotal) * 100 : porcentagemPositivacao
+                )}`}
+                style={{ width: `${Math.min(
+                  obrotaTotal > 0 ? (posTotal / obrotaTotal) * 100 : porcentagemPositivacao,
+                  100
+                )}%` }}
               />
             </div>
             <div>Objetivo: {obrotaTotal.toLocaleString('pt-BR')} clientes</div>
-            <div>Progresso: {porcentagemPositivacao.toFixed(1)}%</div>
+            <div>Progresso: {(obrotaTotal > 0 ? (posTotal / obrotaTotal) * 100 : porcentagemPositivacao).toFixed(1)}%</div>
           </div>
           {projecoes && (
             <div style={{ flexBasis: '100%', marginTop: '0.5rem' }}>

@@ -586,6 +586,10 @@ const IndicadoresCards = ({
   const [positivadoPercentual, setPositivadoPercentual] = useState(null);
   const [positivadoVariacao, setPositivadoVariacao] = useState(null);
 
+  const [positivadoRealizadoBase, setPositivadoRealizadoBase] = useState(null); // rotas
+  const [positivadoCuponsPDV, setPositivadoCuponsPDV] = useState(null);         // cupons
+  const [positivadoTotalFormatado, setPositivadoTotalFormatado] = useState(null); // total
+
   const [vendaRealizada, setVendaRealizada] = useState(null);
   const [vendaPercentual, setVendaPercentual] = useState(null);
   const [vendaVariacao, setVendaVariacao] = useState(null);
@@ -805,6 +809,12 @@ const IndicadoresCards = ({
     setCaptadoValor(fmtMoeda(ruptura));
     setCpercCaptado(`${pct(ruptura, vendaAtual).toFixed(2)}%`);
 
+    const cuponsPDV = Number(data?.positivacao?.cupons_pdv || 0);
+    const posTotal  = posReal + cuponsPDV;
+
+    setPositivadoRealizadoBase(posReal.toLocaleString('pt-BR'));
+    setPositivadoCuponsPDV(cuponsPDV > 0 ? cuponsPDV.toLocaleString('pt-BR') : null);
+    setPositivadoTotalFormatado(posTotal.toLocaleString('pt-BR'));
     setPositivadoObjetivo(objPos.toLocaleString('pt-BR'));
     setPositivadoRealizado(posReal.toLocaleString('pt-BR'));
     setPositivadoPercentual(`${pct(posReal, objPos).toFixed(2)}%`);
@@ -928,6 +938,12 @@ setAlocacaoVariacao(
     const objPos = Number(data?.objetivo?.objetivo_positivacao || 0);
     dlog('AREA objPos (objetivo_positivacao):', objPos);
 
+    const cuponsPDVArea = Number(data?.positivacao?.cupons_pdv || 0);
+    const posTotalArea  = posAgg + cuponsPDVArea;
+
+    setPositivadoRealizadoBase(posAgg.toLocaleString('pt-BR'));
+    setPositivadoCuponsPDV(cuponsPDVArea > 0 ? cuponsPDVArea.toLocaleString('pt-BR') : null);
+    setPositivadoTotalFormatado(posTotalArea.toLocaleString('pt-BR'));
     setPositivadoObjetivo(objPos.toLocaleString('pt-BR'));
     setPositivadoRealizado(posAgg.toLocaleString('pt-BR'));
     setPositivadoPercentual(`${pct(posAgg, objPos).toFixed(2)}%`);
@@ -986,17 +1002,22 @@ setAlocacaoVariacao(
             if (onObjetivosRecebidos) onObjetivosRecebidos(objetivosUnificados);
 
             // Extrai projecoes_detalhadas de cada vendedor e emite para o pai
-            if (typeof onProjecoesPorVendedorChange === 'function') {
-              const mapaProjecoes = {};
-              const lista = data?.vendas?.vendas_por_vendedor || [];
-              lista.forEach((v) => {
-                const cod = Number(v.codcampo);
-                if (cod && v.projecoes_detalhadas) {
-                  mapaProjecoes[cod] = v.projecoes_detalhadas;
-                }
-              });
-              onProjecoesPorVendedorChange(mapaProjecoes);
+        if (typeof onProjecoesPorVendedorChange === 'function') {
+          const mapaProjecoes = {};
+          const lista = data?.vendas?.vendas_por_vendedor || [];
+          lista.forEach((v) => {
+            const cod = Number(v.codcampo);
+            if (cod && v.projecoes_detalhadas) {
+              mapaProjecoes[cod] = {
+                ...v.projecoes_detalhadas,
+                pos_cupons_pdv: Number(v.pos_cupons_pdv || 0),
+                pos_rotas:      Number(v.pos_rotas || 0),
+                pos_total:      Number(v.pos_total || 0),
+              };
             }
+          });
+          onProjecoesPorVendedorChange(mapaProjecoes);
+        }
 
             setRawData(data);
             setDataEscopoAtual(data);
@@ -2072,12 +2093,22 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
             className="card-peso"
           />
 
-          <Card
+<Card
             title="Positivação"
             value={positivadoObjetivo ?? '...'}
             subtitle="OBJETIVO"
-            value2={positivadoRealizado ?? '...'}
             title2="Realizado"
+            value2={
+              usarPDV && positivadoCuponsPDV ? (
+                <>
+                  <div>{positivadoRealizadoBase}</div>
+                  <div>PDV: {positivadoCuponsPDV} cupons</div>
+                  <div>Total: {positivadoTotalFormatado}</div>
+                </>
+              ) : (
+                positivadoRealizado ?? '...'
+              )
+            }
             percentage={positivadoPercentual}
             subtitle2=" Cobertura"
             variation={positivadoVariacao}
