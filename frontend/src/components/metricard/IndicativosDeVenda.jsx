@@ -556,6 +556,7 @@ const IndicadoresCards = ({
   onObjetivosRecebidos,
   onPDVResumoChange,
   onVendedoresPermitidosTabelaChange,
+  onProjecoesPorVendedorChange,
 }) => {
   const { user } = useAuth();
 
@@ -982,7 +983,20 @@ setAlocacaoVariacao(
           return acc;
         }, []);
 
-        if (onObjetivosRecebidos) onObjetivosRecebidos(objetivosUnificados);
+            if (onObjetivosRecebidos) onObjetivosRecebidos(objetivosUnificados);
+
+            // Extrai projecoes_detalhadas de cada vendedor e emite para o pai
+            if (typeof onProjecoesPorVendedorChange === 'function') {
+              const mapaProjecoes = {};
+              const lista = data?.vendas?.vendas_por_vendedor || [];
+              lista.forEach((v) => {
+                const cod = Number(v.codcampo);
+                if (cod && v.projecoes_detalhadas) {
+                  mapaProjecoes[cod] = v.projecoes_detalhadas;
+                }
+              });
+              onProjecoesPorVendedorChange(mapaProjecoes);
+            }
 
             setRawData(data);
             setDataEscopoAtual(data);

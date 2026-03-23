@@ -2268,8 +2268,7 @@ def me(request):
         user_data['admin']      = getattr(ctx, "is_admin", False)
         
         # REGRA FINAL: É gerente se o contexto diz OU se as rotas dizem
-        val_gerente = getattr(ctx, "is_gerente", False) or eh_gerente_por_rota
-        
+        val_gerente = getattr(ctx, "is_gerente", False) or eh_gerente_por_rota or request.user.is_superuser
         user_data['gerente']    = val_gerente
         user_data['is_gerente'] = val_gerente
     else:

@@ -52,6 +52,7 @@ const Dashboard = () => {
 
   // Filtro (gerente): vendedores permitidos na tabela quando uma supervisão é selecionada
   const [vendedoresPermitidosTabela, setVendedoresPermitidosTabela] = useState([]);
+  const [projecoesPorVendedor, setProjecoesPorVendedor] = useState({});
 
   // refs para evitar chamadas repetidas/concorrentes
   const ultimaChaveFetchRef = useRef('');
@@ -253,7 +254,8 @@ const Dashboard = () => {
             onObjetivosRecebidos={setObjetivosVendedores}
             vendedoresDaArea={vendedoresDaArea}
             onVendasColaboradores={setVendasColaboradores}
-            onVendedoresPermitidosTabelaChange={setVendedoresPermitidosTabela}  
+            onVendedoresPermitidosTabelaChange={setVendedoresPermitidosTabela}
+            onProjecoesPorVendedorChange={setProjecoesPorVendedor}  
           />
         </div>
 
@@ -297,6 +299,7 @@ const Dashboard = () => {
                   periodoSelecionado={periodoSelecionado}
                   vendedoresList={vendasColaboradores}
                   onNavegar={(colab) => setColaboradorSelecionado(colab)}
+                  projecoesPorVendedor={projecoesPorVendedor}
                 />
                 {colaboradorSelecionado.colaborador}
                 {colaboradorSelecionado.colaborador?.includes('Ana Paula Silva Peixoto') && (

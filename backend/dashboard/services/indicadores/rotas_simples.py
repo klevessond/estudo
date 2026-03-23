@@ -21,12 +21,67 @@ def buscar_rotas_usuario(ctx, db_alias: str = "dados_industria") -> Dict[str, An
     # 1) ADMIN → sem filtro
     # ====================
     if is_admin:
+        sql = """
+            SELECT
+                S.CodAreaSupervisao,
+                S.AreaSupervisao,
+                S.CodSupervisor,
+                S.CodGerente,
+                F.Nome          AS NomeSupervisor,
+                R.CodRota,
+                R.Rota,
+                V.CodVendedor
+            FROM dbo.AreaSupervisao S
+            INNER JOIN dbo.AreaVenda V ON S.CodAreaSupervisao = V.CodAreaSupervisao
+            INNER JOIN dbo.Rota R ON R.CodAreaVenda = V.CodAreaVenda
+            LEFT JOIN dbo.Funcionario F on F.CodFuncionario = S.CodSupervisor
+            WHERE S.Ativa = 1
+              AND V.Ativa = 1
+        """
+        dados = query_all(sql)
+
+        rotas = [int(d["CodRota"]) for d in dados] if dados else []
+        vendedores = sorted(
+            {int(d["CodVendedor"]) for d in dados if d.get("CodVendedor") is not None}
+        )
+
+        # ==== Agrupar TODAS as áreas de supervisão ====
+        grupos = {}
+        for row in dados:
+            cod_area = row.get("CodAreaSupervisao")
+            if cod_area is None:
+                continue
+
+            cod_area = int(cod_area)
+            if cod_area not in grupos:
+                grupos[cod_area] = {
+                    "cod_area_supervisao": cod_area,
+                    "area_supervisao": row.get("AreaSupervisao"),
+                    "cod_supervisor": row.get("CodSupervisor"),
+                    "cod_gerente": row.get("CodGerente"),
+                    "nome_supervisor": row.get("NomeSupervisor"),
+                    "rotas": set(),
+                    "vendedores": set(),
+                }
+
+            g = grupos[cod_area]
+            if row.get("CodRota") is not None:
+                g["rotas"].add(int(row["CodRota"]))
+            if row.get("CodVendedor") is not None:
+                g["vendedores"].add(int(row["CodVendedor"]))
+
+        areas_supervisao = []
+        for g in grupos.values():
+            g["rotas"] = sorted(g["rotas"])
+            g["vendedores"] = sorted(g["vendedores"])
+            areas_supervisao.append(g)
+
         return {
-            "rotas": None,
-            "vendedores": None,
-            "detalhado": [],
-            "e_gerente": False,
-            "areas_supervisao": None,  # nada pra agrupar
+            "rotas": rotas,
+            "vendedores": vendedores,
+            "detalhado": dados,
+            "e_gerente": True,
+            "areas_supervisao": areas_supervisao,
         }
 
     # ====================

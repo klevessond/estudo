@@ -4,7 +4,7 @@ import './CardsColaborador.css';
 import ResumoSegmentoPies from '../Piechart/ResumoSegmentoPies';
 import ReactSpeedometer from 'react-d3-speedometer';
 
-const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado, vendedoresList = [], onNavegar }) => {
+const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado, vendedoresList = [], onNavegar, projecoesPorVendedor = {}  }) => {
   const [modo, setModo] = React.useState('indicadores');
   if (!colaborador) return null;
 
@@ -23,6 +23,12 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   const dadosColaborador = objetivosVendedores.find(
     obj => obj.codFuncionario === codFuncionario
   );
+
+  const projecoes = projecoesPorVendedor[codFuncionario] || null;
+  const projFin   = projecoes?.financeiro_total ?? projecoes?.financeiro_rotas ?? null;
+  const projPeso  = projecoes?.peso ?? null;
+  const projMix   = projecoes?.mix ?? null;
+  const projPos   = projecoes?.positivacao ?? null;
 
   const objetivoPeso = dadosColaborador?.objetivo_peso ?? 0;  
   const obrotaTotal = dadosColaborador?.objetivo_positivacao ?? 0;
@@ -208,6 +214,7 @@ const alocado = colaborador.alocado || 0;
       ) : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
           {/* Cards de indicadores — mantém o estilo original */}
+          
           <div className="card" style={{ background: '#eafaf1' }}>
             <div className="card-title">Faturado:</div>
             <div>R$ {faturado.toLocaleString('pt-BR')}</div>
@@ -221,6 +228,7 @@ const alocado = colaborador.alocado || 0;
                 </div>
                 <div>Objetivo: R$ {objetivoFinanceiro.toLocaleString('pt-BR')}</div>
                 <div>Progresso: {percentualFinanceiro.toFixed(1)}%</div>
+                <div>Variação: R$ {variacaoFinanceira.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({percentualVariacaoFinanceira.toFixed(1)}%)</div>
               </>
             )}
           </div>
@@ -246,16 +254,7 @@ const alocado = colaborador.alocado || 0;
                 </>
               )}
             </div>
-        <div className="card" style={{ background: '#f1faff' }}>
-          <div className="card-title">Variação:</div>
-          R$ {variacaoFinanceira.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
 
-          {objetivoFinanceiro > 0 && (
-            <div>
-              Percentual: {percentualVariacaoFinanceira.toFixed(1)}%
-            </div>
-          )}
-        </div>
 
           <div className="card" style={{ background: '#eafae1' }}>
             <div className="card-title">Peso Vendido:</div>
@@ -295,10 +294,78 @@ const alocado = colaborador.alocado || 0;
             <div>Objetivo: {obrotaTotal.toLocaleString('pt-BR')} clientes</div>
             <div>Progresso: {porcentagemPositivacao.toFixed(1)}%</div>
           </div>
+          {projecoes && (
+            <div style={{ flexBasis: '100%', marginTop: '0.5rem' }}>
+              <div style={{
+                background: '#f0f4ff',
+                borderRadius: '8px',
+                padding: '1rem',
+              }}>
+                <div className="card-title" style={{ marginBottom: '0.75rem' }}>
+                  📈 Projeção (Tendência)
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+
+                  {projFin && (
+                    <div style={{ minWidth: '140px' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#555' }}>Financeiro</div>
+                      <div style={{ fontWeight: 'bold', color: projFin.atingimento_projetado >= 100 ? '#4CAF50' : '#F44336' }}>
+                        {projFin.atingimento_projetado?.toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#777' }}>
+                        Proj: R$ {Number(projFin.projecao_final || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#777' }}>
+                        Meta/dia: R$ {Number(projFin.meta_diaria_necessaria || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  )}
+
+                  {projPeso && (
+                    <div style={{ minWidth: '140px' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#555' }}>Peso</div>
+                      <div style={{ fontWeight: 'bold', color: projPeso.atingimento_projetado >= 100 ? '#4CAF50' : '#F44336' }}>
+                        {projPeso.atingimento_projetado?.toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#777' }}>
+                        Proj: {Number(projPeso.projecao_final || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg
+                      </div>
+                    </div>
+                  )}
+
+                  {projMix && (
+                    <div style={{ minWidth: '140px' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#555' }}>Mix</div>
+                      <div style={{ fontWeight: 'bold', color: projMix.atingimento_projetado >= 100 ? '#4CAF50' : '#F44336' }}>
+                        {projMix.atingimento_projetado?.toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#777' }}>
+                        Proj: {Number(projMix.projecao_final || 0).toFixed(0)} itens
+                      </div>
+                    </div>
+                  )}
+
+                  {projPos && (
+                    <div style={{ minWidth: '140px' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#555' }}>Positivação</div>
+                      <div style={{ fontWeight: 'bold', color: projPos.atingimento_projetado >= 100 ? '#4CAF50' : '#F44336' }}>
+                        {projPos.atingimento_projetado?.toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#777' }}>
+                        Proj: {Number(projPos.projecao_final || 0).toFixed(0)} clientes
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </>
   );
+  
 };
 
 export default CardsColaborador;
