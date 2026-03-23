@@ -2009,7 +2009,7 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
             value={
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.85rem', marginTop: '5px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Fin:</span> <strong>{projPercentFin}</strong>
+                        <span>R$:</span> <strong>{projPercentFin}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span>Peso:</span> <strong>{projPercentPeso}</strong>
