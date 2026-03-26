@@ -816,21 +816,23 @@ def buscar_mix_agregado(
     return 0
 
 
-def buscar_comissoes_vendedor(cod_vendedor: int) -> Dict[str, Any]:
+def buscar_comissoes_vendedor(cod_vendedor: int, data_inicio: str = None, data_fim: str = None) -> Dict[str, Any]:
     """
-    Retorna as comissões liberadas e pendentes de repasse do vendedor
-    nos dois últimos meses (mês atual + mês anterior).
-    Restrito a vendedores da UnidadeGestora 1.
-
+    Retorna todas as vendas comissionáveis do vendedor no período informado,
+    calculando a comissão com base no percentual do pedido aplicado ao valor líquido.
+ 
     Filtros aplicados:
-        - ComissaoLiberacao = 1  (liberada)
-        - ComissaoRepasse   = 0  (ainda não repassada)
-        - CodVendedor       = cod_vendedor
-        - UnidGestora do vendedor = '1'
-
+        - NO.Comissionar = 1  (natureza de operação comissionável)
+        - NO.Venda       = 1  (é uma venda)
+        - M.EmbRetornavel = 0 (exclui embalagens retornáveis)
+        - PV.Status      = 0  (pedido ativo)
+        - PV.Situacao <> 'A'  (não anulado)
+        - CodVendedor    = cod_vendedor
+        - DataVenda no período informado
+ 
     Retorno:
     {
-        "total_comissao":      float,   # soma de PVI.ComissaoValor
+        "total_comissao":      float,   # soma calculada (ValorPedido * ComissaoPercentual / 100)
         "total_valor_pedidos": float,   # soma do valor líquido dos pedidos
         "detalhado": [
             {
@@ -843,69 +845,54 @@ def buscar_comissoes_vendedor(cod_vendedor: int) -> Dict[str, Any]:
                 "NaturezaOperacao":       str,
                 "SituacaoPagamento":      str,
                 "ComissaoPercentual":     float,
-                "ComissaoValor":          float,   # valor do pedido (PVI)
-                "ValorPedido":            float,   # valor líquido do pedido
+                "ComissaoValor":          float,  # calculado: ValorPedido * ComissaoPercentual / 100
+                "ValorPedido":            float,  # valor líquido do pedido
             },
             ...
         ]
     }
     """
-    hoje = date.today()
-
-    # janela fixa de 60 dias retroativos até hoje (inclusive)
-    ini = hoje - timedelta(days=60)
-    fim_excl = hoje + timedelta(days=1)  # fim exclusivo
-
-    p_ini = ini.strftime("%Y%m%d")
-    p_fim = fim_excl.strftime("%Y%m%d")
-
-    p_vend = int(cod_vendedor)
-
+    if not data_inicio or not data_fim:
+        raise ValueError("data_inicio e data_fim são obrigatórios.")
+ 
+    ini     = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+    fim_excl = datetime.strptime(data_fim, "%Y-%m-%d").date() + timedelta(days=1)
+    p_ini   = ini.strftime("%Y%m%d")
+    p_fim   = fim_excl.strftime("%Y%m%d")
+    p_vend  = int(cod_vendedor)
+ 
     sql = """
         SELECT
             PV.CodPedidoVenda,
             PV.NumPedidoVenda,
-            CONVERT(VARCHAR(10), PV.DataVenda, 120)  AS DataVenda,
+            CONVERT(VARCHAR(10), PV.DataVenda, 120)                                          AS DataVenda,
             C.Cliente,
             R.Rota,
             Cidade.Cidade,
             NO.NaturezaOperacao,
             PV.SituacaoPagamento,
             PV.ComissaoPercentual,
-            SUM(PVI.ComissaoValor)                                                       AS ComissaoValor,
             SUM(ROUND(100 * PVI.Quantidade * (PVI.ValorEmbalagem - PVI.Desconto), 0)) / 100 AS ValorPedido
         FROM PedidoVenda PV
         INNER JOIN NaturezaOperacao NO  ON PV.CodNaturezaOperacao = NO.CodNaturezaOperacao
-        INNER JOIN PedidoVendaItens  PVI ON PV.CodPedidoVenda      = PVI.CodPedidoVenda
-        INNER JOIN Cliente           C   ON PV.CodCliente           = C.CodCliente
-        INNER JOIN Rota              R   ON C.CodRota               = R.CodRota
-        INNER JOIN AreaVenda         AV  ON R.CodAreaVenda          = AV.CodAreaVenda
-        INNER JOIN Cidade                ON C.CodCidade             = Cidade.CodCidade
-        INNER JOIN Funcionario       F   ON PV.CodVendedor          = F.CodFuncionario
-        INNER JOIN Material          M   ON PVI.CodMaterial         = M.CodMaterial
-        INNER JOIN MaterialComissao  MC  ON M.CodMaterial           = MC.CodMaterial
-        INNER JOIN TabelaPreco       TP  ON PVI.CodTabelaPreco      = TP.CodTabelaPreco
-        INNER JOIN Classificador     CL  ON PVI.CodTipo             = CL.CodClassificador
+        INNER JOIN PedidoVendaItens  PVI ON PV.CodPedidoVenda     = PVI.CodPedidoVenda
+        INNER JOIN Cliente           C   ON PV.CodCliente          = C.CodCliente
+        INNER JOIN Rota              R   ON C.CodRota              = R.CodRota
+        INNER JOIN Cidade                ON C.CodCidade            = Cidade.CodCidade
+        INNER JOIN Funcionario       F   ON PV.CodVendedor         = F.CodFuncionario
+        INNER JOIN Material          M   ON PVI.CodMaterial        = M.CodMaterial
+        INNER JOIN MaterialComissao  MC  ON M.CodMaterial          = MC.CodMaterial
+        INNER JOIN TabelaPreco       TP  ON PVI.CodTabelaPreco     = TP.CodTabelaPreco
+        INNER JOIN Classificador     CL  ON PVI.CodTipo            = CL.CodClassificador
         WHERE
             NO.Comissionar   = 1
             AND NO.Venda     = 1
             AND M.EmbRetornavel = 0
             AND PV.Status    = 0
             AND PV.Situacao <> 'A'
-            AND PV.ComissaoLiberacao = 1
-            AND PV.ComissaoRepasse   = 0
-            AND F.UnidGestora        = '1'
-            AND PV.CodVendedor       = ?
-            AND PV.DataVenda        >= ?
-            AND PV.DataVenda         < ?
-            AND (
-                (SELECT COUNT(*) FROM ContasReceber
-                 WHERE CodPedido = PV.CodPedidoVenda AND Baixa = 0) > 0
-                OR
-                (SELECT COUNT(*) FROM ContasReceber
-                 WHERE CodPedido = PV.CodPedidoVenda AND Baixa = 1
-                   AND (Excluida = 0 OR Excluida IS NULL)) = 0
-            )
+            AND PV.CodVendedor = ?
+            AND PV.DataVenda  >= ?
+            AND PV.DataVenda   < ?
         GROUP BY
             PV.CodPedidoVenda, PV.NumPedidoVenda, PV.DataVenda,
             C.Cliente, R.Rota, Cidade.Cidade, NO.NaturezaOperacao,
@@ -913,19 +900,22 @@ def buscar_comissoes_vendedor(cod_vendedor: int) -> Dict[str, Any]:
         ORDER BY
             PV.DataVenda DESC, C.Cliente, PV.CodPedidoVenda
     """
-
+ 
     params = [p_vend, p_ini, p_fim]
-    rows = query_all(sql, params)
-
-    detalhado = []
+    rows   = query_all(sql, params)
+ 
+    detalhado           = []
     total_comissao      = 0.0
     total_valor_pedidos = 0.0
-
+ 
     for r in rows:
-        comissao    = float(r.get("ComissaoValor")  or 0)
-        valor       = float(r.get("ValorPedido")    or 0)
+        valor    = float(r.get("ValorPedido")       or 0)
+        perc     = float(r.get("ComissaoPercentual") or 0)
+        comissao = round(valor * perc / 100, 2)   # calcula em vez de usar campo armazenado
+ 
         total_comissao      += comissao
         total_valor_pedidos += valor
+ 
         detalhado.append({
             "CodPedidoVenda":     int(r.get("CodPedidoVenda") or 0),
             "NumPedidoVenda":     str(r.get("NumPedidoVenda") or ""),
@@ -935,11 +925,11 @@ def buscar_comissoes_vendedor(cod_vendedor: int) -> Dict[str, Any]:
             "Cidade":             str(r.get("Cidade") or ""),
             "NaturezaOperacao":   str(r.get("NaturezaOperacao") or ""),
             "SituacaoPagamento":  str(r.get("SituacaoPagamento") or ""),
-            "ComissaoPercentual": float(r.get("ComissaoPercentual") or 0),
-            "ComissaoValor":      round(comissao, 2),
+            "ComissaoPercentual": perc,
+            "ComissaoValor":      comissao,
             "ValorPedido":        round(valor, 2),
         })
-
+ 
     return {
         "total_comissao":      round(total_comissao, 2),
         "total_valor_pedidos": round(total_valor_pedidos, 2),

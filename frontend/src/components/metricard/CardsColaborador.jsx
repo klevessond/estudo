@@ -10,26 +10,48 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   const [modo, setModo] = React.useState('indicadores');
   const { user } = useAuth();
 
-  const temComissoes = Boolean(
+  // codFuncionario declarado ANTES do useEffect que o usa
+  const codFuncionario = colaborador ? Number(colaborador.codFuncionario) : null;
+
+  const isVendedorPuro = Boolean(user?.vendedor && !user?.supervisor && !user?.gerente && !user?.admin);
+  const eOProprioPerfil = Number(user?.cod_funcionario) === codFuncionario;
+
+ const temComissoes = Boolean(
     user?.gerente ||
     (user?.supervisor && String(user?.cod_unid_gestora) === '1') ||
-    (user?.vendedor   && String(user?.cod_unid_gestora) === '1')
+    // vendedor puro: só mostra o botão quando está vendo o próprio perfil
+    (isVendedorPuro && eOProprioPerfil && String(user?.cod_unid_gestora) === '1')
   );
 
   const [comissoes, setComissoes] = useState(null);
   const [loadingComissoes, setLoadingComissoes] = useState(false);
 
-  // codFuncionario declarado ANTES do useEffect que o usa
-  const codFuncionario = colaborador ? Number(colaborador.codFuncionario) : null;
-
+  
   useEffect(() => {
     if (modo !== 'comissoes' || !temComissoes || !codFuncionario) return;
+    if (!user) return;
+
+    // Vendedor puro só busca a própria comissão, independente do colaborador clicado
+    const codParaBuscar = (user?.vendedor && !user?.supervisor && !user?.gerente && !user?.admin)
+      ? Number(user.cod_funcionario)
+      : codFuncionario;
+
     setLoadingComissoes(true);
-    api.get('/comissoes-vendedor/', { params: { cod_vendedor: codFuncionario } })
+    api.get('/comissoes-vendedor/', {
+      params: {
+        cod_vendedor: codParaBuscar,
+        de: periodoSelecionado?.de,
+        ate: periodoSelecionado?.ate,
+      }
+    })
       .then((res) => setComissoes(res.data))
       .catch(() => setComissoes(null))
       .finally(() => setLoadingComissoes(false));
-  }, [modo, codFuncionario, temComissoes]);
+  }, [modo, codFuncionario, temComissoes, periodoSelecionado, user]);
+
+useEffect(() => {
+  setComissoes(null);
+}, [codFuncionario]);
 
   // early return DEPOIS de todos os hooks
   if (!colaborador) return null;

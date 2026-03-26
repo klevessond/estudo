@@ -204,6 +204,9 @@ def _resumo_detalhamento(det):
 class ComissoesVendedorView(APIView):
     def get(self, request):
         cod_vendedor = request.query_params.get("cod_vendedor")
+        de  = request.query_params.get("de")
+        ate = request.query_params.get("ate")
+
         if not cod_vendedor:
             return Response({"error": "Parâmetro 'cod_vendedor' obrigatório."}, status=400)
         try:
@@ -211,8 +214,19 @@ class ComissoesVendedorView(APIView):
         except ValueError:
             return Response({"error": "cod_vendedor deve ser inteiro."}, status=400)
 
+        # Segurança: vendedor só pode ver a própria comissão
+        ctx = get_role_context(request.user)
+        is_vendedor_puro = (
+            getattr(ctx, "is_vendedor", False)
+            and not getattr(ctx, "is_supervisor", False)
+            and not getattr(ctx, "is_gerente", False)
+            and not getattr(ctx, "is_admin", False)
+        )
+        if is_vendedor_puro and int(ctx.cod_funcionario or 0) != cod_vendedor:
+            return Response({"error": "Acesso negado."}, status=403)
+
         try:
-            dados = buscar_comissoes_vendedor(cod_vendedor)
+            dados = buscar_comissoes_vendedor(cod_vendedor, data_inicio=de, data_fim=ate)
             return Response(dados)
         except Exception as e:
             logger.exception("Erro em ComissoesVendedorView: cod=%s", cod_vendedor)
