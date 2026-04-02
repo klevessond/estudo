@@ -30,7 +30,8 @@ def _in_clause_int(values: Optional[Iterable]) -> str:
 
 def buscar_vendido(data_inicio: str | date, data_fim: str | date, rotas: Optional[Iterable[int]] = None) -> Dict[str, Any]:
     """
-    Soma vendido por Rota. Se 'rotas' vier, aplica AND Rota.CodRota IN (...).
+    Soma vendido por Rota filtrando pela Unidade Gestora atual do Vendedor daquela Rota.
+    Se 'rotas' vier, aplica AND Rota.CodRota IN (...).
     """
     p1, p2 = _dt_bounds(data_inicio, data_fim)
 
@@ -47,7 +48,7 @@ def buscar_vendido(data_inicio: str | date, data_fim: str | date, rotas: Optiona
 
    SELECT 
     Count(distinct QtdClientes) QtdClientes, 
-    CodVendedor, -- Novo campo solicitado
+    CodVendedor, 
     CodCampo, 
     Campo, 
     sum(Qtd) Qtd, 
@@ -80,16 +81,20 @@ def buscar_vendido(data_inicio: str | date, data_fim: str | date, rotas: Optiona
         LEFT JOIN Rota R ON IsNull(CRV.CodRota, CL.CodRota) = R.CodRota
         LEFT JOIN Material Mat ON PVI.CodMaterial = Mat.CodMaterial
         LEFT JOIN NaturezaOperacao Nat ON PV.CodNaturezaOperacao = Nat.CodNaturezaOperacao
+        -- >>> FILTRO UG: MIX <<<
+        LEFT JOIN AreaVenda AV_Filtro ON R.CodAreaVenda = AV_Filtro.CodAreaVenda
+        LEFT JOIN Funcionario F_Rota_Filtro ON AV_Filtro.CodVendedor = F_Rota_Filtro.CodFuncionario
         WHERE PV.Status = 0 AND Nat.Venda = 1
           AND PV.DataVenda >= @p1 AND PV.DataVenda < @p2
           AND Mat.EmbRetornavel = 0
           AND R.CodRota = CodCampo 
-          AND PV.CodVendedor = Consulta.CodVendedor -- FILTRO DO VENDEDOR NO MIX
+          AND PV.CodVendedor = Consulta.CodVendedor 
+          AND PV.UnidGestora = F_Rota_Filtro.unidgestora
     ) as Tb) Mix
 FROM (
     SELECT 
         Cliente.CodCliente as QtdClientes,
-        PedidoVenda.CodVendedor, -- Selecionando o vendedor
+        PedidoVenda.CodVendedor, 
         Cast(Rota.CodRota as VarChar) as CodCampo,
         Rota.Rota as Campo,
         -- Venda
@@ -102,7 +107,7 @@ FROM (
         sum(case NaturezaOperacao.Bonificacao when 1 then PedidoVendaItens.quantidade * PedidoVendaItens.qtdembalagem else 0 end) As QtdBonificacao,
         sum(case NaturezaOperacao.Bonificacao when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / Material.QtdVolume) else 0 end) As QtdEmbalagemBonificacao,
         case NaturezaOperacao.Bonificacao when 1 then sum(dbo.Round2(PedidoVendaItens.quantidade * (PedidoVendaItens.ValorEmbalagem))) else 0 end As Bonificacao,
-        -- Avaria e outros campos (simplificados para brevidade, mantendo sua lógica original)
+        -- Avaria 
         sum(case NaturezaOperacao.Avaria when 1 then dbo.Round2(PedidoVendaItens.quantidade * PedidoVendaItens.qtdembalagem) else 0 end) As QtdAvaria,
         sum(case NaturezaOperacao.Avaria when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / Material.QtdVolume) else 0 end ) As QtdEmbalagemAvaria,
         case NaturezaOperacao.Avaria when 1 then sum(dbo.Round2(PedidoVendaItens.quantidade * (PedidoVendaItens.ValorEmbalagem))) else 0 end As Avaria,
@@ -123,11 +128,15 @@ FROM (
                 left join Cliente CL2 on PV.CodCliente = CL2.CodCliente
                 left join Rota R2 on IsNull(CRV2.CodRota, CL2.CodRota) = R2.CodRota
                 left join NaturezaOperacao Nat2 on PV.CodNaturezaOperacao = Nat2.CodNaturezaOperacao
+                -- >>> FILTRO UG: A RECEBER <<<
+                LEFT JOIN AreaVenda AV_Filtro2 ON R2.CodAreaVenda = AV_Filtro2.CodAreaVenda
+                LEFT JOIN Funcionario F_Rota_Filtro2 ON AV_Filtro2.CodVendedor = F_Rota_Filtro2.CodFuncionario
                 where PV.Status = 0 and Nat2.Venda = 1
                   and PV.DataVenda >= @p1 and PV.DataVenda < @p2
                   and R2.CodRota = Rota.CodRota 
-                  and PV.CodVendedor = PedidoVenda.CodVendedor -- FILTRO VENDEDOR
+                  and PV.CodVendedor = PedidoVenda.CodVendedor 
                   and CL2.CodCliente = Cliente.CodCliente
+                  AND PV.UnidGestora = F_Rota_Filtro2.unidgestora
                 Group by PV.CodPedidoVenda
             ) Tb
         ) AReceber2,
@@ -140,11 +149,15 @@ FROM (
             left join Cliente CL3 on PV3.CodCliente = CL3.CodCliente
             left join Rota R3 on IsNull(CRV3.CodRota, CL3.CodRota) = R3.CodRota
             left join NaturezaOperacao Nat3 on PV3.CodNaturezaOperacao = Nat3.CodNaturezaOperacao
+            -- >>> FILTRO UG: RECEBIDO <<<
+            LEFT JOIN AreaVenda AV_Filtro3 ON R3.CodAreaVenda = AV_Filtro3.CodAreaVenda
+            LEFT JOIN Funcionario F_Rota_Filtro3 ON AV_Filtro3.CodVendedor = F_Rota_Filtro3.CodFuncionario
             Where PV3.Status = 0 and Nat3.Venda = 1
               and PV3.DataVenda >= @p1 and PV3.DataVenda < @p2
               and R3.CodRota = Rota.CodRota
-              and PV3.CodVendedor = PedidoVenda.CodVendedor -- FILTRO VENDEDOR
+              and PV3.CodVendedor = PedidoVenda.CodVendedor 
               and CL3.CodCliente = Cliente.CodCliente
+              AND PV3.UnidGestora = F_Rota_Filtro3.unidgestora
         ) Recebido2
     FROM PedidoVenda 
     LEFT JOIN ClienteRotaVendedor CRV ON (PedidoVenda.CodVendedor = CRV.CodVendedor and PedidoVenda.CodCliente = CRV.CodCliente) 
@@ -153,8 +166,12 @@ FROM (
     LEFT JOIN Cliente ON PedidoVenda.CodCliente = Cliente.CodCliente
     LEFT JOIN Rota ON IsNull(CRV.CodRota, Cliente.CodRota) = Rota.CodRota
     LEFT JOIN NaturezaOperacao ON PedidoVenda.CodNaturezaOperacao = NaturezaOperacao.CodNaturezaOperacao
+    -- >>> FILTRO UG: CONSULTA PRINCIPAL <<<
+    LEFT JOIN AreaVenda AV_Filtro4 ON Rota.CodAreaVenda = AV_Filtro4.CodAreaVenda
+    LEFT JOIN Funcionario F_Rota_Filtro4 ON AV_Filtro4.CodVendedor = F_Rota_Filtro4.CodFuncionario
     WHERE Material.EmbRetornavel = 0 AND PedidoVenda.Status = 0
       AND PedidoVenda.DataVenda >= @p1 AND PedidoVenda.DataVenda < @p2
+      AND PedidoVenda.UnidGestora = F_Rota_Filtro4.unidgestora
 	  {rota_filter_sql}
     GROUP BY Rota.CodRota, Rota.Rota, PedidoVenda.CodVendedor, Cliente.CodCliente, NaturezaOperacao.Venda, NaturezaOperacao.Avaria, NaturezaOperacao.Bonificacao
 ) Consulta

@@ -1792,8 +1792,34 @@ class IndicadoresPDV(APIView):
             detalhado_atual = dados_pdv.get("detalhado", [])
 
             # mesmo período do ano anterior (sem filtro)
-            ano_anterior_inicio = ajustar_data_para_ano_anterior(data_inicio)
-            ano_anterior_fim = ajustar_data_para_ano_anterior(data_fim)
+            # ano anterior do PDV — mesma lógica condicional das rotas:
+            # mês atual → vai só até o equivalente de "hoje" no ano anterior
+            # mês passado → usa o mês completo
+            from datetime import date as _date
+            _de_dt  = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+            _ate_dt = datetime.strptime(data_fim,    "%Y-%m-%d").date()
+            _hoje   = _date.today()
+
+            def _sub_ano(d):
+                try:
+                    return d.replace(year=d.year - 1)
+                except ValueError:
+                    return d.replace(year=d.year - 1, day=28)
+
+            ano_anterior_inicio = _sub_ano(_de_dt).strftime("%Y-%m-%d")
+
+            if _de_dt.year == _hoje.year and _de_dt.month == _hoje.month:
+                # mês atual: limita ao dia equivalente de hoje no ano anterior
+                _aa_ini = _sub_ano(_de_dt)
+                _last   = (31 if _aa_ini.month in (1,3,5,7,8,10,12)
+                           else 30 if _aa_ini.month in (4,6,9,11)
+                           else 29 if (_aa_ini.year % 4 == 0 and (_aa_ini.year % 100 != 0 or _aa_ini.year % 400 == 0))
+                           else 28)
+                ano_anterior_fim = _date(_aa_ini.year, _aa_ini.month, min(_hoje.day, _last)).strftime("%Y-%m-%d")
+            else:
+                # mês passado: mês completo do ano anterior
+                ano_anterior_fim = _sub_ano(_ate_dt).strftime("%Y-%m-%d")
+
             dados_pdv_aa = buscar_vendas_pdv(ano_anterior_inicio, ano_anterior_fim)
             venda_aa_total = float(dados_pdv_aa.get("valor_pdv", 0) or 0)
             detalhado_aa = dados_pdv_aa.get("detalhado", [])
