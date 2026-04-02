@@ -955,11 +955,18 @@ setAlocacaoVariacao(
   // ========= fetch inicial =========
   useEffect(() => {
     
-    const fetchIndicadores = async () => {
-      const { de, ate } = periodoSelecionado || {};
-      if (!de || !ate) return;
-      setValorPDVBase(null);
-      setLoading(true);
+  const fetchIndicadores = async () => {
+    const { de, ate } = periodoSelecionado || {};
+    if (!de || !ate) return;
+    setValorPDVBase(null);
+    // 🔧 invalida cache do PDV para forçar novo fetch ao trocar período
+    setPdvValorUG(null);
+    setPdvPesoUG(null);
+    setPdvValorArea(null);
+    setPdvPesoArea(null);
+    setPdvValorAAUG(null);
+    setPdvValorAAArea(null);
+    setLoading(true);
 
       try {
         const { data } = await api.get('/Indicadores/', { params: { de, ate } });
@@ -1862,37 +1869,6 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
   setPositivadoObjetivo(obj.objetivo_positivacao.toLocaleString('pt-BR'));
   setPositivadoPercentual(`${(obj.objetivo_positivacao > 0 ? (posReal / obj.objetivo_positivacao) * 100 : 0).toFixed(2)}%`);
   setPositivadoVariacao((posReal - obj.objetivo_positivacao).toLocaleString('pt-BR'));
-  if (usarPDV) {
-    const listaVend = filtrado?.vendas?.vendas_por_vendedor || [];
-    const novoPDVValor = listaVend.reduce(
-      (acc, v) => acc + Number(v.venda_pdv || 0),
-      0
-    );
-    const novoPDVPeso = listaVend.reduce(
-      (acc, v) => acc + Number(v.peso_pdv || 0),
-      0
-    );
-
-    // Ano anterior PDV filtrado (soma dos vendedores do escopo)
-    const idsPermitidos = new Set(listaVend.map((v) => Number(v.codcampo)));
-    const listaAA = rawData?.vendas?.vendas_por_vendedor || [];
-    const novoPDVAA = listaAA
-      .filter((v) => idsPermitidos.has(Number(v.codcampo)))
-      .reduce((acc, v) => acc + Number(v.venda_pdv || 0), 0);
-
-    setPdvValorArea(novoPDVValor);
-    setPdvPesoArea(novoPDVPeso);
-    setPdvValorAAArea(novoPDVAA);
-
-    // Dispara recálculo do card (venda base já foi setada acima com setVendaRealizadaBase)
-    const novoTotal = atual + novoPDVValor;
-    setVendaRealizada(fmtMoeda(novoTotal));
-    setVendaPDVFormatada(fmtMoeda(novoPDVValor));
-    setVendaTotalFormatada(fmtMoeda(novoTotal));
-    setPdvSelecionadoAtual(novoPDVValor);
-    setVendaPDVAnoAnterior(novoPDVAA);
-    notifyPDVResumo(true, true);
-  }
   
 };
 
