@@ -1223,27 +1223,7 @@ class IndicadoresView(APIView):
         # =========================================================
         
         # 1. Busca Dados Externos
-        _ugs_escopo: list[str] = []
-        if vendedores:
-            try:
-                _mapa = obter_unid_gestoras_por_vendedores(list(vendedores))
-                for _ugs in _mapa.values():
-                    for _ug in _ugs:
-                        _s = str(_ug).strip()
-                        if _s and _s not in _ugs_escopo:
-                            _ugs_escopo.append(_s)
-            except Exception:
-                _ugs_escopo = []
-
-        dados_pdv = (
-                    buscar_pdv_por_unid_gestora(data_inicio, data_fim, unid_gestoras=_ugs_escopo)
-                    if _ugs_escopo
-                    else buscar_pdv_por_unid_gestora(data_inicio, data_fim, unid_gestoras=None)
-                )
-        # normaliza para o mesmo formato que buscar_vendas_pdv devolvia
-        _pdv_valor = sum(float(r.get("ValorProdutos") or 0) for r in dados_pdv)
-        _pdv_peso  = sum(float(r.get("Peso") or 0) for r in dados_pdv)
-        dados_pdv = {"valor_pdv": round(_pdv_valor, 2), "peso_pdv": round(_pdv_peso, 3), "detalhado": dados_pdv}
+        dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
         dados_positivacao = buscar_positivacao_por_rota(data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores)
        
         # 2. Valores Totais Gerais
