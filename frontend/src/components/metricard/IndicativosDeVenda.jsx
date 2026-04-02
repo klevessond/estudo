@@ -955,11 +955,18 @@ setAlocacaoVariacao(
   // ========= fetch inicial =========
   useEffect(() => {
     
-    const fetchIndicadores = async () => {
-      const { de, ate } = periodoSelecionado || {};
-      if (!de || !ate) return;
-      setValorPDVBase(null);
-      setLoading(true);
+  const fetchIndicadores = async () => {
+    const { de, ate } = periodoSelecionado || {};
+    if (!de || !ate) return;
+    setValorPDVBase(null);
+    // 🔧 invalida cache do PDV para forçar novo fetch ao trocar período
+    setPdvValorUG(null);
+    setPdvPesoUG(null);
+    setPdvValorArea(null);
+    setPdvPesoArea(null);
+    setPdvValorAAUG(null);
+    setPdvValorAAArea(null);
+    setLoading(true);
 
       try {
         const { data } = await api.get('/Indicadores/', { params: { de, ate } });
