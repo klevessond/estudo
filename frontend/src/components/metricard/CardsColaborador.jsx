@@ -25,6 +25,11 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
 
   const [comissoes, setComissoes] = useState(null);
   const [loadingComissoes, setLoadingComissoes] = useState(false);
+  const [modalMixAberto, setModalMixAberto] = useState(false);
+  const [itensMix, setItensMix] = useState([]);
+  const [loadingMix, setLoadingMix] = useState(false);
+  const [mostrarMenosVendidos, setMostrarMenosVendidos] = useState(false);
+  const [criterioValor, setCriterioValor] = useState(false);
 
   
   useEffect(() => {
@@ -52,6 +57,28 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
 useEffect(() => {
   setComissoes(null);
 }, [codFuncionario]);
+
+// Busca ao abrir modal ou trocar toggle
+useEffect(() => {
+  if (!modalMixAberto || !codFuncionario || !periodoSelecionado) return;
+
+  setLoadingMix(true);
+  api.get('/indicadores/mix-itens/', {
+    params: {
+      de:           periodoSelecionado.de,
+      ate:          periodoSelecionado.ate,
+      cod_vendedor: codFuncionario,
+      ordem:        mostrarMenosVendidos ? "bottom" : "top",
+      criterio:     criterioValor ? "valor" : "qtd",   // ← NOVO
+    }
+  })
+    .then(res => setItensMix(res.data?.itens || []))
+    .catch(() => setItensMix([]))
+    .finally(() => setLoadingMix(false));
+
+}, [modalMixAberto, mostrarMenosVendidos, criterioValor, codFuncionario, periodoSelecionado]);
+
+
 
   // early return DEPOIS de todos os hooks
   if (!colaborador) return null;
@@ -386,19 +413,21 @@ const alocado = colaborador.alocado || 0;
             <div>Objetivo: {objetivoPeso.toLocaleString('pt-BR')} kg</div>
             <div>Progresso: {porcentagemPeso.toFixed(1)}%</div>
           </div>
-
-          <div className="card" style={{ background: '#f3e8ff' }}>
-            <div className="card-title">Mix de Produtos:</div>
-            <div>{mixRealizado} / {objetivoMix} itens</div>
-            <div className="progress-container">
-              <div
-                className={`progress-bar ${getProgressClass(porcentagemMix)}`}
-                style={{ width: `${Math.min(porcentagemMix, 100)}%` }}
-              />
+            <div
+              className="card"
+              style={{ background: '#f3e8ff', cursor: 'pointer' }}
+              onClick={() => setModalMixAberto(true)}
+              title="Clique para ver os produtos"
+            >
+              <div className="card-title">Mix de Produtos: 🔍</div>
+              <div>{mixRealizado} / {objetivoMix} itens</div>
+              <div className="progress-container">
+                <div className={`progress-bar ${getProgressClass(porcentagemMix)}`}
+                    style={{ width: `${Math.min(porcentagemMix, 100)}%` }} />
+              </div>
+              <div>Objetivo: {objetivoMix} itens</div>
+              <div>Progresso: {porcentagemMix.toFixed(1)}%</div>
             </div>
-            <div>Objetivo: {objetivoMix} itens</div>
-            <div>Progresso: {porcentagemMix.toFixed(1)}%</div>
-          </div>
 
           <div className="card" style={{ background: '#fff0f3' }}>
             <div className="card-title">Positivação:</div>
@@ -494,6 +523,122 @@ const alocado = colaborador.alocado || 0;
           )}
         </div>
       )}
+
+      {modalMixAberto && (
+  <div style={{
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 1000,
+  }}>
+    <div style={{
+      background: '#fff', borderRadius: '12px', padding: '1.5rem',
+      width: '90%', maxWidth: '600px', maxHeight: '80vh',
+      display: 'flex', flexDirection: 'column', gap: '1rem',
+    }}>
+      {/* Cabeçalho */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0 }}>
+          {mostrarMenosVendidos ? '📉 Menos Vendidos' : '📈 Mais Vendidos'} — Mix PDV
+        </h3>
+        <button onClick={() => setModalMixAberto(false)}
+          style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+          ✕
+        </button>
+      </div>
+
+      {/* Toggle mais/menos vendidos */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <span style={{ fontSize: '0.875rem', color: '#555' }}>Mais vendidos</span>
+        <div
+          onClick={() => setMostrarMenosVendidos(v => !v)}
+          style={{
+            width: '44px', height: '24px', borderRadius: '999px', cursor: 'pointer',
+            background: mostrarMenosVendidos ? '#ef4444' : '#22c55e',
+            position: 'relative', transition: 'background 0.2s',
+          }}
+        >
+          <div style={{
+            position: 'absolute', top: '3px',
+            left: mostrarMenosVendidos ? '23px' : '3px',
+            width: '18px', height: '18px', borderRadius: '50%',
+            background: '#fff', transition: 'left 0.2s',
+          }} />
+        </div>
+        <span style={{ fontSize: '0.875rem', color: '#555' }}>Menos vendidos</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span style={{ fontSize: '0.875rem', color: criterioValor ? '#aaa' : '#1e88e5', fontWeight: criterioValor ? 400 : 600 }}>
+              📦 Quantidade
+            </span>
+            <div onClick={() => setCriterioValor(v => !v)}
+              style={{
+                width: '44px', height: '24px', borderRadius: '999px', cursor: 'pointer',
+                background: criterioValor ? '#1e88e5' : '#9ca3af',
+                position: 'relative', transition: 'background 0.2s',
+              }}>
+              <div style={{
+                position: 'absolute', top: '3px',
+                left: criterioValor ? '23px' : '3px',
+                width: '18px', height: '18px', borderRadius: '50%',
+                background: '#fff', transition: 'left 0.2s',
+              }} />
+            </div>
+            <span style={{ fontSize: '0.875rem', color: criterioValor ? '#1e88e5' : '#aaa', fontWeight: criterioValor ? 600 : 400 }}>
+              💰 Valor
+            </span>
+      </div>
+
+      {/* Lista */}
+      <div style={{ overflowY: 'auto', flex: 1 }}>
+        {loadingMix ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+            Carregando...
+          </div>
+        ) : itensMix.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+            Nenhum item encontrado.
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <thead>
+              <tr style={{ background: '#f3e8ff', textAlign: 'left' }}>
+                <th style={{ padding: '8px' }}>#</th>
+                <th style={{ padding: '8px' }}>Produto</th>
+                <th style={{ padding: '8px', textAlign: 'right',
+                            color: criterioValor ? '#aaa' : '#7c3aed', fontWeight: criterioValor ? 400 : 700 }}>
+                  Qtd {!criterioValor && '▼'}
+                </th>
+                <th style={{ padding: '8px', textAlign: 'right',
+                            color: criterioValor ? '#7c3aed' : '#aaa', fontWeight: criterioValor ? 700 : 400 }}>
+                  Valor {criterioValor && '▼'}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {itensMix.map((item, i) => (
+                <tr key={item.CodMaterial}
+                  style={{ borderBottom: '1px solid #eee', background: i % 2 === 0 ? '#faf5ff' : '#fff' }}>
+                  <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
+                  <td style={{ padding: '6px 8px' }}>{item.Material || `Cod: ${item.CodMaterial}`}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right',
+                              fontWeight: criterioValor ? 400 : 700,
+                              color: criterioValor ? '#555' : '#000' }}>
+                    {Number(item.QtdItens).toLocaleString('pt-BR')}
+                  </td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right',
+                              fontWeight: criterioValor ? 700 : 400,
+                              color: criterioValor ? '#000' : '#555' }}>
+                    {Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  </div>
+)}
     </>
   );
   

@@ -469,3 +469,65 @@ def buscar_mix_pdv_por_perfil(
         )
 
     raise ValueError(f"Perfil desconhecido: '{perfil}'. Use 'vendedor', 'supervisor', 'gerente' ou 'admin'.")
+
+def buscar_itens_mix_por_ug(
+    data_inicio,
+    data_fim,
+    unid_gestoras: List[str],
+    ordem: str = "top",       # "top" = mais | "bottom" = menos
+    criterio: str = "qtd",    # "qtd" = quantidade | "valor" = financeiro
+    limite: int = 50,
+) -> List[Dict[str, Any]]:
+    """
+    Retorna os TOP ou BOTTOM N produtos vendidos nas UGs informadas.
+    Cada item: { CodMaterial, Material, QtdItens, ValorTotal, Desconto, Peso }
+    """
+    di = _as_date(data_inicio)
+    df = _as_date(data_fim)
+    di_dt, df_dt = _intervalo_exclusivo(di, df)
+
+    if not unid_gestoras:
+        return []
+
+    ph = _placeholders(unid_gestoras)
+    order_dir   = "DESC" if ordem == "top" else "ASC"
+    order_field = "ValorTotal" if criterio == "valor" else "QtdItens"
+
+    sql = f"""
+        SELECT TOP {limite}
+            VI.CodMaterial,
+            M.Material,
+            SUM(VI.Quantidade * VI.QtdEmbalagem)               AS QtdItens,
+            SUM(dbo.Round2(VI.Quantidade * VI.ValorEmbalagem))  AS ValorTotal,
+            SUM(dbo.Round2(VI.DescontoRef + (VI.Desconto * VI.Quantidade))) AS Desconto,
+            SUM(VI.Quantidade * VI.QtdEmbalagem * M.PesoBruto)  AS Peso
+        FROM ViewVenda V
+        LEFT JOIN ViewVendaItens VI
+            ON  V.CodPedidoVenda = VI.CodPedidoVenda
+            AND V.ECFSerial      = VI.ECFSerial
+            AND V.CodCupom       = VI.CodCupom
+        LEFT JOIN Material M
+            ON VI.CodMaterial = M.CodMaterial
+        LEFT JOIN NaturezaOperacao N
+            ON V.CodNaturezaOperacao = N.CodNaturezaOperacao
+        WHERE M.EmbRetornavel = 0
+          AND N.Venda         = 1
+          AND V.Status        = 0
+          AND V.UnidGestora  <> 1
+          AND V.UnidGestora  IN ({ph})
+          AND V.DataVenda    >= ?
+          AND V.DataVenda     < ?
+        GROUP BY VI.CodMaterial, M.Material
+        ORDER BY {order_field} {order_dir}
+    """
+    params = [*unid_gestoras, di_dt, df_dt]
+    rows = query_all(sql, params)
+
+    for r in rows:
+        r["QtdItens"]   = float(r.get("QtdItens")   or 0)
+        r["ValorTotal"] = float(r.get("ValorTotal")  or 0)
+        r["Desconto"]   = float(r.get("Desconto")    or 0)
+        r["Peso"]       = float(r.get("Peso")        or 0)
+        r["Material"]   = (r.get("Material") or "").strip()
+
+    return rows

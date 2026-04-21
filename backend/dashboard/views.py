@@ -43,6 +43,8 @@ from dashboard.services.indicadores.vendas_service import buscar_comissoes_vende
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora,buscar_cupons_por_vendedor
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 from dashboard.services.indicadores.pdv_mix_service import buscar_mix_pdv_por_perfil
+from dashboard.services.indicadores.pdv_mix_service import buscar_mix_pdv_por_perfil, buscar_itens_mix_por_ug
+
 # Create your views here.
 
 
@@ -2757,3 +2759,35 @@ class ObjetivoMixNivelView(APIView):
                 })
 
         return Response({"message": "Metas de Mix processadas com sucesso.", "detalhes": response_data})
+    
+
+class MixItensPorVendedorView(APIView):
+    def get(self, request):
+        de          = request.GET.get("de")
+        ate         = request.GET.get("ate")
+        cod_vend    = request.GET.get("cod_vendedor")
+        ordem       = request.GET.get("ordem", "top")   # "top" ou "bottom"
+        criterio = request.GET.get("criterio", "qtd")  # "qtd" ou "valor"
+
+        if not de or not ate or not cod_vend:
+            return Response({"error": "Parâmetros obrigatórios: de, ate, cod_vendedor"}, status=400)
+
+        try:
+            cod_vend_int = int(cod_vend)
+        except ValueError:
+            return Response({"error": "cod_vendedor inválido"}, status=400)
+
+        # Busca UGs do vendedor
+        raw_ugs = obter_unid_gestoras_por_vendedores([cod_vend_int])
+        ugs = [str(u) for u in raw_ugs.get(cod_vend_int, [])
+               if str(u).strip() and str(u) != "1"]
+
+        if not ugs:
+            return Response({"itens": [], "ordem": ordem})
+
+        try:
+            itens = buscar_itens_mix_por_ug(de, ate, ugs, ordem=ordem, criterio=criterio, limite=50)
+            return Response({"itens": itens, "ordem": ordem, "total_mix": len(itens)})
+        except Exception as e:
+            logger.exception("[MixItensPorVendedorView] erro")
+            return Response({"error": str(e)}, status=500)
