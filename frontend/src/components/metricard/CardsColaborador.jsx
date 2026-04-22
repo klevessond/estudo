@@ -612,6 +612,7 @@ const alocado = colaborador.alocado || 0;
                             color: criterioValor ? '#7c3aed' : '#aaa', fontWeight: criterioValor ? 700 : 400 }}>
                   Valor {criterioValor && '▼'}
                 </th>
+                <th style={{ padding: '8px', textAlign: 'right', color: '#7c3aed' }}>%</th>
               </tr>
             </thead>
             <tbody>
@@ -630,6 +631,12 @@ const alocado = colaborador.alocado || 0;
                               color: criterioValor ? '#000' : '#555' }}>
                     {Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', color: '#7c3aed', fontWeight: 500 }}>
+                      {criterioValor
+                        ? `${Number(item.PercValor || 0).toFixed(1)}%`
+                        : `${Number(item.PercQtd   || 0).toFixed(1)}%`
+                      }
+                   </td>
                 </tr>
               ))}
             </tbody>

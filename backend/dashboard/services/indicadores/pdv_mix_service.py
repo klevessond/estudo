@@ -529,5 +529,13 @@ def buscar_itens_mix_por_ug(
         r["Desconto"]   = float(r.get("Desconto")    or 0)
         r["Peso"]       = float(r.get("Peso")        or 0)
         r["Material"]   = (r.get("Material") or "").strip()
+    
+    # ── percentuais sobre o total das linhas retornadas ──
+    total_qtd = sum(r["QtdItens"]   for r in rows)
+    total_val = sum(r["ValorTotal"] for r in rows)
+    for r in rows:
+        r["PercQtd"]   = round((r["QtdItens"]   / total_qtd * 100) if total_qtd else 0, 2)
+        r["PercValor"] = round((r["ValorTotal"]  / total_val * 100) if total_val else 0, 2)
+
 
     return rows
