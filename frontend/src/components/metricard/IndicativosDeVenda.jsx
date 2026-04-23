@@ -150,6 +150,7 @@ function filtrarPorSupervisao(data, selecionadas) {
 
   const valorAlocado = vendaRealizada + preVendaAgregado;
 
+
   return {
     ...data,
     vendas: {
@@ -325,7 +326,7 @@ const getValorAnoAnteriorTexto = (
 
 /* ========= COMPONENTES DE APRESENTAÇÃO ========= */
 
-const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, variation, icon, className, onDetailClick }) => (
+const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, variation, icon, className, onDetailClick, extra }) => (
   <div className={`indicativo-card ${className || ''}`}>
     <div className="card-header">
       <h2>{title}</h2>
@@ -361,8 +362,15 @@ const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, v
                 Detalhar 🔍
             </button>
         )}
+
     </div>
+    {extra && (
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', marginTop: '0.25rem', paddingTop: '0.25rem', fontSize: '0.75rem', textAlign: 'center', opacity: 0.9 }}>
+        {extra}
+      </div>
+    )}
   </div>
+  
 );
 
 /* ========= NOVO COMPONENTE: MODAL DE PROJEÇÃO ========= */
@@ -562,6 +570,7 @@ const IndicadoresCards = ({
 
   console.log('[DEBUG] User Context:', user);
 
+  const [vendaDia, setVendaDia] = useState(0);
   const [showProjectionModal, setShowProjectionModal] = useState(false);
   const [projecaoPercentual, setProjecaoPercentual] = useState(null);
   const [projecaoRotasValor, setProjecaoRotasValor] = useState(null);
@@ -616,6 +625,8 @@ const IndicadoresCards = ({
   const [valorPDVBase, setValorPDVBase] = useState(null);
   const [vendaPDVFormatada, setVendaPDVFormatada] = useState(null);
   const [vendaTotalFormatada, setVendaTotalFormatada] = useState(null);
+
+
 
   const [pesoRealizadoBase, setPesoRealizadoBase] = useState(null);
   const [pesoPDVBase, setPesoPDVBase] = useState(null);
@@ -706,6 +717,7 @@ const IndicadoresCards = ({
 
     const m = data.minha_visao;
     const linha = getMinhaLinha(data);
+    setVendaDia(Number(linha?.venda_media_diaria_atual || 0));
 
     dlog('applyIndividualFromRaw - minha_visao:', m);
     dlog('applyIndividualFromRaw - minha linha:', linha);
@@ -877,6 +889,8 @@ const IndicadoresCards = ({
     const agg = data?.vendas?.agregados_area || {};
     const list = data?.vendas?.vendas_por_vendedor || [];
     const soma = (k) => list.reduce((acc, it) => acc + Number(it?.[k] || 0), 0);
+    console.log('[DEBUG venda_dia] list:', list.map(v => ({ cod: v.codcampo, venda_dia: v.venda_dia })));
+    setVendaDia(Math.round(soma('venda_media_diaria_atual')));
 
     const preAgg = Number(
       (agg.PreVenda_Valor ?? null) !== null
@@ -2018,6 +2032,7 @@ setMixVariacao(String(mixReal - metaMixFinal));
             icon={null} // Ou adicione um ícone específico se desejar
           />
 
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
           <Card
             title="Venda Realizada"
             value={
@@ -2041,7 +2056,12 @@ setMixVariacao(String(mixReal - metaMixFinal));
             subtitle2=" Cobertura Atual"
             variation={vendaVariacao ?? '...'}
             className="card-venda"
-          />
+            extra={vendaDia > 0
+            ? `📅 Média/dia: R$ ${vendaDia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+            : null
+          }
+        />
+      </div>
 
           <Card
             title="Alocações"

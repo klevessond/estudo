@@ -29,7 +29,7 @@ import logging
 from decimal import Decimal
 from dashboard.roles import get_role_context  
 from dashboard.services.indicadores.info_service import Todos_Vendedores, obter_cod_supervisor
-from dashboard.services.indicadores.calculos_projecao import get_dias_uteis_info, calcular_matematica_projecao
+from dashboard.services.indicadores.calculos_projecao import get_dias_uteis_info_pdv,get_dias_uteis_info, calcular_matematica_projecao
 from dashboard.services.indicadores.ruptura_service import buscar_ruptura
 from dashboard.db_conn import query_all
 
@@ -2159,6 +2159,17 @@ class VendasPorVendedorView(APIView):
             except Exception as e:
                 print(f"[DEBUG] Erro ao calcular mix_pdv por vendedor: {e}")
         # ────────────────────────────────────────────────────────────────
+        # ── Dias decorridos para cálculo de venda/dia ──────────────────
+        try:
+            dt_ref = datetime.strptime(data_fim, "%Y-%m-%d").date()
+            _dias_rotas = get_dias_uteis_info(data_base=dt_ref)      # seg-sex
+            _dias_pdv   = get_dias_uteis_info_pdv(data_base=dt_ref)  # seg-sab
+        except Exception:
+            _dias_rotas = {"decorridos": 1}
+            _dias_pdv   = {"decorridos": 1}
+        # ────────────────────────────────────────────────────────────────
+
+        print(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
 
         print(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
 
@@ -2174,6 +2185,11 @@ class VendasPorVendedorView(APIView):
             # Adiciona as novas chaves no dicionário do vendedor que vai para o FrontEnd
             vendedor["cupons_quantidade"] = dados_cupom["quantidade"]
             vendedor["mix_pdv_realizado"] = _mix_pdv_por_vendedor.get(codcampo_int, 0)
+            # ── venda/dia: PDV conta sábado, rota só seg-sex ──
+            tem_pdv_vend = _mix_pdv_por_vendedor.get(codcampo_int, 0) > 0
+            dias_dec = _dias_pdv["decorridos"] if tem_pdv_vend else _dias_rotas["decorridos"]
+            vendedor["venda_dia"]       = round(valor_realizado / dias_dec, 2)
+            vendedor["dias_decorridos"] = dias_dec
 
             print(
                 f"[DEBUG] Vendedor {codcampo_int}: "
