@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from .views import IndicadoresView, ObjetivoMensalView,ObjetivoMensalResumoView,IndicadoresPDV,VendasPorVendedorView,ObjetivoMensalVendedorView,ComissoesVendedorView
 from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionario_detail, me,TodosVendedoresView,RupturaView
-from .views import ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
+from .views import ClientesPositivacaoView,MixItensPorVendedorView,ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
 urlpatterns = [
     path('dados-sql/', views.get_dados_sql, name='get_dados_sql'),
     path('api/clientes/', views.get_dados_sql_api, name='get_dados_sql_api'),
@@ -26,5 +26,6 @@ urlpatterns = [
     path('feriados/', FeriadoView.as_view(), name='feriados-list'),
     path('feriados/<int:pk>/', FeriadoView.as_view(), name='feriados-delete'),
     path('comissoes-vendedor/', ComissoesVendedorView.as_view(), name='comissoes-vendedor'),
-
+    path('indicadores/mix-itens/', MixItensPorVendedorView.as_view(), name='mix-itens'),
+    path('indicadores/clientes-positivacao/', ClientesPositivacaoView.as_view(), name='clientes-positivacao'),
 ]

@@ -150,6 +150,7 @@ function filtrarPorSupervisao(data, selecionadas) {
 
   const valorAlocado = vendaRealizada + preVendaAgregado;
 
+
   return {
     ...data,
     vendas: {
@@ -325,7 +326,7 @@ const getValorAnoAnteriorTexto = (
 
 /* ========= COMPONENTES DE APRESENTAÇÃO ========= */
 
-const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, variation, icon, className, onDetailClick }) => (
+const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, variation, icon, className, onDetailClick, extra }) => (
   <div className={`indicativo-card ${className || ''}`}>
     <div className="card-header">
       <h2>{title}</h2>
@@ -361,8 +362,15 @@ const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, v
                 Detalhar 🔍
             </button>
         )}
+
     </div>
+    {extra && (
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', marginTop: '0.25rem', paddingTop: '0.25rem', fontSize: '0.75rem', textAlign: 'center', opacity: 0.9 }}>
+        {extra}
+      </div>
+    )}
   </div>
+  
 );
 
 /* ========= NOVO COMPONENTE: MODAL DE PROJEÇÃO ========= */
@@ -562,6 +570,7 @@ const IndicadoresCards = ({
 
   console.log('[DEBUG] User Context:', user);
 
+  const [vendaDia, setVendaDia] = useState(0);
   const [showProjectionModal, setShowProjectionModal] = useState(false);
   const [projecaoPercentual, setProjecaoPercentual] = useState(null);
   const [projecaoRotasValor, setProjecaoRotasValor] = useState(null);
@@ -616,6 +625,8 @@ const IndicadoresCards = ({
   const [valorPDVBase, setValorPDVBase] = useState(null);
   const [vendaPDVFormatada, setVendaPDVFormatada] = useState(null);
   const [vendaTotalFormatada, setVendaTotalFormatada] = useState(null);
+
+
 
   const [pesoRealizadoBase, setPesoRealizadoBase] = useState(null);
   const [pesoPDVBase, setPesoPDVBase] = useState(null);
@@ -706,6 +717,7 @@ const IndicadoresCards = ({
 
     const m = data.minha_visao;
     const linha = getMinhaLinha(data);
+    setVendaDia(Number(linha?.venda_media_diaria_atual || 0));
 
     dlog('applyIndividualFromRaw - minha_visao:', m);
     dlog('applyIndividualFromRaw - minha linha:', linha);
@@ -729,10 +741,15 @@ const IndicadoresCards = ({
       setPesoPercentual(`${Number(m.percentual_peso || 0).toFixed(2)}%`);
       setPesoVariacao(fmtNum2(Number(m.variacao_peso || 0)));
 
-      setObjetivoMix(String(m.objetivo_mix || 0));
-      setMixRealizado(String(m.mix_realizado || 0));
-      setMixPercentual(`${Number(m.percentual_mix || 0).toFixed(2)}%`);
-      setMixVariacao(String(Number(m.variacao_mix || 0)));
+      
+      const mixPdvLinha = Number(linha?.mix_pdv?.mix || linha?.mix_pdv_realizado || 0);
+      const mixParaCard = (usarPDV && mixPdvLinha > 0) ? mixPdvLinha : Number(m?.mix_realizado || 0);
+      const objMixNum   = Number(m?.objetivo_mix || 0);
+
+      setObjetivoMix(String(objMixNum));
+      setMixRealizado(String(mixParaCard));
+      setMixPercentual(`${objMixNum > 0 ? ((mixParaCard / objMixNum) * 100).toFixed(2) : 0}%`);
+      setMixVariacao(String(mixParaCard - objMixNum));
     } else {
       const percentual = data.realizado_peso?.percentual || 0;
       const variacao = data.realizado_peso?.variacao || 0;
@@ -857,18 +874,23 @@ const IndicadoresCards = ({
     setPesoPercentual(`${Number(percentual).toFixed(2)}%`);
     setPesoVariacao(fmtNum2(Number(variacao)));
 
-    const objetivoMixValor = data.objetivo?.objetivo_mix || 0;
-    setObjetivoMix(String(objetivoMixValor));
-    const realizadoMix = data.realizado_mix?.realizado || 0;
-    const percentualMix = data.realizado_mix?.percentual || 0;
-    const variacaoMix = data.realizado_mix?.variacao || 0;
+    const mixPdvGrupo  = data?.realizado_mix?.mix_pdv_grupo;
+    const mixPdvReal   = Number(mixPdvGrupo?.mix_grupo || 0);
+    const realizadoMix = (usarPDV && mixPdvReal > 0) ? mixPdvReal : Number(data.realizado_mix?.realizado || 0);
+    //const percentualMix = data.realizado_mix?.percentual || 0;
+    //const variacaoMix   = data.realizado_mix?.variacao   || 0;
+    const objMix        = Number(data.objetivo?.objetivo_mix || 0);
+
+    setObjetivoMix(String(objMix));
     setMixRealizado(String(realizadoMix));
-    setMixPercentual(`${Number(percentualMix).toFixed(2)}%`);
-    setMixVariacao(String(variacaoMix));
+    setMixPercentual(objMix > 0 ? `${((realizadoMix / objMix) * 100).toFixed(2)}%` : '0%');
+    setMixVariacao(String(realizadoMix - objMix));
 
     const agg = data?.vendas?.agregados_area || {};
     const list = data?.vendas?.vendas_por_vendedor || [];
     const soma = (k) => list.reduce((acc, it) => acc + Number(it?.[k] || 0), 0);
+    console.log('[DEBUG venda_dia] list:', list.map(v => ({ cod: v.codcampo, venda_dia: v.venda_dia })));
+    setVendaDia(Math.round(soma('venda_media_diaria_atual')));
 
     const preAgg = Number(
       (agg.PreVenda_Valor ?? null) !== null
@@ -1837,32 +1859,48 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
   setObjetivoMix(String(metaMixFinal));
   
   // Cálculo do Realizado (usando a nova lógica de área ou fallback)
-  let mixReal = 0;
+let mixReal = 0;
 
-  if (selecionadas && selecionadas.length > 0) {
-      // Tenta pegar o mix calculado no backend para as áreas selecionadas
-      const areasObj = data?.escopo_rotas?.areas_supervisao || [];
-      const idsSel = selecionadas.map(s => String(s.value));
-      
-      // Filtra as áreas selecionadas
-      const areasFiltradas = areasObj.filter(a => idsSel.includes(String(a.cod_area_supervisao)));
-      
-      // Soma o mix das áreas (valor agregado vindo do backend)
-      mixReal = areasFiltradas.reduce((acc, area) => acc + (area.mix_realizado_area || 0), 0);
-      
-      // Fallback: se o backend não mandou 'mix_realizado_area', usa a soma simples dos vendedores
-      if (mixReal === 0 && areasFiltradas.length > 0) {
-           mixReal = Number(filtrado?.realizado_mix?.realizado ?? 0);
-      }
+if (selecionadas && selecionadas.length > 0) {
+  // Gerente com filtro: usa mix_pdv_grupo da área filtrada (union real — não soma)
+  const areasObj  = data?.escopo_rotas?.areas_supervisao || [];
+  const idsSel    = selecionadas.map(s => String(s.value));
+  const areasFiltradas = areasObj.filter(a => idsSel.includes(String(a.cod_area_supervisao)));
+
+  if (usarPDV) {
+    // mix PDV: union das áreas filtradas — NÃO somar mix_pdv_grupo de cada área
+    // cada área já tem mix_pdv_grupo.mix calculado via COUNT DISTINCT de suas UGs
+    // para 1 área selecionada: usa diretamente
+    // para N áreas: o correto seria uma nova query, mas como aproximação usamos a maior
+    // (a union real estaria em projecao_empresa.mix_pdv_empresa quando todas selecionadas)
+    if (areasFiltradas.length === 1) {
+      mixReal = Number(areasFiltradas[0]?.mix_pdv_grupo?.mix || 0)
+                || Number(areasFiltradas[0]?.mix_realizado_area || 0);
+    } else {
+      // múltiplas áreas: usa mix_pdv_empresa (todas as UGs juntas)
+      // se todas as áreas estão selecionadas, é o mix geral
+      const todosSelecionados = areasFiltradas.length === areasObj.length;
+      mixReal = todosSelecionados
+        ? Number(data?.projecao_empresa?.mix_pdv_empresa?.mix || 0)
+        : Math.max(...areasFiltradas.map(a => Number(a?.mix_pdv_grupo?.mix || 0)));
+    }
+    // fallback para mix tradicional se PDV não retornou
+    if (!mixReal) mixReal = areasFiltradas.reduce((acc, a) => acc + (a.mix_realizado_area || 0), 0);
   } else {
-      // Sem filtro: usa o total da empresa (que vem no payload principal)
-      mixReal = Number(data.realizado_mix?.realizado || 0);
+    mixReal = areasFiltradas.reduce((acc, a) => acc + (a.mix_realizado_area || 0), 0);
+    if (!mixReal && areasFiltradas.length > 0) mixReal = Number(filtrado?.realizado_mix?.realizado ?? 0);
   }
-  
-  // Atualiza os estados do Card
-  setMixRealizado(String(mixReal));
-  setMixPercentual(`${(metaMixFinal > 0 ? (mixReal / metaMixFinal) * 100 : 0).toFixed(2)}%`);
-  setMixVariacao(String(mixReal - metaMixFinal));
+
+} else {
+  // Sem filtro: todas as áreas — usa o mix geral da empresa
+  mixReal = usarPDV
+    ? Number(data?.projecao_empresa?.mix_pdv_empresa?.mix || 0) || Number(data.realizado_mix?.realizado || 0)
+    : Number(data.realizado_mix?.realizado || 0);
+}
+
+setMixRealizado(String(mixReal));
+setMixPercentual(`${(metaMixFinal > 0 ? (mixReal / metaMixFinal) * 100 : 0).toFixed(2)}%`);
+setMixVariacao(String(mixReal - metaMixFinal));
 
   // 5) Positivação
   const posReal = Number(filtrado?.positivacao?.realizado ?? 0);
@@ -1994,6 +2032,7 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
             icon={null} // Ou adicione um ícone específico se desejar
           />
 
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
           <Card
             title="Venda Realizada"
             value={
@@ -2017,7 +2056,12 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
             subtitle2=" Cobertura Atual"
             variation={vendaVariacao ?? '...'}
             className="card-venda"
-          />
+            extra={vendaDia > 0
+            ? `📅 Média/dia: R$ ${vendaDia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+            : null
+          }
+        />
+      </div>
 
           <Card
             title="Alocações"

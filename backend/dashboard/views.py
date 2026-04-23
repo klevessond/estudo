@@ -29,7 +29,7 @@ import logging
 from decimal import Decimal
 from dashboard.roles import get_role_context  
 from dashboard.services.indicadores.info_service import Todos_Vendedores, obter_cod_supervisor
-from dashboard.services.indicadores.calculos_projecao import get_dias_uteis_info, calcular_matematica_projecao
+from dashboard.services.indicadores.calculos_projecao import get_dias_uteis_info_pdv,get_dias_uteis_info, calcular_matematica_projecao
 from dashboard.services.indicadores.ruptura_service import buscar_ruptura
 from dashboard.db_conn import query_all
 
@@ -39,9 +39,12 @@ logger = logging.getLogger(__name__)
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
 from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_mix_agregado,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor,buscar_resumo_segmento_area_venda
-from dashboard.services.indicadores.vendas_service import buscar_comissoes_vendedor
+from dashboard.services.indicadores.vendas_service import buscar_comissoes_vendedor,buscar_itens_mix_por_vendedor, buscar_clientes_positivacao_por_vendedor
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora,buscar_cupons_por_vendedor
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
+from dashboard.services.indicadores.pdv_mix_service import buscar_mix_pdv_por_perfil
+from dashboard.services.indicadores.pdv_mix_service import buscar_mix_pdv_por_perfil, buscar_itens_mix_por_ug
+
 # Create your views here.
 
 
@@ -1241,6 +1244,20 @@ class IndicadoresView(APIView):
         # Cupons PDV — só busca se houver PDV
         dados_cupons_pdv = buscar_cupons_por_vendedor(data_inicio, data_fim) if tem_pdv else []
         cupons_pdv_total = sum(int(r.get("QuantidadeCupons") or 0) for r in dados_cupons_pdv)
+        
+        _mapa_vend_ugs = {} 
+
+        if tem_pdv:
+            _todos_ids = [_to_int(v) for v in (vendedores or []) if _to_int(v)]
+            if _todos_ids:
+                try:
+                    raw = obter_unid_gestoras_por_vendedores(_todos_ids)
+                    _mapa_vend_ugs = {
+                        vid: [str(u) for u in ugs if str(u).strip() and str(u) != "1"]
+                        for vid, ugs in raw.items()
+                    }
+                except Exception:
+                    logger.exception("[mix_pdv] erro ao montar mapa de UGs")
 
         # 3. Mapas
         pdv_map = defaultdict(lambda: {"fin": 0.0, "peso": 0.0})
@@ -1377,9 +1394,31 @@ class IndicadoresView(APIView):
                 vend["venda_rotas"] = val_rotas
                 vend["venda_pdv"] = val_pdv
                 vend["venda_total_geral"] = total_fin
-                vend["pos_rotas"] = pos_rotas
+                vend["pos_rotas"] = pos_rotas   
                 vend["pos_cupons_pdv"] = qtd_cupons_pdv
                 vend["pos_total"] = val_pos
+                if tem_pdv:
+                    ugs_vend = _mapa_vend_ugs.get(vid, [])
+                    if ugs_vend:
+                        try:
+                            _r = buscar_mix_pdv_por_perfil(
+                                data_inicio, data_fim,
+                                perfil="vendedor",  
+                                unid_gestoras_vendedor=ugs_vend,
+                            )
+                            vend["mix_pdv"] = {
+                                "mix"        : _r.get("Mix", 0),
+                                "qtd_cupons" : _r.get("QtdCupons", 0),
+                                "qtd_itens"  : _r.get("QtdItens", 0.0),
+                                "valor_total": _r.get("ValorTotal", 0.0),
+                            }
+                        except Exception:
+                            vend["mix_pdv"] = None
+                    else:
+                        vend["mix_pdv"] = None
+                else:
+                    vend["mix_pdv"] = None
+
                 
                 vend["projecao_financeira_rotas"] = p_rotas_only
                 vend["projecao_financeira_pdv"] = p_pdv_only
@@ -1402,7 +1441,81 @@ class IndicadoresView(APIView):
         # =========================================================
         # 🔴 FIM DO BLOCO DE PROJEÇÃO
         # =========================================================
+        
+        if tem_pdv and grupos_supervisao:
+            # Coleta UGs de toda a empresa (para o mix geral)
+            _todas_ugs_empresa = list(dict.fromkeys(
+                ug for ugs in _mapa_vend_ugs.values() for ug in ugs
+            ))
 
+            for area in grupos_supervisao:
+                area_vendedores = [_to_int(v) for v in (area.get("vendedores") or []) if _to_int(v)]
+
+                # UGs de todos os vendedores desta área juntas (COUNT DISTINCT real)
+                ugs_da_area = list(dict.fromkeys(
+                    ug for vid in area_vendedores
+                    for ug in _mapa_vend_ugs.get(vid, [])
+                ))
+
+                if ugs_da_area:
+                    try:
+                        _r = buscar_mix_pdv_por_perfil(
+                            data_inicio, data_fim,
+                            perfil="vendedor",          # recebe lista de UGs — lógica idêntica
+                            unid_gestoras_vendedor=ugs_da_area,
+                        )
+                        area["mix_pdv_grupo"] = {
+                            "mix"        : _r.get("Mix", 0),      # ← COUNT DISTINCT do grupo todo
+                            "qtd_cupons" : _r.get("QtdCupons", 0),
+                            "qtd_itens"  : _r.get("QtdItens", 0.0),
+                            "valor_total": _r.get("ValorTotal", 0.0),
+                        }
+                    except Exception:
+                        area["mix_pdv_grupo"] = None
+                else:
+                    area["mix_pdv_grupo"] = None
+
+            # Mix geral da empresa (todas as UGs juntas — nunca soma dos supervisores)
+            try:
+                _r_emp = buscar_mix_pdv_por_perfil(
+                    data_inicio, data_fim,
+                    perfil="vendedor",
+                    unid_gestoras_vendedor=_todas_ugs_empresa,
+                )
+                _mix_pdv_empresa = {
+                    "mix"        : _r_emp.get("Mix", 0),
+                    "qtd_cupons" : _r_emp.get("QtdCupons", 0),
+                    "qtd_itens"  : _r_emp.get("QtdItens", 0.0),
+                    "valor_total": _r_emp.get("ValorTotal", 0.0),
+                }
+            except Exception:
+                _mix_pdv_empresa = None
+        else:
+            _mix_pdv_empresa = None
+        mix_pdv_supervisor = None
+        if tem_pdv and getattr(ctx, "is_supervisor", False) and not rotas_info.get("e_gerente"):
+            _todos_ids = [_to_int(v) for v in (vendedores or []) if _to_int(v)]
+            if _todos_ids and _mapa_vend_ugs:
+                try:
+                    mix_pdv_supervisor = buscar_mix_pdv_por_perfil(
+                        data_inicio, data_fim,
+                        perfil="supervisor",
+                        mapa_vendedor_ugs=_mapa_vend_ugs,
+                    )
+                except Exception:
+                    logger.exception("[mix_pdv] erro ao calcular mix supervisor")
+        # ────────────────────────────────────────────────────────────────
+
+        print(f"""
+                [DEBUG][mix_pdv_grupo]
+                perfil        : {'gerente' if rotas_info.get('e_gerente') else 'supervisor' if getattr(ctx, 'is_supervisor', False) else 'vendedor'}
+                e_gerente     : {rotas_info.get('e_gerente')}
+                vendedores    : {vendedores}
+                _mapa_vend_ugs keys: {list(_mapa_vend_ugs.keys())}
+                mix_pdv_supervisor : {mix_pdv_supervisor}
+                grupos_supervisao  : {[a.get('cod_area_supervisao') for a in (grupos_supervisao or [])]}
+                """)
+        
         return Response({
             "objetivo": objetivo,
             "objetivos_vendedores": objetivos_vendedores,
@@ -1429,7 +1542,8 @@ class IndicadoresView(APIView):
             "realizado_financeiro": {
                 "valor": round(venda_realizada, 2),
                 "percentual_cobertura": round(percentual_cobertura, 2),
-                "variacao": round(variacao_financeira, 2)
+                "variacao": round(variacao_financeira, 2),
+                 
             },
             "positivacao": {
                 "realizado": positivacao_realizado_geral,
@@ -1442,7 +1556,8 @@ class IndicadoresView(APIView):
             "realizado_mix": {
                 "realizado": mix_realizado,
                 "percentual": percentual_mix,
-                "variacao": variacao_mix
+                "variacao": variacao_mix,
+                "mix_pdv_grupo": mix_pdv_supervisor if not rotas_info.get("e_gerente") else _mix_pdv_empresa,
             },
             "positivacao_detalhada": positivacao,
             "ruptura": {
@@ -1453,8 +1568,10 @@ class IndicadoresView(APIView):
             "minha_visao": minha_visao,
             #: escopo por área de supervisão (para gerente) =====
             "escopo_rotas": {
-                "e_gerente": rotas_info.get("e_gerente", False),
-                "areas_supervisao": grupos_supervisao,  # pode ser None se não for gerente
+                "e_gerente"         : rotas_info.get("e_gerente", False),
+                "e_supervisor"      : getattr(ctx, "is_supervisor", False) and not rotas_info.get("e_gerente", False),  # ← NOVO
+                "areas_supervisao"  : grupos_supervisao,   # populado só para gerente
+                "vendedores_escopo" : vendedores or [],    # ← NOVO: lista dos vendedores do supervisor
             },
            "projecao_empresa": {
                 "dias_uteis": dias_info,
@@ -1475,7 +1592,8 @@ class IndicadoresView(APIView):
                     "rotas": venda_realizada, # Certifique-se que esta variável existe (ou venda_realizada_rotas)
                     "pdv": venda_pdv_total,
                     "total": venda_total_empresa
-                }
+                },
+                 "mix_pdv_empresa": _mix_pdv_empresa,
             },
         })
         
@@ -2016,6 +2134,42 @@ class VendasPorVendedorView(APIView):
                     "quantidade": c.get("QuantidadeCupons", 0),
                     "valor": float(c.get("ValorTotalCupons", 0) or 0)
                 }
+        # ── Mix PDV por vendedor (1 query de UGs + 2 queries do service) ──
+        _mix_pdv_por_vendedor = {}
+        _lista_ids = [
+            to_int(v.get("codcampo"))
+            for v in resultado.get("vendas_por_vendedor", [])
+            if to_int(v.get("codcampo"))
+        ]
+        if _lista_ids:
+            try:
+                _raw_ugs = obter_unid_gestoras_por_vendedores(_lista_ids)
+                _mapa_ugs = {
+                    vid: [str(u) for u in ugs if str(u).strip() and str(u) != "1"]
+                    for vid, ugs in _raw_ugs.items()
+                }
+                for vid, ugs_v in _mapa_ugs.items():
+                    if ugs_v:
+                        _r = buscar_mix_pdv_por_perfil(
+                            data_inicio, data_fim,
+                            perfil="vendedor",
+                            unid_gestoras_vendedor=ugs_v,
+                        )
+                        _mix_pdv_por_vendedor[vid] = _r.get("Mix", 0)
+            except Exception as e:
+                print(f"[DEBUG] Erro ao calcular mix_pdv por vendedor: {e}")
+        # ────────────────────────────────────────────────────────────────
+        # ── Dias decorridos para cálculo de venda/dia ──────────────────
+        try:
+            dt_ref = datetime.strptime(data_fim, "%Y-%m-%d").date()
+            _dias_rotas = get_dias_uteis_info(data_base=dt_ref)      # seg-sex
+            _dias_pdv   = get_dias_uteis_info_pdv(data_base=dt_ref)  # seg-sab
+        except Exception:
+            _dias_rotas = {"decorridos": 1}
+            _dias_pdv   = {"decorridos": 1}
+        # ────────────────────────────────────────────────────────────────
+
+        print(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
 
         print(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
 
@@ -2030,6 +2184,12 @@ class VendasPorVendedorView(APIView):
             vendedor["alocado"] = round(valor_realizado + valor_prevenda, 2)
             # Adiciona as novas chaves no dicionário do vendedor que vai para o FrontEnd
             vendedor["cupons_quantidade"] = dados_cupom["quantidade"]
+            vendedor["mix_pdv_realizado"] = _mix_pdv_por_vendedor.get(codcampo_int, 0)
+            # ── venda/dia: PDV conta sábado, rota só seg-sex ──
+            tem_pdv_vend = _mix_pdv_por_vendedor.get(codcampo_int, 0) > 0
+            dias_dec = _dias_pdv["decorridos"] if tem_pdv_vend else _dias_rotas["decorridos"]
+            vendedor["venda_dia"]       = round(valor_realizado / dias_dec, 2)
+            vendedor["dias_decorridos"] = dias_dec
 
             print(
                 f"[DEBUG] Vendedor {codcampo_int}: "
@@ -2615,3 +2775,59 @@ class ObjetivoMixNivelView(APIView):
                 })
 
         return Response({"message": "Metas de Mix processadas com sucesso.", "detalhes": response_data})
+    
+
+class MixItensPorVendedorView(APIView):
+    def get(self, request):
+        de          = request.GET.get("de")
+        ate         = request.GET.get("ate")
+        cod_vend    = request.GET.get("cod_vendedor")
+        ordem       = request.GET.get("ordem", "top")   # "top" ou "bottom"
+        criterio = request.GET.get("criterio", "qtd")  # "qtd" ou "valor"
+
+        if not de or not ate or not cod_vend:
+            return Response({"error": "Parâmetros obrigatórios: de, ate, cod_vendedor"}, status=400)
+
+        try:
+            cod_vend_int = int(cod_vend)
+        except ValueError:
+            return Response({"error": "cod_vendedor inválido"}, status=400)
+
+        # Busca UGs do vendedor
+        raw_ugs = obter_unid_gestoras_por_vendedores([cod_vend_int])
+        ugs = [str(u) for u in raw_ugs.get(cod_vend_int, [])
+               if str(u).strip() and str(u) != "1"]
+
+        
+        if ugs:
+            # vendedor PDV — consulta por UnidGestora
+            itens = buscar_itens_mix_por_ug(de, ate, ugs, ordem=ordem, criterio=criterio, limite=50)
+        else:
+            # vendedor de rota — consulta por CodVendedor em PedidoVenda
+            itens = buscar_itens_mix_por_vendedor(de, ate, cod_vend_int, ordem=ordem, criterio=criterio, limite=50)
+
+        return Response({"itens": itens, "ordem": ordem, "criterio": criterio, "total_mix": len(itens)})
+
+class ClientesPositivacaoView(APIView):
+    def get(self, request):
+        de           = request.GET.get("de")
+        ate          = request.GET.get("ate")
+        cod_vend     = request.GET.get("cod_vendedor")
+        positivados  = request.GET.get("positivados", "true").lower() == "true"
+
+        if not de or not ate or not cod_vend:
+            return Response({"error": "Parâmetros obrigatórios: de, ate, cod_vendedor"}, status=400)
+
+        try:
+            cod_vend_int = int(cod_vend)
+        except ValueError:
+            return Response({"error": "cod_vendedor inválido"}, status=400)
+
+        try:
+            clientes = buscar_clientes_positivacao_por_vendedor(
+                de, ate, cod_vend_int, apenas_positivados=positivados
+            )
+            return Response({"clientes": clientes, "total": len(clientes), "positivados": positivados})
+        except Exception:
+            logger.exception("[ClientesPositivacaoView] erro")
+            return Response({"error": "Erro interno"}, status=500)

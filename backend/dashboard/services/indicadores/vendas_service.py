@@ -952,3 +952,127 @@ def buscar_comissoes_vendedor(cod_vendedor: int, data_inicio: str = None, data_f
         "total_valor_pedidos": round(total_valor_pedidos, 2),
         "detalhado":           detalhado,
     }
+
+
+def buscar_itens_mix_por_vendedor(
+    data_inicio,
+    data_fim,
+    cod_vendedor: int,
+    ordem: str = "top",      # "top" | "bottom"
+    criterio: str = "qtd",   # "qtd" | "valor"
+    limite: int = 50,
+) -> List[Dict[str, Any]]:
+    """
+    TOP/BOTTOM N produtos vendidos por um vendedor de rota (PedidoVenda).
+    Filtros: NaturezaOperacao.Venda=1, Status=0, EmbRetornavel=0.
+    """
+    p1, p2 = _dt_bounds(data_inicio, data_fim)
+
+    order_dir   = "DESC" if ordem == "top" else "ASC"
+    order_field = "ValorTotal" if criterio == "valor" else "QtdItens"
+
+    sql = f"""
+        DECLARE @P1 datetime2 = '{p1:%Y-%m-%d %H:%M:%S}';
+        DECLARE @P2 datetime2 = '{p2:%Y-%m-%d %H:%M:%S}';
+
+        SELECT TOP {limite}
+            M.CodMaterial,
+            M.Material,
+            SUM(PVI.Quantidade * PVI.QtdEmbalagem)                              AS QtdItens,
+            SUM(dbo.Round2(PVI.Quantidade * PVI.ValorEmbalagem))                AS ValorTotal,
+            SUM(dbo.Round2(PVI.DescontoRef + (PVI.Desconto * PVI.Quantidade)))  AS Desconto,
+            SUM(PVI.Quantidade * PVI.QtdEmbalagem * M.PesoBruto)                AS Peso
+        FROM PedidoVenda PV
+        INNER JOIN PedidoVendaItens PVI ON PV.CodPedidoVenda = PVI.CodPedidoVenda
+        INNER JOIN Material M           ON PVI.CodMaterial   = M.CodMaterial
+        INNER JOIN NaturezaOperacao N   ON PV.CodNaturezaOperacao = N.CodNaturezaOperacao
+        WHERE PV.Status        = 0
+          AND N.Venda          = 1
+          AND M.EmbRetornavel  = 0
+          AND PV.CodVendedor   = {int(cod_vendedor)}
+          AND PV.DataVenda    >= @P1
+          AND PV.DataVenda     < @P2
+        GROUP BY M.CodMaterial, M.Material
+        ORDER BY {order_field} {order_dir}
+    """
+    rows = query_all(sql)
+    for r in rows:
+        r["QtdItens"]   = float(r.get("QtdItens")   or 0)
+        r["ValorTotal"] = float(r.get("ValorTotal")  or 0)
+        r["Desconto"]   = float(r.get("Desconto")    or 0)
+        r["Peso"]       = float(r.get("Peso")        or 0)
+        r["Material"]   = (r.get("Material") or "").strip()
+    
+    # ── percentuais sobre o total das linhas retornadas ──
+    total_qtd = sum(r["QtdItens"]   for r in rows)
+    total_val = sum(r["ValorTotal"] for r in rows)
+    for r in rows:
+        r["PercQtd"]   = round((r["QtdItens"]   / total_qtd * 100) if total_qtd else 0, 2)
+        r["PercValor"] = round((r["ValorTotal"]  / total_val * 100) if total_val else 0, 2)
+
+    
+    
+    return rows
+
+def buscar_clientes_positivacao_por_vendedor(
+    data_inicio,
+    data_fim,
+    cod_vendedor: int,
+    apenas_positivados: bool = True,
+) -> List[Dict[str, Any]]:
+    """
+    Retorna clientes da carteira do vendedor com status de positivação.
+    apenas_positivados=True  → clientes que compraram no período
+    apenas_positivados=False → clientes que NÃO compraram no período
+    """
+    p1, p2 = _dt_bounds(data_inicio, data_fim)
+
+    # Condição de positivação: teve pedido de venda no período
+    cond_positiv = ">" if apenas_positivados else "="
+
+    sql = f"""
+        DECLARE @P1 datetime2 = '{p1:%Y-%m-%d %H:%M:%S}';
+        DECLARE @P2 datetime2 = '{p2:%Y-%m-%d %H:%M:%S}';
+
+        SELECT DISTINCT
+            C.CodCliente,
+            C.Cliente,
+            C.ClienteFantasia,
+            R.Rota,
+            R.CodRota
+        FROM Funcionario F
+        INNER JOIN AreaVenda AV  ON F.CodFuncionario = AV.CodVendedor
+        INNER JOIN Rota R        ON AV.CodAreaVenda  = R.CodAreaVenda
+        INNER JOIN Cliente C     ON C.CodRota        = R.CodRota
+        WHERE F.CodFuncionario = {int(cod_vendedor)}
+          AND C.Ativo      = 1
+          AND C.AtivoAuto  = 1
+          AND C.ECliente   = 1
+          AND R.Ativa      = 1
+          AND (
+            SELECT COUNT(DISTINCT PV.CodPedidoVenda)
+            FROM PedidoVenda PV
+            LEFT JOIN ClienteRotaVendedor CRV
+                ON PV.CodVendedor = CRV.CodVendedor AND PV.CodCliente = CRV.CodCliente
+            LEFT JOIN PedidoVendaItens PVI ON PV.CodPedidoVenda = PVI.CodPedidoVenda
+            LEFT JOIN Material M           ON PVI.CodMaterial    = M.CodMaterial
+            LEFT JOIN NaturezaOperacao N   ON PV.CodNaturezaOperacao = N.CodNaturezaOperacao
+            LEFT JOIN Rota R2 ON ISNULL(CRV.CodRota, C.CodRota) = R2.CodRota
+            WHERE PV.CodCliente  = C.CodCliente
+              AND PV.CodVendedor = F.CodFuncionario
+              AND PV.Status      = 0
+              AND N.Venda        = 1
+              AND M.EmbRetornavel = 0
+              AND R2.CodAreaVenda = AV.CodAreaVenda
+              AND PV.DataVenda   >= @P1
+              AND PV.DataVenda    < @P2
+          ) {cond_positiv} 0
+        ORDER BY R.Rota, C.Cliente
+    """
+    rows = query_all(sql)
+    for r in rows:
+        r["Cliente"]        = (r.get("Cliente")        or "").strip()
+        r["ClienteFantasia"] = (r.get("ClienteFantasia") or "").strip()
+        r["Rota"]           = (r.get("Rota")            or "").strip()
+        r["positivado"]     = apenas_positivados
+    return rows

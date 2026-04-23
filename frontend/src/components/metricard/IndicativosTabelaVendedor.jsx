@@ -131,6 +131,7 @@ useEffect(() => {
           pesototalvendido: Number(vendedor.PesoTotal || 0),
           qtdClientes: Number(vendedor.QtdClientes || 0),
           mix: Number(vendedor.Mix || 0),
+          mix_pdv: Number(vendedor.mix_pdv_realizado || 0),
         }));
 
         setBaseDataAll(tabelaBase);
@@ -202,6 +203,8 @@ useEffect(() => {
       // Calcula % e variação contra o objetivo individual
       const percVenda = objetivo > 0 ? (faturado / objetivo) * 100 : 0;
       const variacao = faturado - objetivo;
+      // Mix: PDV substitui o tradicional quando ativo e existe valor
+      const mix = (usarPDV && row.mix_pdv > 0) ? row.mix_pdv : row.mix;
 
       return {
         ...row,
@@ -209,6 +212,7 @@ useEffect(() => {
         faturado,
         alocado,
         pesototalvendido: peso,
+         mix,     
         percVenda,
         variacao,
       };
@@ -323,11 +327,19 @@ useEffect(() => {
       {
         accessorKey: 'mix',
         header: 'Mix (Qtd. Produtos)',
-        cell: (info) => (
-          <span style={{ fontWeight: 600 }}>
-            {Number(info.getValue() || 0)} itens
-          </span>
-        ),
+        cell: (info) => {
+          const temMixPDV = usarPDV && info.row.original.mix_pdv > 0;
+          return (
+            <span style={{ fontWeight: 600 }}>
+              {Number(info.getValue() || 0)} itens
+              {temMixPDV && (
+                <span style={{ fontSize: '10px', color: '#1e88e5', marginLeft: 4 }}>
+                  ● PDV
+                </span>
+              )}
+            </span>
+          );
+        },
       },
     ],
    [isPdvLoading, usarPDV]
