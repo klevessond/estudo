@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
 from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_mix_agregado,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor,buscar_resumo_segmento_area_venda
-from dashboard.services.indicadores.vendas_service import buscar_comissoes_vendedor,buscar_itens_mix_por_vendedor
+from dashboard.services.indicadores.vendas_service import buscar_comissoes_vendedor,buscar_itens_mix_por_vendedor, buscar_clientes_positivacao_por_vendedor
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora,buscar_cupons_por_vendedor
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 from dashboard.services.indicadores.pdv_mix_service import buscar_mix_pdv_por_perfil
@@ -2791,3 +2791,27 @@ class MixItensPorVendedorView(APIView):
             itens = buscar_itens_mix_por_vendedor(de, ate, cod_vend_int, ordem=ordem, criterio=criterio, limite=50)
 
         return Response({"itens": itens, "ordem": ordem, "criterio": criterio, "total_mix": len(itens)})
+
+class ClientesPositivacaoView(APIView):
+    def get(self, request):
+        de           = request.GET.get("de")
+        ate          = request.GET.get("ate")
+        cod_vend     = request.GET.get("cod_vendedor")
+        positivados  = request.GET.get("positivados", "true").lower() == "true"
+
+        if not de or not ate or not cod_vend:
+            return Response({"error": "Parâmetros obrigatórios: de, ate, cod_vendedor"}, status=400)
+
+        try:
+            cod_vend_int = int(cod_vend)
+        except ValueError:
+            return Response({"error": "cod_vendedor inválido"}, status=400)
+
+        try:
+            clientes = buscar_clientes_positivacao_por_vendedor(
+                de, ate, cod_vend_int, apenas_positivados=positivados
+            )
+            return Response({"clientes": clientes, "total": len(clientes), "positivados": positivados})
+        except Exception:
+            logger.exception("[ClientesPositivacaoView] erro")
+            return Response({"error": "Erro interno"}, status=500)

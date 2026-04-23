@@ -30,6 +30,30 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   const [loadingMix, setLoadingMix] = useState(false);
   const [mostrarMenosVendidos, setMostrarMenosVendidos] = useState(false);
   const [criterioValor, setCriterioValor] = useState(false);
+  const [modalPosAberto, setModalPosAberto]         = useState(false);
+  const [clientesPos, setClientesPos]               = useState([]);
+  const [loadingPos, setLoadingPos]                 = useState(false);
+  const [mostrarNaoPositivados, setMostrarNaoPositivados] = useState(false);
+
+  
+  useEffect(() => {
+  if (!modalPosAberto || !codFuncionario || !periodoSelecionado) return;
+
+  setLoadingPos(true);
+  api.get('/indicadores/clientes-positivacao/', {
+    params: {
+      de:           periodoSelecionado.de,
+      ate:          periodoSelecionado.ate,
+      cod_vendedor: codFuncionario,
+      positivados:  mostrarNaoPositivados ? "false" : "true",
+    }
+  })
+    .then(res => setClientesPos(res.data?.clientes || []))
+    .catch(() => setClientesPos([]))
+    .finally(() => setLoadingPos(false));
+
+}, [modalPosAberto, mostrarNaoPositivados, codFuncionario, periodoSelecionado]);
+
 
   
   useEffect(() => {
@@ -429,8 +453,13 @@ const alocado = colaborador.alocado || 0;
               <div>Progresso: {porcentagemMix.toFixed(1)}%</div>
             </div>
 
-          <div className="card" style={{ background: '#fff0f3' }}>
-            <div className="card-title">Positivação:</div>
+          <div 
+          className="card" 
+          onClick={() => setModalPosAberto(true)}
+          style={{ background: '#fff0f3' ,cursor: 'pointer' }}
+          title="Clique para ver os clientes"
+          >
+            <div className="card-title">Positivação: 🔍</div>
             {temPosPdv ? (
               <>
                 <div>Rotas: {posRotas}</div>
@@ -637,6 +666,110 @@ const alocado = colaborador.alocado || 0;
                         : `${Number(item.PercQtd   || 0).toFixed(1)}%`
                       }
                    </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
+{modalPosAberto && (
+  <div style={{
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 1000,
+  }}>
+    <div style={{
+      background: '#fff', borderRadius: '12px', padding: '1.5rem',
+      width: '90%', maxWidth: '600px', maxHeight: '80vh',
+      display: 'flex', flexDirection: 'column', gap: '1rem',
+    }}>
+      {/* Cabeçalho */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0 }}>
+          {mostrarNaoPositivados ? '❌ Não Positivados' : '✅ Positivados'}
+          <span style={{ fontSize: '0.875rem', fontWeight: 400, color: '#888', marginLeft: 8 }}>
+            ({clientesPos.length} clientes)
+          </span>
+        </h3>
+        <button onClick={() => setModalPosAberto(false)}
+          style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+          ✕
+        </button>
+      </div>
+
+      {/* Toggle positivados / não positivados */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <span style={{
+          fontSize: '0.875rem',
+          color: mostrarNaoPositivados ? '#aaa' : '#22c55e',
+          fontWeight: mostrarNaoPositivados ? 400 : 600
+        }}>
+          ✅ Positivados
+        </span>
+        <div onClick={() => setMostrarNaoPositivados(v => !v)}
+          style={{
+            width: '44px', height: '24px', borderRadius: '999px', cursor: 'pointer',
+            background: mostrarNaoPositivados ? '#ef4444' : '#22c55e',
+            position: 'relative', transition: 'background 0.2s',
+          }}>
+          <div style={{
+            position: 'absolute', top: '3px',
+            left: mostrarNaoPositivados ? '23px' : '3px',
+            width: '18px', height: '18px', borderRadius: '50%',
+            background: '#fff', transition: 'left 0.2s',
+          }} />
+        </div>
+        <span style={{
+          fontSize: '0.875rem',
+          color: mostrarNaoPositivados ? '#ef4444' : '#aaa',
+          fontWeight: mostrarNaoPositivados ? 600 : 400
+        }}>
+          ❌ Não Positivados
+        </span>
+      </div>
+
+      {/* Lista */}
+      <div style={{ overflowY: 'auto', flex: 1 }}>
+        {loadingPos ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+            Carregando...
+          </div>
+        ) : clientesPos.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+            Nenhum cliente encontrado.
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <thead>
+              <tr style={{ background: mostrarNaoPositivados ? '#fee2e2' : '#dcfce7', textAlign: 'left' }}>
+                <th style={{ padding: '8px' }}>#</th>
+                <th style={{ padding: '8px' }}>Cliente</th>
+                <th style={{ padding: '8px' }}>Rota</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clientesPos.map((cliente, i) => (
+                <tr key={cliente.CodCliente}
+                  style={{
+                    borderBottom: '1px solid #eee',
+                    background: i % 2 === 0
+                      ? (mostrarNaoPositivados ? '#fff5f5' : '#f0fdf4')
+                      : '#fff'
+                  }}>
+                  <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
+                  <td style={{ padding: '6px 8px' }}>
+                    <div style={{ fontWeight: 500 }}>{cliente.Cliente}</div>
+                    {cliente.ClienteFantasia && cliente.ClienteFantasia !== cliente.Cliente && (
+                      <div style={{ fontSize: '0.75rem', color: '#888' }}>{cliente.ClienteFantasia}</div>
+                    )}
+                  </td>
+                  <td style={{ padding: '6px 8px', color: '#555', fontSize: '0.8rem' }}>
+                    {cliente.Rota}
+                  </td>
                 </tr>
               ))}
             </tbody>

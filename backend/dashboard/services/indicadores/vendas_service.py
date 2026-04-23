@@ -1013,3 +1013,66 @@ def buscar_itens_mix_por_vendedor(
     
     
     return rows
+
+def buscar_clientes_positivacao_por_vendedor(
+    data_inicio,
+    data_fim,
+    cod_vendedor: int,
+    apenas_positivados: bool = True,
+) -> List[Dict[str, Any]]:
+    """
+    Retorna clientes da carteira do vendedor com status de positivação.
+    apenas_positivados=True  → clientes que compraram no período
+    apenas_positivados=False → clientes que NÃO compraram no período
+    """
+    p1, p2 = _dt_bounds(data_inicio, data_fim)
+
+    # Condição de positivação: teve pedido de venda no período
+    cond_positiv = ">" if apenas_positivados else "="
+
+    sql = f"""
+        DECLARE @P1 datetime2 = '{p1:%Y-%m-%d %H:%M:%S}';
+        DECLARE @P2 datetime2 = '{p2:%Y-%m-%d %H:%M:%S}';
+
+        SELECT DISTINCT
+            C.CodCliente,
+            C.Cliente,
+            C.ClienteFantasia,
+            R.Rota,
+            R.CodRota
+        FROM Funcionario F
+        INNER JOIN AreaVenda AV  ON F.CodFuncionario = AV.CodVendedor
+        INNER JOIN Rota R        ON AV.CodAreaVenda  = R.CodAreaVenda
+        INNER JOIN Cliente C     ON C.CodRota        = R.CodRota
+        WHERE F.CodFuncionario = {int(cod_vendedor)}
+          AND C.Ativo      = 1
+          AND C.AtivoAuto  = 1
+          AND C.ECliente   = 1
+          AND R.Ativa      = 1
+          AND (
+            SELECT COUNT(DISTINCT PV.CodPedidoVenda)
+            FROM PedidoVenda PV
+            LEFT JOIN ClienteRotaVendedor CRV
+                ON PV.CodVendedor = CRV.CodVendedor AND PV.CodCliente = CRV.CodCliente
+            LEFT JOIN PedidoVendaItens PVI ON PV.CodPedidoVenda = PVI.CodPedidoVenda
+            LEFT JOIN Material M           ON PVI.CodMaterial    = M.CodMaterial
+            LEFT JOIN NaturezaOperacao N   ON PV.CodNaturezaOperacao = N.CodNaturezaOperacao
+            LEFT JOIN Rota R2 ON ISNULL(CRV.CodRota, C.CodRota) = R2.CodRota
+            WHERE PV.CodCliente  = C.CodCliente
+              AND PV.CodVendedor = F.CodFuncionario
+              AND PV.Status      = 0
+              AND N.Venda        = 1
+              AND M.EmbRetornavel = 0
+              AND R2.CodAreaVenda = AV.CodAreaVenda
+              AND PV.DataVenda   >= @P1
+              AND PV.DataVenda    < @P2
+          ) {cond_positiv} 0
+        ORDER BY R.Rota, C.Cliente
+    """
+    rows = query_all(sql)
+    for r in rows:
+        r["Cliente"]        = (r.get("Cliente")        or "").strip()
+        r["ClienteFantasia"] = (r.get("ClienteFantasia") or "").strip()
+        r["Rota"]           = (r.get("Rota")            or "").strip()
+        r["positivado"]     = apenas_positivados
+    return rows
