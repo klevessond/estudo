@@ -7,5 +7,13 @@ backend/staticfiles/
 *.zip
 estudo-main/
 backend/db.sqlite3~
+<<<<<<< Updated upstream
+backend/*.sqlite3~
+backend/db.sqlite3
+=======
+backend/db.sqlite3
+*.sqlite3~
+>>>>>>> Stashed changes
+backend/db.sqlite3~
 backend/*.sqlite3~
 backend/db.sqlite3
