@@ -29,7 +29,7 @@ import logging
 from decimal import Decimal
 from dashboard.roles import get_role_context  
 from dashboard.services.indicadores.info_service import Todos_Vendedores, obter_cod_supervisor
-from dashboard.services.indicadores.calculos_projecao import get_dias_uteis_info_pdv,get_dias_uteis_info, calcular_matematica_projecao
+from dashboard.services.indicadores.calculos_projecao import get_dias_uteis_info, calcular_matematica_projecao
 from dashboard.services.indicadores.ruptura_service import buscar_ruptura
 from dashboard.db_conn import query_all
 
@@ -2163,7 +2163,6 @@ class VendasPorVendedorView(APIView):
         try:
             dt_ref = datetime.strptime(data_fim, "%Y-%m-%d").date()
             _dias_rotas = get_dias_uteis_info(data_base=dt_ref)      # seg-sex
-            _dias_pdv   = get_dias_uteis_info_pdv(data_base=dt_ref)  # seg-sab
         except Exception:
             _dias_rotas = {"decorridos": 1}
             _dias_pdv   = {"decorridos": 1}
