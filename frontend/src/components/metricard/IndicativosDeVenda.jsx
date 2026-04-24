@@ -1548,12 +1548,23 @@ setAlocacaoVariacao(
     };
 
     // 1. Financeiro
-    const pFin = getProjPercent(
-        projData.financeiro, 
-        projData.financeiro_rotas, 
-        objetivos.financeiro, 
-        usarPDV
-    );
+let pFin = 0;
+    if (usarPDV && somarArea) {
+        // Supervisor/Gerente com PDV ON: recalcula pelo objetivo real de cada vendedor
+        // (evita dividir total rotas+PDV pelo objetivo de rotas apenas)
+        const listaVend = dataEscopoAtual?.vendas?.vendas_por_vendedor || [];
+        let sumProj = 0, sumObj = 0;
+        listaVend.forEach(v => {
+            const d = v.projecoes_detalhadas || {};
+            const proj  = d.financeiro_total?.projecao_final || 0;
+            const ating = d.financeiro_total?.atingimento_projetado || 0;
+            sumProj += proj;
+            if (ating > 0) sumObj += (proj / ating) * 100; // back-calcula objetivo real
+        });
+        pFin = sumObj > 0 ? (sumProj / sumObj) * 100 : 0;
+    } else {
+        pFin = getProjPercent(projData.financeiro, projData.financeiro_rotas, objetivos.financeiro, usarPDV);
+    }
     setProjPercentFin(pFin ? `${fmtNum2(pFin)}%` : '--');
 
     // 2. Peso
@@ -1703,6 +1714,7 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
       
       // Acumuladores
       let sumFinProj = 0, sumFinObj = 0, sumFinMetaDia = 0;
+      let sumFinObjTotal = 0;
       let sumRotasProj = 0, sumPdvProj = 0;
       let sumPesoProj = 0, sumMixProj = 0, sumPosProj = 0;
 
@@ -1713,6 +1725,10 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
           if(d.financeiro_total) {
               sumFinProj += (d.financeiro_total.projecao_final || 0);
               sumFinMetaDia += (d.financeiro_total.meta_diaria_necessaria || 0);
+
+              const ating = d.financeiro_total.atingimento_projetado || 0;
+              const proj  = d.financeiro_total.projecao_final || 0;
+              if (ating > 0) sumFinObjTotal += (proj / ating) * 100;
           }
           if(d.financeiro_rotas) sumRotasProj += (d.financeiro_rotas.projecao_final || 0);
           if(d.financeiro_pdv) sumPdvProj += (d.financeiro_pdv.projecao_final || 0);
@@ -1732,7 +1748,7 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
           financeiro: {
               ...data.projecao_empresa?.financeiro,
               projecao_final: sumFinProj,
-              atingimento_projetado: objArea.objetivo_financeiro > 0 ? (sumFinProj / objArea.objetivo_financeiro) * 100 : 0,
+              atingimento_projetado: sumFinObjTotal > 0 ? (sumFinProj / sumFinObjTotal) * 100 : 0,
               meta_diaria_necessaria: sumFinMetaDia
           },
           financeiro_rotas: {
