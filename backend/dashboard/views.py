@@ -2159,14 +2159,6 @@ class VendasPorVendedorView(APIView):
             except Exception as e:
                 print(f"[DEBUG] Erro ao calcular mix_pdv por vendedor: {e}")
         # ────────────────────────────────────────────────────────────────
-        # ── Dias decorridos para cálculo de venda/dia ──────────────────
-        try:
-            dt_ref = datetime.strptime(data_fim, "%Y-%m-%d").date()
-            _dias_rotas = get_dias_uteis_info(data_base=dt_ref)      # seg-sex
-        except Exception:
-            _dias_rotas = {"decorridos": 1}
-            _dias_pdv   = {"decorridos": 1}
-        # ────────────────────────────────────────────────────────────────
 
         print(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
 
@@ -2185,10 +2177,6 @@ class VendasPorVendedorView(APIView):
             vendedor["cupons_quantidade"] = dados_cupom["quantidade"]
             vendedor["mix_pdv_realizado"] = _mix_pdv_por_vendedor.get(codcampo_int, 0)
             # ── venda/dia: PDV conta sábado, rota só seg-sex ──
-            tem_pdv_vend = _mix_pdv_por_vendedor.get(codcampo_int, 0) > 0
-            dias_dec = _dias_pdv["decorridos"] if tem_pdv_vend else _dias_rotas["decorridos"]
-            vendedor["venda_dia"]       = round(valor_realizado / dias_dec, 2)
-            vendedor["dias_decorridos"] = dias_dec
 
             print(
                 f"[DEBUG] Vendedor {codcampo_int}: "
