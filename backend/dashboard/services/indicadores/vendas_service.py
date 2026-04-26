@@ -879,43 +879,44 @@ def buscar_comissoes_vendedor(cod_vendedor: int, data_inicio: str = None, data_f
     p_vend  = int(cod_vendedor)
  
     sql = """
-        SELECT
-            PV.CodPedidoVenda,
-            PV.NumPedidoVenda,
-            CONVERT(VARCHAR(10), PV.DataVenda, 120)                                          AS DataVenda,
-            C.Cliente,
-            R.Rota,
-            Cidade.Cidade,
-            NO.NaturezaOperacao,
-            PV.SituacaoPagamento,
-            PV.ComissaoPercentual,
-            SUM(ROUND(100 * PVI.Quantidade * (PVI.ValorEmbalagem - PVI.Desconto), 0)) / 100 AS ValorPedido
-        FROM PedidoVenda PV
-        INNER JOIN NaturezaOperacao NO  ON PV.CodNaturezaOperacao = NO.CodNaturezaOperacao
-        INNER JOIN PedidoVendaItens  PVI ON PV.CodPedidoVenda     = PVI.CodPedidoVenda
-        INNER JOIN Cliente           C   ON PV.CodCliente          = C.CodCliente
-        INNER JOIN Rota              R   ON C.CodRota              = R.CodRota
-        INNER JOIN Cidade                ON C.CodCidade            = Cidade.CodCidade
-        INNER JOIN Funcionario       F   ON PV.CodVendedor         = F.CodFuncionario
-        INNER JOIN Material          M   ON PVI.CodMaterial        = M.CodMaterial
-        INNER JOIN MaterialComissao  MC  ON M.CodMaterial          = MC.CodMaterial
-        INNER JOIN TabelaPreco       TP  ON PVI.CodTabelaPreco     = TP.CodTabelaPreco
-        INNER JOIN Classificador     CL  ON PVI.CodTipo            = CL.CodClassificador
-        WHERE
-            NO.Comissionar   = 1
-            AND NO.Venda     = 1
-            AND M.EmbRetornavel = 0
-            AND PV.Status    = 0
-            AND PV.Situacao <> 'A'
-            AND PV.CodVendedor = ?
-            AND PV.DataVenda  >= ?
-            AND PV.DataVenda   < ?
-        GROUP BY
-            PV.CodPedidoVenda, PV.NumPedidoVenda, PV.DataVenda,
-            C.Cliente, R.Rota, Cidade.Cidade, NO.NaturezaOperacao,
-            PV.SituacaoPagamento, PV.ComissaoPercentual
-        ORDER BY
-            PV.DataVenda DESC, C.Cliente, PV.CodPedidoVenda
+  SELECT
+        PV.CodPedidoVenda,
+        PV.NumPedidoVenda,
+        CONVERT(VARCHAR(10), PV.DataVenda, 120)                                          AS DataVenda,
+        C.Cliente,
+        R.Rota,
+        Cidade.Cidade,
+        NO.NaturezaOperacao,
+        PV.SituacaoPagamento,
+        PV.ComissaoPercentual,
+        SUM(PVI.ComissaoValor)                                                           AS ComissaoValorItens,
+        SUM(ROUND(100 * PVI.Quantidade * (PVI.ValorEmbalagem - PVI.Desconto), 0)) / 100 AS ValorPedido
+    FROM PedidoVenda PV
+    INNER JOIN NaturezaOperacao NO  ON PV.CodNaturezaOperacao = NO.CodNaturezaOperacao
+    INNER JOIN PedidoVendaItens  PVI ON PV.CodPedidoVenda     = PVI.CodPedidoVenda
+    INNER JOIN Cliente           C   ON PV.CodCliente          = C.CodCliente
+    INNER JOIN Rota              R   ON C.CodRota              = R.CodRota
+    INNER JOIN Cidade                ON C.CodCidade            = Cidade.CodCidade
+    INNER JOIN Funcionario       F   ON PV.CodVendedor         = F.CodFuncionario
+    INNER JOIN Material          M   ON PVI.CodMaterial        = M.CodMaterial
+    INNER JOIN MaterialComissao  MC  ON M.CodMaterial          = MC.CodMaterial
+    INNER JOIN TabelaPreco       TP  ON PVI.CodTabelaPreco     = TP.CodTabelaPreco
+    INNER JOIN Classificador     CL  ON PVI.CodTipo            = CL.CodClassificador
+    WHERE
+        NO.Comissionar   = 1
+        AND NO.Venda     = 1
+        AND M.EmbRetornavel = 0
+        AND PV.Status    = 0
+        AND PV.Situacao = 'T'
+        AND PV.CodVendedor = ?
+        AND PV.DataVenda  >= ?
+        AND PV.DataVenda   < ?
+    GROUP BY
+        PV.CodPedidoVenda, PV.NumPedidoVenda, PV.DataVenda,
+        C.Cliente, R.Rota, Cidade.Cidade, NO.NaturezaOperacao,
+        PV.SituacaoPagamento, PV.ComissaoPercentual
+    ORDER BY
+        PV.DataVenda DESC, C.Cliente, PV.CodPedidoVenda
     """
  
     params = [p_vend, p_ini, p_fim]
@@ -926,13 +927,22 @@ def buscar_comissoes_vendedor(cod_vendedor: int, data_inicio: str = None, data_f
     total_valor_pedidos = 0.0
  
     for r in rows:
-        valor    = float(r.get("ValorPedido")       or 0)
+        valor    = float(r.get("ValorPedido")        or 0)
         perc     = float(r.get("ComissaoPercentual") or 0)
-        comissao = round(valor * perc / 100, 2)   # calcula em vez de usar campo armazenado
- 
+    
+        # Se ComissaoPercentual é NULL, usa o valor gravado nos itens
+        if perc > 0:
+            comissao = round(valor * perc / 100, 2)
+        else:
+            comissao = float(r.get("ComissaoValorItens") or 0)
+
         total_comissao      += comissao
         total_valor_pedidos += valor
- 
+        
+        # Para exibição: recalcula % a partir do valor real se perc for nulo
+        perc_exibir = perc if perc > 0 else (round(comissao / valor * 100, 4) if valor else 0)
+
+   
         detalhado.append({
             "CodPedidoVenda":     int(r.get("CodPedidoVenda") or 0),
             "NumPedidoVenda":     str(r.get("NumPedidoVenda") or ""),
@@ -942,7 +952,7 @@ def buscar_comissoes_vendedor(cod_vendedor: int, data_inicio: str = None, data_f
             "Cidade":             str(r.get("Cidade") or ""),
             "NaturezaOperacao":   str(r.get("NaturezaOperacao") or ""),
             "SituacaoPagamento":  str(r.get("SituacaoPagamento") or ""),
-            "ComissaoPercentual": perc,
+            "ComissaoPercentual": perc_exibir,
             "ComissaoValor":      comissao,
             "ValorPedido":        round(valor, 2),
         })
