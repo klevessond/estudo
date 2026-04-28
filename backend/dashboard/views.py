@@ -38,12 +38,12 @@ logger = logging.getLogger(__name__)
 
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
-from dashboard.services.indicadores.vendas_service import buscar_vendido,buscar_positivacao_por_rota,buscar_mix_agregado,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor,buscar_resumo_segmento_area_venda
+from dashboard.services.indicadores.vendas_service import buscar_itens_nao_vendidos_por_vendedor,buscar_vendido,buscar_positivacao_por_rota,buscar_mix_agregado,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor,buscar_resumo_segmento_area_venda
 from dashboard.services.indicadores.vendas_service import buscar_comissoes_vendedor,buscar_itens_mix_por_vendedor, buscar_clientes_positivacao_por_vendedor
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora,buscar_cupons_por_vendedor
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
-from dashboard.services.indicadores.pdv_mix_service import buscar_mix_pdv_por_perfil
-from dashboard.services.indicadores.pdv_mix_service import buscar_mix_pdv_por_perfil, buscar_itens_mix_por_ug
+from dashboard.services.indicadores.pdv_mix_service import buscar_itens_nao_vendidos_por_ug ,buscar_mix_pdv_por_perfil, buscar_itens_mix_por_ug
+from dashboard.services.indicadores.cache_aa import get_cache_aa, set_cache_aa
 
 # Create your views here.
 
@@ -733,7 +733,11 @@ class IndicadoresView(APIView):
             aa_ini_str = aa_ini.strftime("%Y-%m-%d")
             aa_fim_str = aa_fim.strftime("%Y-%m-%d")
 
-            ret_vendido_aa_rotas = buscar_vendido(aa_ini_str, aa_fim_str, rotas=rotas_codigos)
+            _cache_key_rotas = sorted(rotas_codigos or [])
+            ret_vendido_aa_rotas = get_cache_aa("vendido_rotas", aa_ini_str, aa_fim_str, _cache_key_rotas)
+            if ret_vendido_aa_rotas is None:
+                ret_vendido_aa_rotas = buscar_vendido(aa_ini_str, aa_fim_str, rotas=rotas_codigos)
+                set_cache_aa("vendido_rotas", aa_ini_str, aa_fim_str, ret_vendido_aa_rotas, _cache_key_rotas)
 
             if isinstance(ret_vendido_aa_rotas, dict):
                 calc = _calc_liquido_por_vendedor_por_rotas(ret_vendido_aa_rotas, rota_to_vendedor)
@@ -786,7 +790,12 @@ class IndicadoresView(APIView):
             venda_ano_anterior_rotas = None
 
 
-        res_aa  = buscar_vendas_por_vendedor(aa_ini.strftime("%Y-%m-%d"), aa_fim.strftime("%Y-%m-%d"))
+        _aa_ini_s = aa_ini.strftime("%Y-%m-%d")
+        _aa_fim_s = aa_fim.strftime("%Y-%m-%d")
+        res_aa = get_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s)
+        if res_aa is None:
+            res_aa = buscar_vendas_por_vendedor(_aa_ini_s, _aa_fim_s)
+            set_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s, res_aa)
         print(
             "[DEBUG][VENDA ANO ANTERIOR]\n"
             f"  Total registros retornados: {len(res_aa.get('vendas_por_vendedor', []) or [])}\n"
@@ -860,10 +869,12 @@ class IndicadoresView(APIView):
         aa_mes_last_day = last_day_of_month(aa_mes_ano, aa_mes_mes)
         aa_mes_fim = date(aa_mes_ano, aa_mes_mes, aa_mes_last_day)
 
-        res_aa_mes = buscar_vendas_por_vendedor(
-            aa_mes_ini.strftime("%Y-%m-%d"),
-            aa_mes_fim.strftime("%Y-%m-%d"),
-        )
+        _aa_mes_ini_s = aa_mes_ini.strftime("%Y-%m-%d")
+        _aa_mes_fim_s = aa_mes_fim.strftime("%Y-%m-%d")
+        res_aa_mes = get_cache_aa("vendas_vendedor_mes", _aa_mes_ini_s, _aa_mes_fim_s)
+        if res_aa_mes is None:
+            res_aa_mes = buscar_vendas_por_vendedor(_aa_mes_ini_s, _aa_mes_fim_s)
+            set_cache_aa("vendas_vendedor_mes", _aa_mes_ini_s, _aa_mes_fim_s, res_aa_mes)
         lista_aa_mes = res_aa_mes.get("vendas_por_vendedor", []) or []
 
         # aplica o MESMO filtro de escopo de vendedores
@@ -959,11 +970,7 @@ class IndicadoresView(APIView):
                 # =========
                 # AA (mês completo do ano anterior) — mantém sua regra
                 # =========
-                res_aa_area = buscar_vendas_por_vendedor(
-                    aa_ini.strftime("%Y-%m-%d"),
-                    aa_fim.strftime("%Y-%m-%d"),
-                    cod_vendedores=area_vendedores,
-                )
+                res_aa_area = res_aa
                 lista_aa_area = res_aa_area.get("vendas_por_vendedor", []) or []
                 soma_aa_area = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa_area)
                 area["venda_ano_anterior_area"] = round(soma_aa_area, 2)
@@ -2764,37 +2771,6 @@ class ObjetivoMixNivelView(APIView):
         return Response({"message": "Metas de Mix processadas com sucesso.", "detalhes": response_data})
     
 
-class MixItensPorVendedorView(APIView):
-    def get(self, request):
-        de          = request.GET.get("de")
-        ate         = request.GET.get("ate")
-        cod_vend    = request.GET.get("cod_vendedor")
-        ordem       = request.GET.get("ordem", "top")   # "top" ou "bottom"
-        criterio = request.GET.get("criterio", "qtd")  # "qtd" ou "valor"
-
-        if not de or not ate or not cod_vend:
-            return Response({"error": "Parâmetros obrigatórios: de, ate, cod_vendedor"}, status=400)
-
-        try:
-            cod_vend_int = int(cod_vend)
-        except ValueError:
-            return Response({"error": "cod_vendedor inválido"}, status=400)
-
-        # Busca UGs do vendedor
-        raw_ugs = obter_unid_gestoras_por_vendedores([cod_vend_int])
-        ugs = [str(u) for u in raw_ugs.get(cod_vend_int, [])
-               if str(u).strip() and str(u) != "1"]
-
-        
-        if ugs:
-            # vendedor PDV — consulta por UnidGestora
-            itens = buscar_itens_mix_por_ug(de, ate, ugs, ordem=ordem, criterio=criterio, limite=50)
-        else:
-            # vendedor de rota — consulta por CodVendedor em PedidoVenda
-            itens = buscar_itens_mix_por_vendedor(de, ate, cod_vend_int, ordem=ordem, criterio=criterio, limite=50)
-
-        return Response({"itens": itens, "ordem": ordem, "criterio": criterio, "total_mix": len(itens)})
-
 class ClientesPositivacaoView(APIView):
     def get(self, request):
         de           = request.GET.get("de")
@@ -2817,4 +2793,47 @@ class ClientesPositivacaoView(APIView):
             return Response({"clientes": clientes, "total": len(clientes), "positivados": positivados})
         except Exception:
             logger.exception("[ClientesPositivacaoView] erro")
+            return Response({"error": "Erro interno"}, status=500)
+
+
+class MixItensPorVendedorView(APIView):
+    def get(self, request):
+        de       = request.GET.get("de")
+        ate      = request.GET.get("ate")
+        cod_vend = request.GET.get("cod_vendedor")
+        ordem    = request.GET.get("ordem",   "top")
+        criterio = request.GET.get("criterio", "qtd")
+        modo     = request.GET.get("modo",    "vendidos")  
+        total_qtd   = float(request.GET.get("total_qtd",   0) or 0)
+        total_valor = float(request.GET.get("total_valor", 0) or 0)
+
+        if not de or not ate or not cod_vend:
+            return Response({"error": "Parâmetros obrigatórios: de, ate, cod_vendedor"}, status=400)
+
+        try:
+            cod_vend_int = int(cod_vend)
+        except ValueError:
+            return Response({"error": "cod_vendedor inválido"}, status=400)
+
+        try:
+            # Busca UGs do vendedor
+            raw_ugs = obter_unid_gestoras_por_vendedores([cod_vend_int])
+            ugs = [str(u) for u in raw_ugs.get(cod_vend_int, [])
+                   if str(u).strip() and str(u) != "1"]
+
+            if ugs:
+                if modo == "nao_vendidos":
+                    itens = buscar_itens_nao_vendidos_por_ug(de, ate, ugs, limite=50)
+                else:
+                    itens = buscar_itens_mix_por_ug(de, ate, ugs, ordem=ordem, criterio=criterio, limite=50)
+            else:
+                if modo == "nao_vendidos":
+                    itens = buscar_itens_nao_vendidos_por_vendedor(de, ate, cod_vend_int, limite=50)
+                else:
+                    itens = buscar_itens_mix_por_vendedor(de, ate, cod_vend_int, ordem=ordem, criterio=criterio, limite=50)
+
+            return Response({"itens": itens, "modo": modo, "criterio": criterio, "total_mix": len(itens)})
+
+        except Exception:
+            logger.exception("[MixItensPorVendedorView] erro")
             return Response({"error": "Erro interno"}, status=500)

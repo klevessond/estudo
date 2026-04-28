@@ -5,6 +5,10 @@ import ResumoSegmentoPies from '../Piechart/ResumoSegmentoPies';
 import ReactSpeedometer from 'react-d3-speedometer';
 import api from '../../api';
 import { useAuth } from '../../contexts/auth';
+// jsPDF está disponível via CDN no bundle ou pode ser importado assim:
+// npm install jspdf jspdf-autotable
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado, vendedoresList = [], onNavegar, projecoesPorVendedor = {} }) => {
   const [modo, setModo] = React.useState('indicadores');
@@ -28,7 +32,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   const [modalMixAberto, setModalMixAberto] = useState(false);
   const [itensMix, setItensMix] = useState([]);
   const [loadingMix, setLoadingMix] = useState(false);
-  const [mostrarMenosVendidos, setMostrarMenosVendidos] = useState(false);
+  const [mostrarNaoVendidos, setMostrarNaoVendidos] = useState(false);
   const [criterioValor, setCriterioValor] = useState(false);
   const [modalPosAberto, setModalPosAberto]         = useState(false);
   const [clientesPos, setClientesPos]               = useState([]);
@@ -92,17 +96,95 @@ useEffect(() => {
       de:           periodoSelecionado.de,
       ate:          periodoSelecionado.ate,
       cod_vendedor: codFuncionario,
-      ordem:        mostrarMenosVendidos ? "bottom" : "top",
+      modo:    mostrarNaoVendidos ? "nao_vendidos" : "vendidos",
       criterio:     criterioValor ? "valor" : "qtd",   // ← NOVO
+      ordem:          "top",
+      total_qtd:      colaborador?.qtdItensTotal  || 0,   // total de unidades vendidas
+      total_valor:    colaborador?.faturado        || 0,   // total financeiro do vendedor ← já existe
     }
   })
     .then(res => setItensMix(res.data?.itens || []))
     .catch(() => setItensMix([]))
     .finally(() => setLoadingMix(false));
 
-}, [modalMixAberto, mostrarMenosVendidos, criterioValor, codFuncionario, periodoSelecionado]);
+}, [modalMixAberto, mostrarNaoVendidos, criterioValor, codFuncionario, periodoSelecionado]);
 
+  const exportarMixPDF = () => {
+    // eslint-disable-next-line no-undef
+    const doc = new jsPDF();
+    const titulo = mostrarNaoVendidos ? 'Produtos Não Vendidos' : 'Produtos Vendidos';
+    const criterioLabel = criterioValor ? 'Valor Financeiro' : 'Quantidade';
+    const nomeVendedor = colaborador?.colaborador || 'Vendedor';
 
+    doc.setFontSize(14);
+    doc.text(`Mix de Produtos — ${nomeVendedor}`, 14, 15);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`${titulo} | Ordenado por: ${criterioLabel}`, 14, 22);
+    doc.text(`Período: ${periodoSelecionado?.de} a ${periodoSelecionado?.ate}`, 14, 28);
+    doc.text(`Total: ${itensMix.length} produtos`, 14, 34);
+
+    const colunas = mostrarNaoVendidos
+      ? ['#', 'Produto']
+      : ['#', 'Produto', 'Qtd', 'Valor (R$)', '% Qtd', '% Valor'];
+
+    const linhas = itensMix.map((item, i) => {
+      const base = [i + 1, item.Material || `Cod: ${item.CodMaterial}`];
+      if (!mostrarNaoVendidos) {
+        base.push(
+          Number(item.QtdItens).toLocaleString('pt-BR'),
+          Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+          `${item.PercQtd ?? 0}%`,
+          `${item.PercValor ?? 0}%`,
+        );
+      }
+      return base;
+    });
+
+    autoTable(doc, {
+      head: [colunas],
+      body: linhas,
+      startY: 40,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [124, 58, 237] },
+      alternateRowStyles: { fillColor: [250, 245, 255] },
+    });
+
+    doc.save(`mix_${nomeVendedor.replace(/\s+/g, '_')}_${periodoSelecionado?.de}.pdf`);
+  };
+
+  const exportarPosicaoPDF = () => {
+    // eslint-disable-next-line no-undef
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const titulo = mostrarNaoPositivados ? 'Clientes Não Positivados' : 'Clientes Positivados';
+    const nomeVendedor = colaborador?.colaborador || 'Vendedor';
+
+    doc.setFontSize(14);
+    doc.text(`Positivação — ${nomeVendedor}`, 14, 15);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`${titulo}`, 14, 22);
+    doc.text(`Período: ${periodoSelecionado?.de} a ${periodoSelecionado?.ate}`, 14, 28);
+    doc.text(`Total: ${clientesPos.length} clientes`, 14, 34);
+
+    doc.autoTable({
+      head: [['#', 'Cliente', 'Rota']],
+      body: clientesPos.map((c, i) => [
+        i + 1,
+        c.ClienteFantasia && c.ClienteFantasia !== c.Cliente
+          ? `${c.Cliente} (${c.ClienteFantasia})`
+          : c.Cliente,
+        c.Rota,
+      ]),
+      startY: 40,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: mostrarNaoPositivados ? [239, 68, 68] : [34, 197, 94] },
+      alternateRowStyles: { fillColor: mostrarNaoPositivados ? [255, 245, 245] : [240, 253, 244] },
+    });
+
+    doc.save(`positivacao_${nomeVendedor.replace(/\s+/g, '_')}_${periodoSelecionado?.de}.pdf`);
+  };
 
   // early return DEPOIS de todos os hooks
   if (!colaborador) return null;
@@ -567,33 +649,57 @@ const alocado = colaborador.alocado || 0;
       {/* Cabeçalho */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>
-          {mostrarMenosVendidos ? '📉 Menos Vendidos' : '📈 Mais Vendidos'} — Mix PDV
+          {mostrarNaoVendidos ? '❌ Não Vendidos' : '✅ Vendidos'} — Mix
+          <span style={{ fontSize: '0.875rem', fontWeight: 400, color: '#888', marginLeft: 8 }}>
+            ({itensMix.length} produtos)
+          </span>
         </h3>
-        <button onClick={() => setModalMixAberto(false)}
-          style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
-          ✕
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button
+            onClick={exportarMixPDF}
+            style={{
+              background: '#7c3aed', color: '#fff', border: 'none',
+              borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem'
+            }}
+          >
+            📄 Exportar PDF
+          </button>
+          <button onClick={() => setModalMixAberto(false)}
+            style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* Toggle mais/menos vendidos */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <span style={{ fontSize: '0.875rem', color: '#555' }}>Mais vendidos</span>
-        <div
-          onClick={() => setMostrarMenosVendidos(v => !v)}
-          style={{
-            width: '44px', height: '24px', borderRadius: '999px', cursor: 'pointer',
-            background: mostrarMenosVendidos ? '#ef4444' : '#22c55e',
-            position: 'relative', transition: 'background 0.2s',
-          }}
-        >
-          <div style={{
-            position: 'absolute', top: '3px',
-            left: mostrarMenosVendidos ? '23px' : '3px',
-            width: '18px', height: '18px', borderRadius: '50%',
-            background: '#fff', transition: 'left 0.2s',
-          }} />
-        </div>
-        <span style={{ fontSize: '0.875rem', color: '#555' }}>Menos vendidos</span>
+            <span style={{
+              color: mostrarNaoVendidos ? '#aaa' : '#22c55e',
+              fontWeight: mostrarNaoVendidos ? 400 : 600,
+              fontSize: '0.875rem'
+            }}>
+              ✅ Vendidos
+            </span>
+            <div onClick={() => setMostrarNaoVendidos(v => !v)}
+              style={{
+                width: '44px', height: '24px', borderRadius: '999px', cursor: 'pointer',
+                background: mostrarNaoVendidos ? '#ef4444' : '#22c55e',
+                position: 'relative', transition: 'background 0.2s',
+              }}>
+              <div style={{
+                position: 'absolute', top: '3px',
+                left: mostrarNaoVendidos ? '23px' : '3px',
+                width: '18px', height: '18px', borderRadius: '50%',
+                background: '#fff', transition: 'left 0.2s',
+              }} />
+            </div>
+            <span style={{
+              color: mostrarNaoVendidos ? '#ef4444' : '#aaa',
+              fontWeight: mostrarNaoVendidos ? 600 : 400,
+              fontSize: '0.875rem'
+            }}>
+              ❌ Não Vendidos
+            </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <span style={{ fontSize: '0.875rem', color: criterioValor ? '#aaa' : '#1e88e5', fontWeight: criterioValor ? 400 : 600 }}>
@@ -633,14 +739,17 @@ const alocado = colaborador.alocado || 0;
               <tr style={{ background: '#f3e8ff', textAlign: 'left' }}>
                 <th style={{ padding: '8px' }}>#</th>
                 <th style={{ padding: '8px' }}>Produto</th>
-                <th style={{ padding: '8px', textAlign: 'right',
-                            color: criterioValor ? '#aaa' : '#7c3aed', fontWeight: criterioValor ? 400 : 700 }}>
-                  Qtd {!criterioValor && '▼'}
-                </th>
-                <th style={{ padding: '8px', textAlign: 'right',
-                            color: criterioValor ? '#7c3aed' : '#aaa', fontWeight: criterioValor ? 700 : 400 }}>
-                  Valor {criterioValor && '▼'}
-                </th>
+                {!mostrarNaoVendidos && (
+                  <>
+                    <th style={{ padding: '8px', textAlign: 'right',
+                                color: criterioValor ? '#aaa' : '#7c3aed', fontWeight: criterioValor ? 400 : 700 }}>
+                      Qtd {!criterioValor && '▼'}
+                    </th>
+                    <th style={{ padding: '8px', textAlign: 'right',
+                                color: criterioValor ? '#7c3aed' : '#aaa', fontWeight: criterioValor ? 700 : 400 }}>
+                      Valor {criterioValor && '▼'}
+                    </th>
+                </>)}
                 <th style={{ padding: '8px', textAlign: 'right', color: '#7c3aed' }}>%</th>
               </tr>
             </thead>
@@ -699,7 +808,17 @@ const alocado = colaborador.alocado || 0;
           style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
           ✕
         </button>
-      </div>
+                    <button
+              onClick={exportarPosicaoPDF}
+              style={{
+                background: mostrarNaoPositivados ? '#ef4444' : '#22c55e',
+                color: '#fff', border: 'none', borderRadius: '6px',
+                padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem'
+              }}
+            >
+              📄 Exportar PDF
+            </button>
+        </div>
 
       {/* Toggle positivados / não positivados */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

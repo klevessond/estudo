@@ -971,6 +971,8 @@ def buscar_itens_mix_por_vendedor(
     ordem: str = "top",      # "top" | "bottom"
     criterio: str = "qtd",   # "qtd" | "valor"
     limite: int = 50,
+    total_qtd_ref=0.0,    
+    total_valor_ref=0.0,  
 ) -> List[Dict[str, Any]]:
     """
     TOP/BOTTOM N produtos vendidos por um vendedor de rota (PedidoVenda).
@@ -1014,8 +1016,9 @@ def buscar_itens_mix_por_vendedor(
         r["Material"]   = (r.get("Material") or "").strip()
     
     # ── percentuais sobre o total das linhas retornadas ──
-    total_qtd = sum(r["QtdItens"]   for r in rows)
-    total_val = sum(r["ValorTotal"] for r in rows)
+    total_qtd = total_qtd_ref if total_qtd_ref > 0 else sum(r["QtdItens"]   for r in rows)
+    total_val = total_valor_ref if total_valor_ref > 0 else sum(r["ValorTotal"] for r in rows)
+
     for r in rows:
         r["PercQtd"]   = round((r["QtdItens"]   / total_qtd * 100) if total_qtd else 0, 2)
         r["PercValor"] = round((r["ValorTotal"]  / total_val * 100) if total_val else 0, 2)
@@ -1085,4 +1088,53 @@ def buscar_clientes_positivacao_por_vendedor(
         r["ClienteFantasia"] = (r.get("ClienteFantasia") or "").strip()
         r["Rota"]           = (r.get("Rota")            or "").strip()
         r["positivado"]     = apenas_positivados
+    return rows
+
+def buscar_itens_nao_vendidos_por_vendedor(
+    data_inicio,
+    data_fim,
+    cod_vendedor: int,
+    limite: int = 50,
+) -> List[Dict[str, Any]]:
+    """
+    Retorna produtos do catálogo (MaterialComissao) que NÃO foram vendidos
+    pelo vendedor no período informado.
+    """
+    p1, p2 = _dt_bounds(data_inicio, data_fim)
+
+    sql = f"""
+        DECLARE @P1 datetime2 = '{p1:%Y-%m-%d %H:%M:%S}';
+        DECLARE @P2 datetime2 = '{p2:%Y-%m-%d %H:%M:%S}';
+
+        SELECT 
+            M.CodMaterial,
+            M.Material,
+            0.0 AS QtdItens,
+            0.0 AS ValorTotal,
+            0.0 AS Desconto,
+            0.0 AS Peso,
+            0.0 AS PercQtd,
+            0.0 AS PercValor
+        FROM Material M
+            WHERE M.Ativo        = 1
+            AND M.Vender       = 1
+            AND M.EmbRetornavel = 0
+            AND NOT EXISTS (
+                SELECT 1
+                FROM PedidoVenda PV
+                INNER JOIN PedidoVendaItens PVI ON PV.CodPedidoVenda = PVI.CodPedidoVenda
+                INNER JOIN NaturezaOperacao N   ON PV.CodNaturezaOperacao = N.CodNaturezaOperacao
+                WHERE PV.CodVendedor   = {int(cod_vendedor)}
+                    AND PVI.CodMaterial  = M.CodMaterial
+                    AND PV.Status        = 0
+                    AND N.Venda          = 1
+                    AND PV.DataVenda    >= @P1
+                    AND PV.DataVenda     < @P2
+            )
+            ORDER BY M.Material
+    """
+    rows = query_all(sql)
+    for r in rows:
+        r["Material"] = (r.get("Material") or "").strip()
+        r["vendido"]  = False
     return rows

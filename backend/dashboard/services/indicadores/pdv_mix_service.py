@@ -477,6 +477,8 @@ def buscar_itens_mix_por_ug(
     ordem: str = "top",       # "top" = mais | "bottom" = menos
     criterio: str = "qtd",    # "qtd" = quantidade | "valor" = financeiro
     limite: int = 50,
+    total_qtd_ref=0.0,    
+    total_valor_ref=0.0,  
 ) -> List[Dict[str, Any]]:
     """
     Retorna os TOP ou BOTTOM N produtos vendidos nas UGs informadas.
@@ -531,11 +533,67 @@ def buscar_itens_mix_por_ug(
         r["Material"]   = (r.get("Material") or "").strip()
     
     # ── percentuais sobre o total das linhas retornadas ──
-    total_qtd = sum(r["QtdItens"]   for r in rows)
-    total_val = sum(r["ValorTotal"] for r in rows)
+    total_qtd = total_qtd_ref if total_qtd_ref > 0 else sum(r["QtdItens"]   for r in rows)
+    total_val = total_valor_ref if total_valor_ref > 0 else sum(r["ValorTotal"] for r in rows)
+
     for r in rows:
         r["PercQtd"]   = round((r["QtdItens"]   / total_qtd * 100) if total_qtd else 0, 2)
         r["PercValor"] = round((r["ValorTotal"]  / total_val * 100) if total_val else 0, 2)
 
 
+    return rows
+
+def buscar_itens_nao_vendidos_por_ug(
+    data_inicio,
+    data_fim,
+    unid_gestoras: List[str],
+    limite: int = 50,
+) -> List[Dict[str, Any]]:
+    """
+    Produtos do catálogo que NÃO foram vendidos nas UGs informadas no período.
+    """
+    if not unid_gestoras:
+        return []
+
+    di = _as_date(data_inicio)
+    df = _as_date(data_fim)
+    di_dt, df_dt = _intervalo_exclusivo(di, df)
+    ph = _placeholders(unid_gestoras)
+
+    sql = f"""
+        SELECT 
+            M.CodMaterial,
+            M.Material,
+            0.0 AS QtdItens,
+            0.0 AS ValorTotal,
+            0.0 AS PercQtd,
+            0.0 AS PercValor
+        FROM Material M
+            WHERE M.Ativo         = 1
+            AND M.Vender        = 1
+            AND M.EmbRetornavel = 0
+            AND NOT EXISTS (
+                SELECT 1
+                FROM ViewVenda V
+                LEFT JOIN ViewVendaItens VI
+                    ON V.CodPedidoVenda = VI.CodPedidoVenda
+                    AND V.ECFSerial      = VI.ECFSerial
+                    AND V.CodCupom       = VI.CodCupom
+                LEFT JOIN NaturezaOperacao N
+                    ON V.CodNaturezaOperacao = N.CodNaturezaOperacao
+                WHERE VI.CodMaterial  = M.CodMaterial
+                    AND V.Status        = 0
+                    AND N.Venda         = 1
+                    AND V.UnidGestora  <> 1
+                    AND V.UnidGestora  IN ({ph})
+                    AND V.DataVenda    >= ?
+                    AND V.DataVenda     < ?
+            )
+            ORDER BY M.Material
+    """
+    params = [*unid_gestoras, di_dt, df_dt]
+    rows = query_all(sql, params)
+    for r in rows:
+        r["Material"] = (r.get("Material") or "").strip()
+        r["vendido"]  = False
     return rows
