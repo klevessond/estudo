@@ -476,7 +476,7 @@ def buscar_itens_mix_por_ug(
     unid_gestoras: List[str],
     ordem: str = "top",       # "top" = mais | "bottom" = menos
     criterio: str = "qtd",    # "qtd" = quantidade | "valor" = financeiro
-    limite: int = 50,
+    limite= None,
     total_qtd_ref=0.0,    
     total_valor_ref=0.0,  
 ) -> List[Dict[str, Any]]:
@@ -496,7 +496,7 @@ def buscar_itens_mix_por_ug(
     order_field = "ValorTotal" if criterio == "valor" else "QtdItens"
 
     sql = f"""
-        SELECT TOP {limite}
+         SELECT
             VI.CodMaterial,
             M.Material,
             SUM(VI.Quantidade * VI.QtdEmbalagem)               AS QtdItens,
@@ -547,7 +547,7 @@ def buscar_itens_nao_vendidos_por_ug(
     data_inicio,
     data_fim,
     unid_gestoras: List[str],
-    limite: int = 50,
+    limite= None,
 ) -> List[Dict[str, Any]]:
     """
     Produtos do catálogo que NÃO foram vendidos nas UGs informadas no período.

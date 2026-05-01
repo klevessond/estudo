@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
 from dashboard.services.indicadores.vendas_service import buscar_itens_nao_vendidos_por_vendedor,buscar_vendido,buscar_positivacao_por_rota,buscar_mix_agregado,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor,buscar_resumo_segmento_area_venda
-from dashboard.services.indicadores.vendas_service import buscar_comissoes_vendedor,buscar_itens_mix_por_vendedor, buscar_clientes_positivacao_por_vendedor
+from dashboard.services.indicadores.vendas_service import buscar_clientes_positivacao_lista,buscar_comissoes_vendedor,buscar_itens_mix_por_vendedor, buscar_clientes_positivacao_por_vendedor
 from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora,buscar_cupons_por_vendedor
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 from dashboard.services.indicadores.pdv_mix_service import buscar_itens_nao_vendidos_por_ug ,buscar_mix_pdv_por_perfil, buscar_itens_mix_por_ug
@@ -2782,14 +2782,28 @@ class ClientesPositivacaoView(APIView):
             return Response({"error": "Parâmetros obrigatórios: de, ate, cod_vendedor"}, status=400)
 
         try:
-            cod_vend_int = int(cod_vend)
-        except ValueError:
-            return Response({"error": "cod_vendedor inválido"}, status=400)
-
-        try:
-            clientes = buscar_clientes_positivacao_por_vendedor(
-                de, ate, cod_vend_int, apenas_positivados=positivados
+            resultado = buscar_positivacao_por_rota(
+                data_inicio=de,
+                data_fim=ate,
+                cod_vendedores=[cod_vend_int],
             )
+
+            clientes = []
+            for linha in resultado.get("detalhamento", []):
+                valor = float(linha.get("ValorLiquido") or 0)
+                if positivados and valor <= 0:
+                    continue
+                if not positivados and valor > 0:
+                    continue
+                clientes.append({
+                    "CodCliente"     : linha.get("CodCampo"),
+                    "Cliente"        : (linha.get("Campo") or "").strip(),
+                    "ClienteFantasia": "",
+                    "Rota"           : (linha.get("Rota") or "").strip(),
+                    "positivado"     : positivados,
+                })
+
+            clientes.sort(key=lambda x: (x.get("Rota",""), x.get("Cliente","")))
             return Response({"clientes": clientes, "total": len(clientes), "positivados": positivados})
         except Exception:
             logger.exception("[ClientesPositivacaoView] erro")
@@ -2823,17 +2837,138 @@ class MixItensPorVendedorView(APIView):
 
             if ugs:
                 if modo == "nao_vendidos":
-                    itens = buscar_itens_nao_vendidos_por_ug(de, ate, ugs, limite=50)
+                    itens = buscar_itens_nao_vendidos_por_ug(de, ate, ugs)
                 else:
-                    itens = buscar_itens_mix_por_ug(de, ate, ugs, ordem=ordem, criterio=criterio, limite=50)
+                    itens = buscar_itens_mix_por_ug(de, ate, ugs, ordem=ordem, criterio=criterio)
             else:
                 if modo == "nao_vendidos":
-                    itens = buscar_itens_nao_vendidos_por_vendedor(de, ate, cod_vend_int, limite=50)
+                    itens = buscar_itens_nao_vendidos_por_vendedor(de, ate, cod_vend_int)
                 else:
-                    itens = buscar_itens_mix_por_vendedor(de, ate, cod_vend_int, ordem=ordem, criterio=criterio, limite=50)
+                    itens = buscar_itens_mix_por_vendedor(de, ate, cod_vend_int, ordem=ordem, criterio=criterio)
 
             return Response({"itens": itens, "modo": modo, "criterio": criterio, "total_mix": len(itens)})
 
         except Exception:
             logger.exception("[MixItensPorVendedorView] erro")
+            return Response({"error": "Erro interno"}, status=500)
+
+class MixItensAreaView(APIView):
+    """
+    Mix de itens para supervisor (suas UGs) ou gerente (filtro de área).
+    Recebe: vendedores=178,190,224,242 ou cod_supervisao=4
+    """
+    def get(self, request):
+        de          = request.GET.get("de")
+        ate         = request.GET.get("ate")
+        vendedores  = request.GET.get("vendedores", "")  # "178,190,224,242"
+        modo        = request.GET.get("modo",     "vendidos")
+        criterio    = request.GET.get("criterio", "qtd")
+        ordem       = request.GET.get("ordem",    "top")
+        total_valor = float(request.GET.get("total_valor", 0) or 0)
+        total_qtd   = float(request.GET.get("total_qtd",   0) or 0)
+
+        if not de or not ate or not vendedores:
+            return Response({"error": "Parâmetros obrigatórios: de, ate, vendedores"}, status=400)
+
+        try:
+            ids = [int(v.strip()) for v in vendedores.split(",") if v.strip()]
+        except ValueError:
+            return Response({"error": "vendedores inválidos"}, status=400)
+
+        try:
+            # Coleta todas as UGs do grupo
+            raw_ugs = obter_unid_gestoras_por_vendedores(ids)
+            todas_ugs = list(dict.fromkeys(
+                str(u) for ugs in raw_ugs.values()
+                for u in ugs if str(u).strip() and str(u) != "1"
+            ))
+
+            if todas_ugs:
+                if modo == "nao_vendidos":
+                    itens = buscar_itens_nao_vendidos_por_ug(de, ate, todas_ugs)
+                else:
+                    itens = buscar_itens_mix_por_ug(
+                        de, ate, todas_ugs, ordem=ordem, criterio=criterio,
+                         total_qtd_ref=total_qtd, total_valor_ref=total_valor,
+                    )
+            else:
+                from collections import defaultdict
+                mapa: dict = {}  # CodMaterial → linha agregada
+                for vid in ids:
+                    if modo == "nao_vendidos":
+                        parcial = buscar_itens_nao_vendidos_por_vendedor(de, ate, vid)
+                    else:
+                        parcial = buscar_itens_mix_por_vendedor(
+                            de, ate, vid, ordem=ordem, criterio=criterio,
+                             total_qtd_ref=total_qtd, total_valor_ref=total_valor,
+                        )
+                    for item in parcial:
+                        cod = item["CodMaterial"]
+                        if cod not in mapa:
+                            mapa[cod] = dict(item)
+                        else:
+                            mapa[cod]["QtdItens"]   += item["QtdItens"]
+                            mapa[cod]["ValorTotal"] += item["ValorTotal"]
+                            mapa[cod]["Desconto"]   += item.get("Desconto", 0)
+                            mapa[cod]["Peso"]       += item.get("Peso", 0)
+
+                itens = sorted(mapa.values(),
+                            key=lambda x: x["ValorTotal"] if criterio == "valor" else x["QtdItens"],
+                            reverse=True)
+
+                # Recalcula percentuais sobre o total agregado
+                total_q = total_qtd  if total_qtd  > 0 else sum(r["QtdItens"]   for r in itens)
+                total_v = total_valor if total_valor > 0 else sum(r["ValorTotal"] for r in itens)
+                for r in itens:
+                    r["PercQtd"]   = round(r["QtdItens"]   / total_q * 100, 2) if total_q else 0
+                    r["PercValor"] = round(r["ValorTotal"]  / total_v * 100, 2) if total_v else 0
+
+            return Response({"itens": itens, "modo": modo, "total": len(itens)})
+
+        except Exception:
+            logger.exception("[MixItensAreaView] erro")
+            return Response({"error": "Erro interno"}, status=500)
+
+class ClientesPositivacaoAreaView(APIView):
+    def get(self, request):
+        de          = request.GET.get("de")
+        ate         = request.GET.get("ate")
+        vendedores  = request.GET.get("vendedores", "")
+        positivados = request.GET.get("positivados", "true").lower() == "true"
+
+        if not de or not ate or not vendedores:
+            return Response({"error": "Parâmetros obrigatórios: de, ate, vendedores"}, status=400)
+
+        try:
+            ids = [int(v.strip()) for v in vendedores.split(",") if v.strip()]
+        except ValueError:
+            return Response({"error": "vendedores inválidos"}, status=400)
+
+        try:
+            todos = []
+            for vid in ids:
+                clientes = buscar_clientes_positivacao_lista(
+                    de, ate, vid, apenas_positivados=positivados
+                )
+                todos.extend(clientes)
+
+            # Dedup por CodCliente mantendo ordem por Rota/Cliente
+            vistos = set()
+            dedup = []
+            for c in todos:
+                cod = c.get("CodCliente")
+                if cod not in vistos:
+                    vistos.add(cod)
+                    dedup.append(c)
+
+            dedup.sort(key=lambda x: (x.get("Rota",""), x.get("Cliente","")))
+
+            return Response({
+                "clientes"  : dedup,
+                "total"     : len(dedup),
+                "positivados": positivados,
+            })
+
+        except Exception:
+            logger.exception("[ClientesPositivacaoAreaView] erro")
             return Response({"error": "Erro interno"}, status=500)

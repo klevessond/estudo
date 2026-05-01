@@ -635,7 +635,8 @@ const alocado = colaborador.alocado || 0;
         </div>
       )}
 
-      {modalMixAberto && (
+
+{modalMixAberto && (
   <div style={{
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',

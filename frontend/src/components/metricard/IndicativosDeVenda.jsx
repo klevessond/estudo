@@ -5,6 +5,8 @@ import api from '../../api';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 import Select from 'react-select';
 import { useAuth } from '../../contexts/auth';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 
 const dlog = (...args) => console.log('[IndicativosDeVenda]', ...args);
@@ -663,6 +665,15 @@ const IndicadoresCards = ({
   const [supervisaoOptions, setSupervisaoOptions] = useState([]);
   const [supervisaoSelecionada, setSupervisaoSelecionada] = useState([]);
   const [mapSupVendedores, setMapSupVendedores] = useState({});
+  const [modalMixAreaAberto,  setModalMixAreaAberto]  = useState(false);
+  const [modalPosAreaAberto,  setModalPosAreaAberto]   = useState(false);
+  const [itensMixArea,        setItensMixArea]         = useState([]);
+  const [clientesPosArea,     setClientesPosArea]      = useState([]);
+  const [loadingMixArea,      setLoadingMixArea]       = useState(false);
+  const [loadingPosArea,      setLoadingPosArea]       = useState(false);
+  const [mostrarNaoVendidosArea, setMostrarNaoVendidosArea] = useState(false);
+  const [mostrarNaoPosArea,   setMostrarNaoPosArea]    = useState(false);
+  const [criterioValorArea,   setCriterioValorArea]    = useState(false);
 
 
   // === evolução base (sem PDV)
@@ -1586,6 +1597,107 @@ let pFin = 0;
 
   }, [dataEscopoAtual, usarPDV, somarArea, user]); // Adicionado somarArea e user nas dependências
 
+  useEffect(() => {
+  if (!modalMixAreaAberto || !rawData) return;
+
+  const escopo = rawData?.escopo_rotas || {};
+  const isGerente = Boolean(escopo.e_gerente);
+  const vendedoresList = escopo.vendedores_escopo || [];
+
+  // Para gerente com filtro ativo, usa só vendedores das áreas selecionadas
+  let vendedores = vendedoresList;
+  if (isGerente && supervisaoSelecionada?.length > 0) {
+    const areas = escopo.areas_supervisao || [];
+    const idsSel = supervisaoSelecionada.map(s => String(s.value));
+    vendedores = areas
+      .filter(a => idsSel.includes(String(a.cod_area_supervisao)))
+      .flatMap(a => a.vendedores || []);
+  }
+
+  if (!vendedores.length) return;
+
+  setLoadingMixArea(true);
+  api.get('/indicadores/mix-itens-area/', {
+    params: {
+      de:          periodoSelecionado?.de,
+      ate:         periodoSelecionado?.ate,
+      vendedores:  vendedores.join(','),
+      modo:        mostrarNaoVendidosArea ? "nao_vendidos" : "vendidos",
+      criterio:    criterioValorArea ? "valor" : "qtd",
+      ordem:       "top",
+    }
+  })
+    .then(res => setItensMixArea(res.data?.itens || []))
+    .catch(() => setItensMixArea([]))
+    .finally(() => setLoadingMixArea(false));
+
+}, [modalMixAreaAberto, mostrarNaoVendidosArea, criterioValorArea, rawData, supervisaoSelecionada, periodoSelecionado]);
+
+useEffect(() => {
+  if (!modalPosAreaAberto || !rawData) return;
+
+  const escopo = rawData?.escopo_rotas || {};
+  let vendedores = escopo.vendedores_escopo || [];
+
+  if (Boolean(escopo.e_gerente) && supervisaoSelecionada?.length > 0) {
+    const areas = escopo.areas_supervisao || [];
+    const idsSel = supervisaoSelecionada.map(s => String(s.value));
+    vendedores = areas
+      .filter(a => idsSel.includes(String(a.cod_area_supervisao)))
+      .flatMap(a => a.vendedores || []);
+  }
+
+  if (!vendedores.length) return;
+
+  setLoadingPosArea(true);
+  api.get('/indicadores/clientes-positivacao-area/', {
+    params: {
+      de:          periodoSelecionado?.de,
+      ate:         periodoSelecionado?.ate,
+      vendedores:  vendedores.join(','),
+      positivados: mostrarNaoPosArea ? "false" : "true",
+    }
+  })
+    .then(res => setClientesPosArea(res.data?.clientes || []))
+    .catch(() => setClientesPosArea([]))
+    .finally(() => setLoadingPosArea(false));
+
+}, [modalPosAreaAberto, mostrarNaoPosArea, rawData, supervisaoSelecionada, periodoSelecionado]);
+
+const exportarMixAreaPDF = () => {
+  const doc = new jsPDF();
+  autoTable(doc, {
+    head: [mostrarNaoVendidosArea ? ['#', 'Produto'] : ['#', 'Produto', 'Qtd', 'Valor (R$)', '%']],
+    body: itensMixArea.map((item, i) => {
+      const base = [i + 1, item.Material || `Cod: ${item.CodMaterial}`];
+      if (!mostrarNaoVendidosArea) {
+        base.push(
+          Number(item.QtdItens).toLocaleString('pt-BR'),
+          Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+          `${criterioValorArea ? (item.PercValor ?? 0) : (item.PercQtd ?? 0)}%`,
+        );
+      }
+      return base;
+    }),
+    startY: 40,
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [124, 58, 237] },
+  });
+  doc.save(`mix_area_${periodoSelecionado?.de}.pdf`);
+};
+
+const exportarPosAreaPDF = () => {
+  const doc = new jsPDF();
+  autoTable(doc, {
+    head: [['#', 'Cliente', 'Rota']],
+    body: clientesPosArea.map((c, i) => [i + 1, c.Cliente, c.Rota]),
+    startY: 40,
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: mostrarNaoPosArea ? [239, 68, 68] : [34, 197, 94] },
+  });
+  doc.save(`positivacao_area_${periodoSelecionado?.de}.pdf`);
+};
+
 
   // ====== alternância de escopo ======
   const handleToggleArea = () => {
@@ -2180,6 +2292,7 @@ setMixVariacao(String(mixReal - metaMixFinal));
             subtitle2=" Cobertura"
             variation={positivadoVariacao}
             className="card-positivado"
+            onDetailClick={() => setModalPosAreaAberto(true)}
           />
 
           <Card
@@ -2192,9 +2305,273 @@ setMixVariacao(String(mixReal - metaMixFinal));
             subtitle2=" Cobertura"
             variation={mixVariacao ?? '...'}
             className="card-mix"
+            onDetailClick={() => setModalMixAreaAberto(true)}
           />
         </div>
       )}
+        {modalMixAreaAberto && (
+  <div style={{
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 1000,
+  }}>
+    <div style={{
+      background: '#fff', borderRadius: '12px', padding: '1.5rem',
+      width: '90%', maxWidth: '600px', maxHeight: '80vh',
+      display: 'flex', flexDirection: 'column', gap: '1rem',
+    }}>
+      {/* Cabeçalho */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0 }}>
+          {mostrarNaoVendidosArea ? '❌ Não Vendidos' : '✅ Vendidos'} — Mix
+          <span style={{ fontSize: '0.875rem', fontWeight: 400, color: '#888', marginLeft: 8 }}>
+            ({itensMixArea.length} produtos)
+          </span>
+        </h3>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button
+            onClick={exportarMixAreaPDF}
+            style={{
+              background: '#7c3aed', color: '#fff', border: 'none',
+              borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem'
+            }}
+          >
+            📄 Exportar PDF
+          </button>
+          <button onClick={() => setModalMixAreaAberto(false)}
+            style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {/* Toggle mais/menos vendidos */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span style={{
+              color: mostrarNaoVendidosArea ? '#aaa' : '#22c55e',
+              fontWeight: mostrarNaoVendidosArea ? 400 : 600,
+              fontSize: '0.875rem'
+            }}>
+              ✅ Vendidos
+            </span>
+            <div onClick={() => setMostrarNaoVendidosArea(v => !v)}
+              style={{
+                width: '44px', height: '24px', borderRadius: '999px', cursor: 'pointer',
+                background: mostrarNaoVendidosArea ? '#ef4444' : '#22c55e',
+                position: 'relative', transition: 'background 0.2s',
+              }}>
+              <div style={{
+                position: 'absolute', top: '3px',
+                left: mostrarNaoVendidosArea ? '23px' : '3px',
+                width: '18px', height: '18px', borderRadius: '50%',
+                background: '#fff', transition: 'left 0.2s',
+              }} />
+            </div>
+            <span style={{
+              color: mostrarNaoVendidosArea ? '#ef4444' : '#aaa',
+              fontWeight: mostrarNaoVendidosArea ? 600 : 400,
+              fontSize: '0.875rem'
+            }}>
+              ❌ Não Vendidos
+            </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span style={{ fontSize: '0.875rem', color: criterioValorArea ? '#aaa' : '#1e88e5', fontWeight: criterioValorArea ? 400 : 600 }}>
+              📦 Quantidade
+            </span>
+            <div onClick={() => setCriterioValorArea(v => !v)}
+              style={{
+                width: '44px', height: '24px', borderRadius: '999px', cursor: 'pointer',
+                background: criterioValorArea ? '#1e88e5' : '#9ca3af',
+                position: 'relative', transition: 'background 0.2s',
+              }}>
+              <div style={{
+                position: 'absolute', top: '3px',
+                left: criterioValorArea ? '23px' : '3px',
+                width: '18px', height: '18px', borderRadius: '50%',
+                background: '#fff', transition: 'left 0.2s',
+              }} />
+            </div>
+            <span style={{ fontSize: '0.875rem', color: criterioValorArea ? '#1e88e5' : '#aaa', fontWeight: criterioValorArea ? 600 : 400 }}>
+              💰 Valor
+            </span>
+      </div>
+
+      {/* Lista */}
+      <div style={{ overflowY: 'auto', flex: 1 }}>
+        {loadingMixArea ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+            Carregando...
+          </div>
+        ) : itensMixArea.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+            Nenhum item encontrado.
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <thead>
+              <tr style={{ background: '#f3e8ff', textAlign: 'left' }}>
+                <th style={{ padding: '8px' }}>#</th>
+                <th style={{ padding: '8px' }}>Produto</th>
+                {!mostrarNaoVendidosArea && (
+                  <>
+                    <th style={{ padding: '8px', textAlign: 'right',
+                                color: criterioValorArea ? '#aaa' : '#7c3aed', fontWeight: criterioValorArea ? 400 : 700 }}>
+                      Qtd {!criterioValorArea && '▼'}
+                    </th>
+                    <th style={{ padding: '8px', textAlign: 'right',
+                                color: criterioValorArea ? '#7c3aed' : '#aaa', fontWeight: criterioValorArea ? 700 : 400 }}>
+                      Valor {criterioValorArea && '▼'}
+                    </th>
+                </>)}
+                <th style={{ padding: '8px', textAlign: 'right', color: '#7c3aed' }}>%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itensMixArea.map((item, i) => (
+                <tr key={item.CodMaterial}
+                  style={{ borderBottom: '1px solid #eee', background: i % 2 === 0 ? '#faf5ff' : '#fff' }}>
+                  <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
+                  <td style={{ padding: '6px 8px' }}>{item.Material || `Cod: ${item.CodMaterial}`}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right',
+                              fontWeight: criterioValorArea ? 400 : 700,
+                              color: criterioValorArea ? '#555' : '#000' }}>
+                    {Number(item.QtdItens).toLocaleString('pt-BR')}
+                  </td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right',
+                              fontWeight: criterioValorArea ? 700 : 400,
+                              color: criterioValorArea ? '#000' : '#555' }}>
+                    {Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', color: '#7c3aed', fontWeight: 500 }}>
+                      {criterioValorArea
+                        ? `${Number(item.PercValor || 0).toFixed(1)}%`
+                        : `${Number(item.PercQtd   || 0).toFixed(1)}%`
+                      }
+                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
+{modalPosAreaAberto && (
+  <div style={{
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 1000,
+  }}>
+    <div style={{
+      background: '#fff', borderRadius: '12px', padding: '1.5rem',
+      width: '90%', maxWidth: '600px', maxHeight: '80vh',
+      display: 'flex', flexDirection: 'column', gap: '1rem',
+    }}>
+      {/* Cabeçalho */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0 }}>
+          {mostrarNaoPosArea ? '❌ Não Positivados' : '✅ Positivados'}
+          <span style={{ fontSize: '0.875rem', fontWeight: 400, color: '#888', marginLeft: 8 }}>
+            ({clientesPosArea.length} clientes)
+          </span>
+        </h3>
+        <button onClick={() => setModalPosAreaAberto(false)}
+          style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+          ✕
+        </button>
+                    <button
+              onClick={exportarPosAreaPDF}
+              style={{
+                background: mostrarNaoPosArea ? '#ef4444' : '#22c55e',
+                color: '#fff', border: 'none', borderRadius: '6px',
+                padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem'
+              }}
+            >
+              📄 Exportar PDF
+            </button>
+        </div>
+
+      {/* Toggle positivados / não positivados */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <span style={{
+          fontSize: '0.875rem',
+          color: mostrarNaoPosArea ? '#aaa' : '#22c55e',
+          fontWeight: mostrarNaoPosArea ? 400 : 600
+        }}>
+          ✅ Positivados
+        </span>
+        <div onClick={() => setMostrarNaoPosArea(v => !v)}
+          style={{
+            width: '44px', height: '24px', borderRadius: '999px', cursor: 'pointer',
+            background: mostrarNaoPosArea ? '#ef4444' : '#22c55e',
+            position: 'relative', transition: 'background 0.2s',
+          }}>
+          <div style={{
+            position: 'absolute', top: '3px',
+            left: mostrarNaoPosArea ? '23px' : '3px',
+            width: '18px', height: '18px', borderRadius: '50%',
+            background: '#fff', transition: 'left 0.2s',
+          }} />
+        </div>
+        <span style={{
+          fontSize: '0.875rem',
+          color: mostrarNaoPosArea ? '#ef4444' : '#aaa',
+          fontWeight: mostrarNaoPosArea ? 600 : 400
+        }}>
+          ❌ Não Positivados
+        </span>
+      </div>
+
+      {/* Lista */}
+      <div style={{ overflowY: 'auto', flex: 1 }}>
+        {loadingPosArea ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+            Carregando...
+          </div>
+        ) : clientesPosArea.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+            Nenhum cliente encontrado.
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <thead>
+              <tr style={{ background: mostrarNaoPosArea ? '#fee2e2' : '#dcfce7', textAlign: 'left' }}>
+                <th style={{ padding: '8px' }}>#</th>
+                <th style={{ padding: '8px' }}>Cliente</th>
+                <th style={{ padding: '8px' }}>Rota</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clientesPosArea.map((cliente, i) => (
+                <tr key={cliente.CodCliente}
+                  style={{
+                    borderBottom: '1px solid #eee',
+                    background: i % 2 === 0
+                      ? (mostrarNaoPosArea ? '#fff5f5' : '#f0fdf4')
+                      : '#fff'
+                  }}>
+                  <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
+                  <td style={{ padding: '6px 8px' }}>
+                    <div style={{ fontWeight: 500 }}>{cliente.Cliente}</div>
+                    {cliente.ClienteFantasia && cliente.ClienteFantasia !== cliente.Cliente && (
+                      <div style={{ fontSize: '0.75rem', color: '#888' }}>{cliente.ClienteFantasia}</div>
+                    )}
+                  </td>
+                  <td style={{ padding: '6px 8px', color: '#555', fontSize: '0.8rem' }}>
+                    {cliente.Rota}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 };

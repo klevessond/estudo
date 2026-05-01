@@ -970,7 +970,7 @@ def buscar_itens_mix_por_vendedor(
     cod_vendedor: int,
     ordem: str = "top",      # "top" | "bottom"
     criterio: str = "qtd",   # "qtd" | "valor"
-    limite: int = 50,
+    limite= None,
     total_qtd_ref=0.0,    
     total_valor_ref=0.0,  
 ) -> List[Dict[str, Any]]:
@@ -987,7 +987,7 @@ def buscar_itens_mix_por_vendedor(
         DECLARE @P1 datetime2 = '{p1:%Y-%m-%d %H:%M:%S}';
         DECLARE @P2 datetime2 = '{p2:%Y-%m-%d %H:%M:%S}';
 
-        SELECT TOP {limite}
+        SELECT 
             M.CodMaterial,
             M.Material,
             SUM(PVI.Quantidade * PVI.QtdEmbalagem)                              AS QtdItens,
@@ -1094,7 +1094,7 @@ def buscar_itens_nao_vendidos_por_vendedor(
     data_inicio,
     data_fim,
     cod_vendedor: int,
-    limite: int = 50,
+    limite= None,
 ) -> List[Dict[str, Any]]:
     """
     Retorna produtos do catálogo (MaterialComissao) que NÃO foram vendidos
@@ -1137,4 +1137,70 @@ def buscar_itens_nao_vendidos_por_vendedor(
     for r in rows:
         r["Material"] = (r.get("Material") or "").strip()
         r["vendido"]  = False
+    return rows
+
+def buscar_clientes_positivacao_lista(
+    data_inicio,
+    data_fim,
+    cod_vendedor: int,
+    apenas_positivados: bool = True,
+) -> List[Dict[str, Any]]:
+
+    p1, p2 = _dt_bounds(data_inicio, data_fim)
+
+    join_type   = "INNER" if apenas_positivados else "LEFT"
+    where_npos  = "" if apenas_positivados else "WHERE CP.CodCliente IS NULL"
+
+    sql = f"""
+        DECLARE @P1 datetime2 = '{p1:%Y-%m-%d %H:%M:%S}';
+        DECLARE @P2 datetime2 = '{p2:%Y-%m-%d %H:%M:%S}';
+
+        WITH ClientesDaRota AS (
+            SELECT DISTINCT
+                C.CodCliente,
+                C.Cliente,
+                C.ClienteFantasia,
+                R.CodRota,
+                R.Rota
+            FROM Funcionario F
+            INNER JOIN AreaVenda AV ON F.CodFuncionario = AV.CodVendedor
+            INNER JOIN Rota R       ON AV.CodAreaVenda  = R.CodAreaVenda
+            INNER JOIN Cliente C    ON C.CodRota        = R.CodRota
+            WHERE F.CodFuncionario = {int(cod_vendedor)}
+              AND C.Ativo     = 1
+              AND C.AtivoAuto = 1
+              AND C.ECliente  = 1
+              AND R.Ativa     = 1
+        ),
+        ClientesPositivados AS (
+            SELECT DISTINCT PV.CodCliente
+            FROM PedidoVenda PV
+            INNER JOIN PedidoVendaItens PVI ON PV.CodPedidoVenda     = PVI.CodPedidoVenda
+            INNER JOIN Material M           ON PVI.CodMaterial        = M.CodMaterial
+            INNER JOIN NaturezaOperacao N   ON PV.CodNaturezaOperacao = N.CodNaturezaOperacao
+            WHERE PV.CodVendedor  = {int(cod_vendedor)}
+              AND PV.Status       = 0
+              AND N.Venda         = 1
+              AND M.EmbRetornavel = 0
+              AND PV.DataVenda   >= @P1
+              AND PV.DataVenda    < @P2
+        )
+        SELECT
+            CR.CodCliente,
+            CR.Cliente,
+            CR.ClienteFantasia,
+            CR.Rota,
+            CR.CodRota,
+            CASE WHEN CP.CodCliente IS NOT NULL THEN 1 ELSE 0 END AS Positivado
+        FROM ClientesDaRota CR
+        {join_type} JOIN ClientesPositivados CP ON CR.CodCliente = CP.CodCliente
+        {where_npos}
+        ORDER BY CR.Rota, CR.Cliente
+    """
+    rows = query_all(sql)
+    for r in rows:
+        r["Cliente"]         = (r.get("Cliente")         or "").strip()
+        r["ClienteFantasia"] = (r.get("ClienteFantasia") or "").strip()
+        r["Rota"]            = (r.get("Rota")            or "").strip()
+        r["positivado"]      = bool(r.get("Positivado", 0))
     return rows
