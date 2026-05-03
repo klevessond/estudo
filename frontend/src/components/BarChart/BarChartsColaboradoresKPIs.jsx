@@ -20,8 +20,14 @@ function toPct(num, den) {
   return (n / d) * 100;
 }
 
-const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [] }) => {
+const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [], onModoChange }) => {
   const [modo, setModo] = useState('financeiro'); // 'financeiro' | 'positivacao' | 'peso' | 'mix'
+
+    // Quando modo muda, avisa o pai
+  const handleModo = (novoModo) => {
+    setModo(novoModo);
+    onModoChange?.(novoModo);
+  };
 
   // Map objetivos por vendedor_id (string) para lookup rápido
   const objetivosMap = useMemo(() => {
@@ -148,25 +154,25 @@ const BarChartsColaboradoresKPIs = ({ dados = [], objetivos = [] }) => {
       <div className="kpis-toolbar">
         <div className="kpis-tabs">
           <button
-            onClick={() => setModo('financeiro')}
+            onClick={() => handleModo('financeiro')}
             className={`mode-btn ${modo === 'financeiro' ? 'active' : ''}`}
           >
             Financeiro %
           </button>
           <button
-            onClick={() => setModo('positivacao')}
+            onClick={() => handleModo('positivacao')}
             className={`mode-btn ${modo === 'positivacao' ? 'active' : ''}`}
           >
             Positivação %
           </button>
           <button
-            onClick={() => setModo('peso')}
+            onClick={() => handleModo('peso')}
             className={`mode-btn ${modo === 'peso' ? 'active' : ''}`}
           >
             Peso %
           </button>
           <button
-            onClick={() => setModo('mix')}
+            onClick={() => handleModo('mix')}
             className={`mode-btn ${modo === 'mix' ? 'active' : ''}`}
           >
             Mix %

@@ -34,6 +34,7 @@ const IndicativosTabelaVendedor = ({
   pdvPorVendedor = [],
   vendedoresPermitidosTabela = [],
   isPdvLoading = false,
+   modoKPI = 'financeiro',
 }) => {
   const [globalFilter, setGlobalFilter] = useState('');
   const [baseData, setBaseData] = useState([]); // dados crus vindos da API
@@ -246,34 +247,61 @@ useEffect(() => {
   }, [baseData, objetivoFinanceiroMap, usarPDV, pdvMap, onDadosAtualizados]);
 
   // Colunas da tabela — ordem: Nome, Objetivo, Faturado, A Faturar, Alocado, Cobertura, Variação, Mix
-  const columns = useMemo(
-    () => [
-      {
-        accessorKey: 'colaborador',
-        header: 'Colaborador',
-        cell: (info) => {
-          const full = String(info.getValue() ?? '').trim();
-          if (!full) return '';
+const columns = useMemo(() => {
+  // ── Coluna Colaborador — idêntica ao original ──────────────────
+  const colColaborador = {
+    accessorKey: 'colaborador',
+    header: 'Colaborador',
+    cell: (info) => {
+      const full = String(info.getValue() ?? '').trim();
+      if (!full) return '';
+      const parts = full.split(/\s+/);
+      if (parts[0].toUpperCase() === 'FILIAL' && parts.length > 1) return parts[1];
+      return parts[0];
+    },
+  };
 
-          const parts = full.split(/\s+/);
+  // ── Coluna Mix — idêntica ao original ──────────────────────────
+  const colMix = {
+    accessorKey: 'mix',
+    header: 'Mix (Qtd. Produtos)',
+    cell: (info) => {
+      const temMixPDV = usarPDV && info.row.original.mix_pdv > 0;
+      return (
+        <span style={{ fontWeight: 600 }}>
+          {Number(info.getValue() || 0)} itens
+          {temMixPDV && (
+            <span style={{ fontSize: '10px', color: '#1e88e5', marginLeft: 4 }}>
+              ● PDV
+            </span>
+          )}
+        </span>
+      );
+    },
+  };
 
-          // Se começar com "FILIAL", mostra o segundo nome
-          if (parts[0].toUpperCase() === 'FILIAL' && parts.length > 1) {
-            return parts[1];
-          }
+  // ── Helper de % cobertura colorido ─────────────────────────────
+  const badgePerc = (v) => {
+    const cls = v < 25 ? 'perc-lt25' : v < 50 ? 'perc-lt50' : v < 75 ? 'perc-lt75' : 'perc-gte100';
+    return <span className={`badge ${cls}`}>{Number(v).toFixed(1)}%</span>;
+  };
 
-          // Caso padrão: primeiro nome
-          return parts[0];
-        },
-      },
+  const objMap = new Map(
+    (objetivosVendedores || []).map(o => [
+      String(o.vendedor_id ?? o.codFuncionario),
+      o,
+    ])
+  );
+  const getObj = (row) => objMap.get(String(row.codFuncionario)) || {};
+
+  // ── MODO FINANCEIRO — idêntico ao original ─────────────────────
+  if (!modoKPI || modoKPI === 'financeiro') {
+    return [
+      colColaborador,
       {
         accessorKey: 'objetivoFinanceiro',
         header: 'Objetivo R$',
-        cell: (info) =>
-          Number(info.getValue() || 0).toLocaleString('pt-BR', {
-            style: 'currency',
-            currency: 'BRL',
-          }),
+        cell: (info) => Number(info.getValue() || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
         sortingFn: 'auto',
       },
       {
@@ -308,42 +336,144 @@ useEffect(() => {
       {
         accessorKey: 'percVenda',
         header: '% Cobertura',
-        cell: (info) => {
-          const v = Number(info.getValue() || 0);
-          const cls =
-            v < 25 ? 'perc-lt25' : v < 50 ? 'perc-lt50' : v < 75 ? 'perc-lt75' : 'perc-gte100';
-          return <span className={`badge ${cls}`}>{v.toFixed(2)}%</span>;
-        },
+        cell: (info) => badgePerc(Number(info.getValue() || 0)),
       },
       {
         accessorKey: 'variacao',
         header: 'Variação R$',
         cell: (info) => {
           const v = Number(info.getValue() || 0);
-          const cls = v < 0 ? 'var-neg' : 'var-pos';
-          return <span className={`badge ${cls}`}>{v.toLocaleString('pt-BR')}</span>;
+          return <span className={`badge ${v < 0 ? 'var-neg' : 'var-pos'}`}>{v.toLocaleString('pt-BR')}</span>;
+        },
+      },
+      colMix,
+    ];
+  }
+
+  // ── MODO POSITIVAÇÃO ───────────────────────────────────────────
+  if (modoKPI === 'positivacao') {
+    return [
+      colColaborador,
+      {
+        id: 'objPos',
+        header: 'Objetivo Pos.',
+        cell: ({ row }) => {
+          const obj = getObj(row.original);
+          return <span>{Number(obj.objetivo_positivacao || 0)} clientes</span>;
         },
       },
       {
-        accessorKey: 'mix',
-        header: 'Mix (Qtd. Produtos)',
-        cell: (info) => {
-          const temMixPDV = usarPDV && info.row.original.mix_pdv > 0;
-          return (
-            <span style={{ fontWeight: 600 }}>
-              {Number(info.getValue() || 0)} itens
-              {temMixPDV && (
-                <span style={{ fontSize: '10px', color: '#1e88e5', marginLeft: 4 }}>
-                  ● PDV
-                </span>
-              )}
-            </span>
-          );
+        accessorKey: 'qtdClientes',
+        header: 'Positivados',
+        cell: (info) => <span style={{ fontWeight: 600 }}>{Number(info.getValue() || 0)} clientes</span>,
+      },
+      {
+        id: 'percPos',
+        header: '% Cobertura',
+        cell: ({ row }) => {
+          const obj = getObj(row.original);
+          const pct = obj.objetivo_positivacao > 0
+            ? (Number(row.original.qtdClientes || 0) / obj.objetivo_positivacao) * 100
+            : 0;
+          return badgePerc(pct);
         },
       },
-    ],
-   [isPdvLoading, usarPDV]
-  );
+      {
+        id: 'varPos',
+        header: 'Variação',
+        cell: ({ row }) => {
+          const obj = getObj(row.original);
+          const v = Number(row.original.qtdClientes || 0) - Number(obj.objetivo_positivacao || 0);
+          return <span className={`badge ${v < 0 ? 'var-neg' : 'var-pos'}`}>{v}</span>;
+        },
+      },
+      colMix,
+    ];
+  }
+
+  // ── MODO PESO ──────────────────────────────────────────────────
+  if (modoKPI === 'peso') {
+    return [
+      colColaborador,
+      {
+        id: 'objPeso',
+        header: 'Objetivo Kg',
+        cell: ({ row }) => {
+          const obj = getObj(row.original);
+          return <span>{Number(obj.objetivo_peso || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</span>;
+        },
+      },
+      {
+        accessorKey: 'pesototalvendido',
+        header: 'Peso Vendido',
+        cell: (info) => (
+          <span style={{ fontWeight: 600 }}>
+            {Number(info.getValue() || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg
+          </span>
+        ),
+      },
+      {
+        id: 'percPeso',
+        header: '% Cobertura',
+        cell: ({ row }) => {
+          const obj = getObj(row.original);
+          const pct = obj.objetivo_peso > 0
+            ? (Number(row.original.pesototalvendido || 0) / obj.objetivo_peso) * 100
+            : 0;
+          return badgePerc(pct);
+        },
+      },
+      {
+        id: 'varPeso',
+        header: 'Variação Kg',
+        cell: ({ row }) => {
+          const obj = getObj(row.original);
+          const v = Number(row.original.pesototalvendido || 0) - Number(obj.objetivo_peso || 0);
+          return <span className={`badge ${v < 0 ? 'var-neg' : 'var-pos'}`}>{v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>;
+        },
+      },
+      colMix,
+    ];
+  }
+
+  // ── MODO MIX ───────────────────────────────────────────────────
+  if (modoKPI === 'mix') {
+    return [
+      colColaborador,
+      {
+        id: 'objMix',
+        header: 'Objetivo Mix',
+        cell: ({ row }) => {
+          const obj = getObj(row.original);
+          return <span>{Number(obj.objetivo_mix || 0)} itens</span>;
+        },
+      },
+      colMix,
+      {
+        id: 'percMix',
+        header: '% Cobertura',
+        cell: ({ row }) => {
+          const obj = getObj(row.original);
+          const pct = obj.objetivo_mix > 0
+            ? (Number(row.original.mix || 0) / obj.objetivo_mix) * 100
+            : 0;
+          return badgePerc(pct);
+        },
+      },
+      {
+        id: 'varMix',
+        header: 'Variação',
+        cell: ({ row }) => {
+          const obj = getObj(row.original);
+          const v = Number(row.original.mix || 0) - Number(obj.objetivo_mix || 0);
+          return <span className={`badge ${v < 0 ? 'var-neg' : 'var-pos'}`}>{v} itens</span>;
+        },
+      },
+    ];
+  }
+
+  return [colColaborador, colMix]; // fallback
+}, [modoKPI, isPdvLoading, usarPDV, objetivosVendedores]);
 
   const table = useReactTable({
     data,

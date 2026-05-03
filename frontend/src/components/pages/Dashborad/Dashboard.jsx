@@ -39,6 +39,7 @@ const Dashboard = () => {
   const { can } = useAuth();
 
   const [modo, setModo] = useState('geral'); // 'geral' | 'individual'
+  const [modoKPI, setModoKPI] = useState('financeiro');
   const [colaboradorSelecionado, setColaboradorSelecionado] = useState(null);
   const [objetivosVendedores, setObjetivosVendedores] = useState([]);
   const [periodoSelecionado, setPeriodoSelecionado] = useState(null);
@@ -287,6 +288,7 @@ const Dashboard = () => {
               <BarChartsColaboradoresKPIs
                 dados={vendasColaboradores}
                 objetivos={objetivosVendedores}
+                 onModoChange={setModoKPI}
               />
             )}
 
@@ -318,6 +320,7 @@ const Dashboard = () => {
                 onSelecionarColaborador={(colab) => {
                   setColaboradorSelecionado(colab);
                   setModo('individual');
+                  
                 }}
                 onDadosAtualizados={setVendasColaboradores}
                 onObjetivosRecebidos={setObjetivosVendedores}
@@ -326,7 +329,8 @@ const Dashboard = () => {
                 usarPDV={usarPDV}
                 pdvPorVendedor={pdvPorVendedor}
                 vendedoresPermitidosTabela={vendedoresPermitidosTabela}
-                isPdvLoading={isPdvLoading} 
+                isPdvLoading={isPdvLoading}
+                modoKPI={modoKPI}
               />
             )}
           </section>
