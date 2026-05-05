@@ -231,6 +231,12 @@ useEffect(() => {
   const objetivoMix = dadosColaborador?.objetivo_mix || 0;
   const porcentagemMix = objetivoMix > 0 ? (mixRealizado / objetivoMix) * 100 : 0;
 
+  console.log('[CardsColaborador] campos AA:', {
+  Ano_anterior_ValorLiquido: colaborador?.Ano_anterior_ValorLiquido,
+  Ano_anterior_mes_ValorLiquido: colaborador?.Ano_anterior_mes_ValorLiquido,
+  faturado: colaborador?.faturado,
+});
+
 
 const alocado = colaborador.alocado || 0;
 
@@ -469,6 +475,43 @@ const alocado = colaborador.alocado || 0;
           <div className="card" style={{ background: '#eafaf1' }}>
             <div className="card-title">Faturado:</div>
             <div>R$ {faturado.toLocaleString('pt-BR')}</div>
+               {/* Ano anterior e evolução */}
+            {(() => {
+                const aaValor = Number(
+                  colaborador?.Ano_anterior_ValorLiquido ||       // mesmo período ← correto para evolução
+                  colaborador?.Ano_anterior_mes_ValorLiquido ||   // mês completo como fallback
+                  0
+                );
+              const atual   = Number(colaborador?.faturado || colaborador?.ValorLiquido || 0);
+              const evolPct = aaValor > 0 ? ((atual - aaValor) / aaValor) * 100 : null;
+              const positivo = evolPct !== null && evolPct >= 0;
+
+              if (!aaValor) return null;
+
+              return (
+                <div style={{
+                  marginTop: '6px',
+                  padding: '4px 8px',
+                  background: 'rgba(0,0,0,0.05)',
+                  borderRadius: '6px',
+                  fontSize: '0.75rem',
+                }}>
+                  <div style={{ color: '#555', marginBottom: '2px' }}>
+                    Ano Anterior: <strong>
+                      {aaValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </strong>
+                  </div>
+                  {evolPct !== null && (
+                    <div style={{ color: positivo ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+                      {positivo ? '▲' : '▼'} {Math.abs(evolPct).toFixed(1)}% vs AA
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+
+
             {objetivoFinanceiro > 0 && (
               <>
                 <div className="progress-container">

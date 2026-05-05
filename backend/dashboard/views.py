@@ -2166,6 +2166,39 @@ class VendasPorVendedorView(APIView):
             except Exception as e:
                 print(f"[DEBUG] Erro ao calcular mix_pdv por vendedor: {e}")
         # ────────────────────────────────────────────────────────────────
+        # ── Linha 2168 — ADICIONAR após o bloco de mix_pdv (────────────) ──
+
+            # Ano anterior por vendedor — envolvido em try para não quebrar a view
+            _aa_by_cod = {}
+            _aa_mes_by_cod = {}
+            try:
+                _de_dt  = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+                _ate_dt = datetime.strptime(data_fim,    "%Y-%m-%d").date()
+                _aa_ini = _de_dt.replace(year=_de_dt.year - 1)
+                from datetime import date
+                _hoje_aa = date.today().replace(year=date.today().year - 1)
+                _aa_fim_candidato = _ate_dt.replace(year=_ate_dt.year - 1)
+                _aa_fim = min(_aa_fim_candidato, _hoje_aa)
+
+                # até hoje do AA
+                _res_aa = buscar_vendas_por_vendedor(_aa_ini.strftime("%Y-%m-%d"), _aa_fim.strftime("%Y-%m-%d"))
+                for _it in (_res_aa.get("vendas_por_vendedor") or []):
+                    _cod = to_int(_it.get("codcampo"))
+                    if _cod:
+                        _aa_by_cod[_cod] = float(_it.get("ValorLiquido") or 0)
+
+                # mês completo do AA — calcula último dia sem depender de função externa
+                import calendar
+                _aa_mes_ultimo = calendar.monthrange(_aa_ini.year, _aa_ini.month)[1]
+                _aa_mes_fim = _aa_ini.replace(day=_aa_mes_ultimo)
+                _res_aa_mes = buscar_vendas_por_vendedor(_aa_ini.strftime("%Y-%m-%d"), _aa_mes_fim.strftime("%Y-%m-%d"))
+                for _it in (_res_aa_mes.get("vendas_por_vendedor") or []):
+                    _cod = to_int(_it.get("codcampo"))
+                    if _cod:
+                        _aa_mes_by_cod[_cod] = float(_it.get("ValorLiquido") or 0)
+            except Exception as _e:
+                print(f"[DEBUG] Erro ao calcular AA para tabela: {_e}")
+            # ────────────────────────────────────────────────────────────────
 
         print(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
 
@@ -2183,6 +2216,8 @@ class VendasPorVendedorView(APIView):
             # Adiciona as novas chaves no dicionário do vendedor que vai para o FrontEnd
             vendedor["cupons_quantidade"] = dados_cupom["quantidade"]
             vendedor["mix_pdv_realizado"] = _mix_pdv_por_vendedor.get(codcampo_int, 0)
+            vendedor["Ano_anterior_ValorLiquido"]     = _aa_by_cod.get(codcampo_int, 0)     
+            vendedor["Ano_anterior_mes_ValorLiquido"] = _aa_mes_by_cod.get(codcampo_int, 0)
             # ── venda/dia: PDV conta sábado, rota só seg-sex ──
 
             print(
