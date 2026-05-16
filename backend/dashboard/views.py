@@ -44,6 +44,7 @@ from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 from dashboard.services.indicadores.pdv_mix_service import buscar_itens_nao_vendidos_por_ug ,buscar_mix_pdv_por_perfil, buscar_itens_mix_por_ug
 from dashboard.services.indicadores.cache_aa import get_cache_aa, set_cache_aa
+from dashboard.services.indicadores.cache_mes import get_cache_mes, set_cache_mes, periodo_cacheavel  # útil para logs/debug
 
 # Create your views here.
 
@@ -563,15 +564,20 @@ class IndicadoresView(APIView):
         eh_gerente = getattr(ctx, "is_supervisor", False) and rotas_info.get("e_gerente")
 
         # Se for GERENTE, já manda os vendedores para o SQL
+        _esc_vend = sorted(vendedores_set) if vendedores_set else []
+ 
         if eh_gerente and vendedores_set:
-            vendido = buscar_vendas_por_vendedor(
-                data_inicio,
-                data_fim,
-                cod_vendedores=list(vendedores_set),
-            )
+            vendido = get_cache_mes("vendas_por_vendedor", data_inicio, data_fim, _esc_vend)
+            if vendido is None:
+                vendido = buscar_vendas_por_vendedor(
+                    data_inicio, data_fim, cod_vendedores=list(vendedores_set)
+                )
+                set_cache_mes("vendas_por_vendedor", data_inicio, data_fim, vendido, _esc_vend)
         else:
-            # supervisor “normal”, vendedor, admin etc → mantém o comportamento atual
-            vendido = buscar_vendas_por_vendedor(data_inicio, data_fim)
+            vendido = get_cache_mes("vendas_por_vendedor", data_inicio, data_fim, _esc_vend)
+            if vendido is None:
+                vendido = buscar_vendas_por_vendedor(data_inicio, data_fim)
+                set_cache_mes("vendas_por_vendedor", data_inicio, data_fim, vendido, _esc_vend)
 
         lista = vendido.get("vendas_por_vendedor", []) or []
 
@@ -985,18 +991,36 @@ class IndicadoresView(APIView):
 
 
         #  POSITIVAÇÃO (área)
-        positivacao = buscar_positivacao_por_rota(data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores)
+        _esc_pos = sorted(vendedores) if vendedores else []
+        _rotas_key = sorted(rotas_codigos) if rotas_codigos else []
+ 
+        positivacao = get_cache_mes("positivacao", data_inicio, data_fim, _esc_pos + _rotas_key)
+        if positivacao is None:
+            positivacao = buscar_positivacao_por_rota(
+                data_inicio, data_fim,
+                rotas=rotas_codigos,
+                cod_vendedores=vendedores,
+            )
+            set_cache_mes("positivacao", data_inicio, data_fim, positivacao, _esc_pos + _rotas_key)
         positivacao_realizado_geral = positivacao.get("positivacao_realizado_geral", 0)
         objetivo_positivacao = objetivo.get('objetivo_positivacao', 0)
         percentual_positivacao = safe_divide(positivacao_realizado_geral, objetivo_positivacao) * 100
         variacao_positivacao = positivacao_realizado_geral  - objetivo_positivacao
 
         # MIX (área)
-        dados_mix = buscar_venda_mix(data_inicio, data_fim, cod_vendedores=vendedores)
+        _esc_mix = sorted(vendedores) if vendedores else []
+        dados_mix = get_cache_mes("venda_mix", data_inicio, data_fim, _esc_mix)
+        if dados_mix is None:
+            dados_mix = buscar_venda_mix(data_inicio, data_fim, cod_vendedores=vendedores)
+            set_cache_mes("venda_mix", data_inicio, data_fim, dados_mix, _esc_mix)
         mix_realizado = dados_mix["mix_realizado"]
         
         # Pré-venda (área)
-        prevenda = buscar_pre_venda(data_inicio, data_fim, cod_vendedores=vendedores)
+        _esc_prev = sorted(vendedores) if vendedores else []
+        prevenda = get_cache_mes("pre_venda", data_inicio, data_fim, _esc_prev)
+        if prevenda is None:
+            prevenda = buscar_pre_venda(data_inicio, data_fim, cod_vendedores=vendedores)
+            set_cache_mes("pre_venda", data_inicio, data_fim, prevenda, _esc_prev)
         valor_prevenda = prevenda.get("pre_venda_valor", 0)
         valor_alocado = venda_realizada + valor_prevenda
 
@@ -1105,12 +1129,16 @@ class IndicadoresView(APIView):
 
         # === RUPTURA (Captado) (área) ===
         vendedores_list_int = [_to_int(v) for v in (vendedores or []) if _to_int(v) is not None]
-        if not vendedores_list_int:
-            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=None)
-        elif len(vendedores_list_int) == 1:
-            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=vendedores_list_int[0], cod_vendedores=None)
-        else:
-            ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=vendedores_list_int)
+        _esc_rupt = sorted(vendedores_list_int) if vendedores_list_int else []
+        ruptura_dados = get_cache_mes("ruptura", data_inicio, data_fim, _esc_rupt)
+        if ruptura_dados is None:
+            if not vendedores_list_int:
+                ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=None)
+            elif len(vendedores_list_int) == 1:
+                ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=vendedores_list_int[0], cod_vendedores=None)
+            else:
+                ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=vendedores_list_int)
+            set_cache_mes("ruptura", data_inicio, data_fim, ruptura_dados, _esc_rupt)
 
         #print(f"[DEBUG]RUPTURA ] {ruptura_dados}")
         ruptura_total = 0.0
@@ -1233,8 +1261,34 @@ class IndicadoresView(APIView):
         # =========================================================
         
         # 1. Busca Dados Externos
-        dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
-        dados_positivacao = buscar_positivacao_por_rota(data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores)
+        dados_pdv = get_cache_mes("vendas_pdv", data_inicio, data_fim)
+        if dados_pdv is None:
+            dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
+            set_cache_mes("vendas_pdv", data_inicio, data_fim, dados_pdv)
+
+        # Calcula tem_pdv aqui, antes de usá-lo
+        venda_pdv_total = float(dados_pdv.get("valor_pdv") or 0)
+        peso_pdv_total  = float(dados_pdv.get("peso_pdv") or 0)
+        tem_pdv = venda_pdv_total > 0
+
+        if tem_pdv:
+            dados_cupons_pdv = get_cache_mes("cupons_pdv", data_inicio, data_fim)
+            if dados_cupons_pdv is None:
+                dados_cupons_pdv = buscar_cupons_por_vendedor(data_inicio, data_fim)
+                set_cache_mes("cupons_pdv", data_inicio, data_fim, dados_cupons_pdv)
+        else:
+            dados_cupons_pdv = []
+        _esc_pos = sorted(vendedores) if vendedores else []
+        _rotas_key = sorted(rotas_codigos) if rotas_codigos else []
+ 
+        dados_positivacao  = get_cache_mes("positivacao", data_inicio, data_fim, _esc_pos + _rotas_key)
+        if dados_positivacao  is None:
+            dados_positivacao  = buscar_positivacao_por_rota(
+                data_inicio, data_fim,
+                rotas=rotas_codigos,
+                cod_vendedores=vendedores,
+            )
+            set_cache_mes("positivacao", data_inicio, data_fim, positivacao, _esc_pos + _rotas_key)
        
         # 2. Valores Totais Gerais
         venda_pdv_total = float(dados_pdv.get("valor_pdv") or 0)
@@ -1891,7 +1945,10 @@ class IndicadoresPDV(APIView):
 
         try:
             # período atual (agregado por UnidGestora – sem filtro)
-            dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
+            dados_pdv = get_cache_mes("vendas_pdv", data_inicio, data_fim)
+            if dados_pdv is None:
+                dados_pdv = buscar_vendas_pdv(data_inicio, data_fim)
+                set_cache_mes("vendas_pdv", data_inicio, data_fim, dados_pdv)
             venda_realizada_PDV = float(dados_pdv.get("valor_pdv") or 0)
             peso_realizado_PDV = float(dados_pdv.get("peso_pdv") or 0)
             detalhado_atual = dados_pdv.get("detalhado", [])
@@ -2016,7 +2073,11 @@ class VendasPorVendedorView(APIView):
         print("----------------------------")
 
         # --- 2. BUSCA DADOS NO BANCO (Restaurado - AQUI estava o erro) ---
-        resultado = buscar_vendas_por_vendedor(data_inicio, data_fim)
+        _esc_tabela = []   # sem escopo = todos (a filtragem é feita em memória depois)
+        resultado = get_cache_mes("vendas_por_vendedor", data_inicio, data_fim, _esc_tabela)
+        if resultado is None:
+            resultado = buscar_vendas_por_vendedor(data_inicio, data_fim)
+            set_cache_mes("vendas_por_vendedor", data_inicio, data_fim, resultado, _esc_tabela)
         lista = resultado.get("vendas_por_vendedor", []) or []
 
         print(f"[DEBUG] Total bruto retornado por buscar_vendas_por_vendedor: {len(lista)} vendedores")
@@ -2119,8 +2180,10 @@ class VendasPorVendedorView(APIView):
         print("[DEBUG] Iniciando cálculo de pré-venda…")
 
         chave = f"prevenda_{data_inicio}_{data_fim}"
-        prevenda = buscar_pre_venda(data_inicio, data_fim)
-
+        prevenda = get_cache_mes("pre_venda", data_inicio, data_fim, [])
+        if prevenda is None:
+            prevenda = buscar_pre_venda(data_inicio, data_fim)
+            set_cache_mes("pre_venda", data_inicio, data_fim, prevenda, [])
         prevenda_por_vendedor = defaultdict(float)
         for item in prevenda.get("detalhado", []):
             cod_vend = to_int(item.get("CodVendedor"))
@@ -3007,3 +3070,30 @@ class ClientesPositivacaoAreaView(APIView):
         except Exception:
             logger.exception("[ClientesPositivacaoAreaView] erro")
             return Response({"error": "Erro interno"}, status=500)
+
+class CacheMesAdminView(APIView):
+    """
+    GET  → estatísticas do cache de meses
+    DELETE ?tipo=vendas_pdv → invalida um tipo específico
+    DELETE (sem params) → invalida tudo
+    Acesso restrito a superusuários.
+    """
+    def _check_admin(self, request):
+        if not request.user.is_superuser:
+            return Response({"error": "Acesso restrito."}, status=403)
+        return None
+ 
+    def get(self, request):
+        err = self._check_admin(request)
+        if err: return err
+        from dashboard.services.indicadores.cache_mes import stats_cache_mes
+        return Response(stats_cache_mes())
+ 
+    def delete(self, request):
+        err = self._check_admin(request)
+        if err: return err
+        from dashboard.services.indicadores.cache_mes import invalidar_cache_mes
+        tipo = request.query_params.get("tipo")
+        removidos = invalidar_cache_mes(tipo=tipo)
+        return Response({"removidos": removidos, "tipo": tipo or "ALL"})
+ 
