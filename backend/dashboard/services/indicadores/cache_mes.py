@@ -231,3 +231,104 @@ def stats_cache_mes() -> dict:
     except Exception:
         logger.exception("[cache_mes] erro ao consultar stats")
         return {"total": 0, "por_tipo": {}}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADICIONE estas funções ao final de:
+# backend/dashboard/services/indicadores/cache_mes.py
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# =============================================================================
+# SUBSTITUA a função listar_periodos_cacheados() em:
+# backend/dashboard/services/indicadores/cache_mes.py
+# =============================================================================
+
+def listar_periodos_cacheados() -> list:
+    """
+    Retorna lista de períodos únicos cacheados, agregados por data_ini + data_fim.
+
+    CORREÇÃO: SQLite não suporta ORDER BY dentro de GROUP_CONCAT.
+    A ordenação dos tipos é feita em Python após a query.
+
+    Formato de cada item:
+    {
+        "data_ini":  "2026-01-01",
+        "data_fim":  "2026-01-31",
+        "qtd_tipos": 6,
+        "tipos":     ["cupons_pdv", "positivacao", "pre_venda", ...],
+        "criado_em": "2026-05-16 02:49:57"
+    }
+    """
+    try:
+        with _get_conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    data_ini,
+                    data_fim,
+                    COUNT(*)           AS qtd_tipos,
+                    GROUP_CONCAT(tipo) AS tipos,
+                    MAX(criado_em)     AS criado_em
+                FROM cache_mes
+                GROUP BY data_ini, data_fim
+                ORDER BY data_ini DESC
+                """
+            ).fetchall()
+
+            resultado = []
+            for r in rows:
+                # Ordena os tipos em Python (evita incompatibilidade do SQLite)
+                tipos_raw = r["tipos"] or ""
+                tipos = sorted(t.strip() for t in tipos_raw.split(",") if t.strip())
+
+                resultado.append({
+                    "data_ini":  r["data_ini"],
+                    "data_fim":  r["data_fim"],
+                    "qtd_tipos": r["qtd_tipos"],
+                    "tipos":     tipos,
+                    "criado_em": r["criado_em"],
+                })
+
+            return resultado
+
+    except Exception:
+        logger.exception("[cache_mes] erro ao listar períodos")
+        return []
+
+
+def invalidar_por_periodo(data_ini: str, data_fim: str) -> int:
+    """
+    Remove todas as entradas de um período específico (todos os tipos).
+    Retorna quantidade de linhas removidas.
+    """
+    try:
+        with _get_conn() as conn:
+            cur = conn.execute(
+                "DELETE FROM cache_mes WHERE data_ini = ? AND data_fim = ?",
+                (data_ini, data_fim),
+            )
+            conn.commit()
+            removidos = cur.rowcount
+            logger.info(
+                "[cache_mes] invalidados %d registros período %s→%s",
+                removidos, data_ini, data_fim,
+            )
+            return removidos
+    except Exception:
+        logger.exception("[cache_mes] erro ao invalidar período %s→%s", data_ini, data_fim)
+        return 0
+
+
+def invalidar_por_tipo_e_periodo(tipo: str, data_ini: str, data_fim: str) -> int:
+    """Remove uma entrada específica (tipo + período)."""
+    try:
+        with _get_conn() as conn:
+            cur = conn.execute(
+                "DELETE FROM cache_mes WHERE tipo = ? AND data_ini = ? AND data_fim = ?",
+                (tipo, data_ini, data_fim),
+            )
+            conn.commit()
+            return cur.rowcount
+    except Exception:
+        logger.exception("[cache_mes] erro ao invalidar tipo=%s período %s→%s", tipo, data_ini, data_fim)
+        return 0

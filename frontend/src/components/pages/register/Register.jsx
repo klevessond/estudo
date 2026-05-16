@@ -2,6 +2,7 @@
 import './register.css';
 import { useNavigate } from 'react-router-dom';
 import React, { useEffect, useState, useMemo } from 'react';
+import CacheAdminSection from './CacheAdminSection';
 import api from '../../../api';
 
 const toYYYYMM = (dateObj) => {
@@ -424,6 +425,7 @@ const RegisterObjetivosVendedores = () => {
           {loading ? 'Salvando...' : '💾 Salvar Todas as Metas'}
         </button>
       </div>
+        <CacheAdminSection />
     </div>
   );
 };

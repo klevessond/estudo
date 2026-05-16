@@ -44,7 +44,7 @@ from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_
 from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
 from dashboard.services.indicadores.pdv_mix_service import buscar_itens_nao_vendidos_por_ug ,buscar_mix_pdv_por_perfil, buscar_itens_mix_por_ug
 from dashboard.services.indicadores.cache_aa import get_cache_aa, set_cache_aa
-from dashboard.services.indicadores.cache_mes import get_cache_mes, set_cache_mes, periodo_cacheavel  # útil para logs/debug
+from dashboard.services.indicadores.cache_mes import get_cache_mes, set_cache_mes, periodo_cacheavel,invalidar_cache_mes, invalidar_por_periodo, invalidar_por_tipo_e_periodo, listar_periodos_cacheados, stats_cache_mes # útil para logs/debug
 
 # Create your views here.
 
@@ -3096,4 +3096,91 @@ class CacheMesAdminView(APIView):
         tipo = request.query_params.get("tipo")
         removidos = invalidar_cache_mes(tipo=tipo)
         return Response({"removidos": removidos, "tipo": tipo or "ALL"})
+    permission_classes = [IsAuthenticated]
+ 
+    def _checar_admin(self, request):
+        if not request.user.is_superuser:
+            return Response({"error": "Acesso restrito a administradores."}, status=403)
+        return None
+ 
+    # ── GET ──────────────────────────────────────────────────────────────────
+    def get(self, request):
+        erro = self._checar_admin(request)
+        if erro:
+            return erro
+ 
+        periodos = listar_periodos_cacheados()
+        stats    = stats_cache_mes()
+ 
+        return Response({
+            "stats":    stats,
+            "periodos": periodos,
+        })
+ 
+    # ── DELETE ───────────────────────────────────────────────────────────────
+    def delete(self, request):
+        erro = self._checar_admin(request)
+        if erro:
+            return erro
+ 
+        modo     = request.query_params.get("modo", "tudo")
+        data_ini = request.query_params.get("data_ini")
+        data_fim = request.query_params.get("data_fim")
+        tipo     = request.query_params.get("tipo")
+ 
+        if modo == "tudo":
+            removidos = invalidar_cache_mes()
+            return Response({
+                "ok": True,
+                "modo": "tudo",
+                "removidos": removidos,
+            })
+ 
+        if modo == "periodo":
+            if not data_ini or not data_fim:
+                return Response(
+                    {"error": "Informe data_ini e data_fim para modo=periodo."},
+                    status=400,
+                )
+            removidos = invalidar_por_periodo(data_ini, data_fim)
+            return Response({
+                "ok": True,
+                "modo": "periodo",
+                "data_ini": data_ini,
+                "data_fim": data_fim,
+                "removidos": removidos,
+            })
+ 
+        if modo == "tipo":
+            if not tipo:
+                return Response(
+                    {"error": "Informe tipo para modo=tipo."},
+                    status=400,
+                )
+            removidos = invalidar_cache_mes(tipo=tipo)
+            return Response({
+                "ok": True,
+                "modo": "tipo",
+                "tipo": tipo,
+                "removidos": removidos,
+            })
+ 
+        if modo == "entrada":
+            if not tipo or not data_ini or not data_fim:
+                return Response(
+                    {"error": "Informe tipo, data_ini e data_fim para modo=entrada."},
+                    status=400,
+                )
+            removidos = invalidar_por_tipo_e_periodo(tipo, data_ini, data_fim)
+            return Response({
+                "ok": True,
+                "modo": "entrada",
+                "tipo": tipo,
+                "data_ini": data_ini,
+                "data_fim": data_fim,
+                "removidos": removidos,
+            })
+ 
+        return Response({"error": f"Modo desconhecido: '{modo}'."}, status=400)
+ 
  
