@@ -101,15 +101,15 @@ FROM (
         sum(case NaturezaOperacao.Venda when 1 then PedidoVendaItens.quantidade * PedidoVendaItens.qtdembalagem else 0 end) As Qtd,
         sum(case NaturezaOperacao.Venda when 1 then (PedidoVendaItens.Quantidade * PedidoVendaItens.QtdEmbalagem * Material.VolumeBruto) else 0 end) As Volume,
         sum(case NaturezaOperacao.Venda when 1 then (PedidoVendaItens.Quantidade * PedidoVendaItens.QtdEmbalagem * Material.PesoBruto) else 0 end) As Peso,
-        sum(case NaturezaOperacao.Venda when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / Material.QtdVolume) else 0 end) As QtdEmbalagem,
+        sum(case NaturezaOperacao.Venda when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / NULLIF(Material.QtdVolume, 0)) else 0 end) As QtdEmbalagem,
         case NaturezaOperacao.Venda when 1 then sum(dbo.Round2(PedidoVendaItens.quantidade * (PedidoVendaItens.ValorEmbalagem))) else 0 end As ValorProdutos,
         -- Bonificacao
         sum(case NaturezaOperacao.Bonificacao when 1 then PedidoVendaItens.quantidade * PedidoVendaItens.qtdembalagem else 0 end) As QtdBonificacao,
-        sum(case NaturezaOperacao.Bonificacao when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / Material.QtdVolume) else 0 end) As QtdEmbalagemBonificacao,
+        sum(case NaturezaOperacao.Bonificacao when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / NULLIF(Material.QtdVolume, 0)) else 0 end) As QtdEmbalagemBonificacao,
         case NaturezaOperacao.Bonificacao when 1 then sum(dbo.Round2(PedidoVendaItens.quantidade * (PedidoVendaItens.ValorEmbalagem))) else 0 end As Bonificacao,
         -- Avaria 
         sum(case NaturezaOperacao.Avaria when 1 then dbo.Round2(PedidoVendaItens.quantidade * PedidoVendaItens.qtdembalagem) else 0 end) As QtdAvaria,
-        sum(case NaturezaOperacao.Avaria when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / Material.QtdVolume) else 0 end ) As QtdEmbalagemAvaria,
+        sum(case NaturezaOperacao.Avaria when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / NULLIF(Material.QtdVolume, 0)) else 0 end ) As QtdEmbalagemAvaria,
         case NaturezaOperacao.Avaria when 1 then sum(dbo.Round2(PedidoVendaItens.quantidade * (PedidoVendaItens.ValorEmbalagem))) else 0 end As Avaria,
         0.0 As QtdOutros, 0 As QtdEmbalagemOutros, 0.0 As Outros,
         sum(case NaturezaOperacao.Venda when 1 then dbo.Round2(PedidoVendaItens.DescontoRef + (PedidoVendaItens.Desconto * PedidoVendaItens.quantidade)) else 0 end) As Desconto,
@@ -141,7 +141,7 @@ FROM (
             ) Tb
         ) AReceber2,
         (
-            Select sum(dbo.Round2((case Nat3.Venda when 1 then dbo.Round2(PVI3.quantidade * (PVI3.valorembalagem - PVI3.Desconto)) else 0 end)*Coalesce((CR3.ValorRecebido + CR3.Desconto - CR3.Acrescimo)/PV3.Valor,1)))
+            Select sum(dbo.Round2((case Nat3.Venda when 1 then dbo.Round2(PVI3.quantidade * (PVI3.valorembalagem - PVI3.Desconto)) else 0 end)*Coalesce((CR3.ValorRecebido + CR3.Desconto - CR3.Acrescimo)/ NULLIF(PV3.Valor, 0),1)))
             From PedidoVenda PV3
             inner join PedidoVendaItens PVI3 on PV3.CodPedidoVenda = PVI3.CodPedidoVenda
             left join ContasReceber CR3 on PV3.CodPedidoVenda = CR3.CodPedido
@@ -314,7 +314,7 @@ def buscar_venda_mix(data_inicio: str | date, data_fim: str | date, cod_vendedor
         end) As Peso,
         sum(
         case NaturezaOperacao.Venda 
-            when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / Material.QtdVolume) 
+            when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / NULLIF(Material.QtdVolume, 0)) 
             else 0
         end) As QtdEmbalagem,
         case NaturezaOperacao.Venda 
@@ -329,7 +329,7 @@ def buscar_venda_mix(data_inicio: str | date, data_fim: str | date, cod_vendedor
         end) As QtdBonificacao,
         sum(
         case NaturezaOperacao.Bonificacao 
-            when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / Material.QtdVolume) 
+            when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / NULLIF(Material.QtdVolume, 0)) 
             else 0
         end) As QtdEmbalagemBonificacao,
         case NaturezaOperacao.Bonificacao
@@ -344,7 +344,7 @@ def buscar_venda_mix(data_inicio: str | date, data_fim: str | date, cod_vendedor
         end) As QtdAvaria,
         sum(
         case NaturezaOperacao.Avaria 
-            when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / Material.QtdVolume) 
+            when 1 then dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / NULLIF(Material.QtdVolume, 0)) 
             else 0
         end ) As QtdEmbalagemAvaria,
         case NaturezaOperacao.Avaria
@@ -435,7 +435,7 @@ def buscar_venda_mix(data_inicio: str | date, data_fim: str | date, cod_vendedor
             sum(dbo.Round2((case Nat.Venda
             when 1 then dbo.Round2(PedidoVendaItens.quantidade * (PedidoVendaItens.valorembalagem - PedidoVendaItens.Desconto))
             else 0
-            end)*Coalesce((ContasReceber.ValorRecebido + ContasReceber.Desconto - ContasReceber.Acrescimo)/PV.Valor,1))) As Recebido
+            end)*Coalesce((ContasReceber.ValorRecebido + ContasReceber.Desconto - ContasReceber.Acrescimo)/ NULLIF(PV.Valor, 0),1))) As Recebido
         From
             PedidoVenda PV left join ClienteRotaVendedor CRV on (PV.CodVendedor = CRV.CodVendedor and PV.CodCliente = CRV.CodCliente)
             left join  PedidoVendaItens on (PV.CodPedidoVenda = PedidoVendaItens.CodPedidoVenda)
@@ -627,7 +627,7 @@ def buscar_vendas_por_vendedor(
                      END) As Qtd,
                    SUM(
                      CASE NaturezaOperacao.Venda
-                       WHEN 1 THEN dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / Material.QtdVolume)
+                       WHEN 1 THEN dbo.Round2(pedidovendaitens.quantidade * pedidovendaitens.qtdembalagem / NULLIF(Material.QtdVolume, 0))
                        ELSE 0
                      END) As QtdEmbalagem,
                    SUM(
