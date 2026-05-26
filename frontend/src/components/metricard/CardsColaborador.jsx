@@ -48,12 +48,19 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
     params: {
       de:           periodoSelecionado.de,
       ate:          periodoSelecionado.ate,
-      cod_vendedor: codFuncionario,
+      cod_vendedor: String(codFuncionario),
       positivados:  mostrarNaoPositivados ? "false" : "true",
     }
   })
-    .then(res => setClientesPos(res.data?.clientes || []))
-    .catch(() => setClientesPos([]))
+.then(res => {
+      // ✅ LOG PARA VERIFICAR:
+      console.log("Resposta Positivação (CardsColaborador):", res.data);
+      setClientesPos(res.data?.clientes || []);
+    })
+    .catch((err) => {
+      console.error("Erro na Positivação:", err);
+      setClientesPos([]);
+    })
     .finally(() => setLoadingPos(false));
 
 }, [modalPosAberto, mostrarNaoPositivados, codFuncionario, periodoSelecionado]);

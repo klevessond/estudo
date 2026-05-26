@@ -170,6 +170,24 @@ def get_dados_excel(request):
         return JsonResponse({'erro': str(e)}, status=500)
 
 
+def _to_int(v):
+    try:
+        return int(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+
+def _to_float(v):
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+def _num(v):
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
 def _to_float_safe(v):
     # Decimal -> float, string número -> float, None -> 0.0
     try:
@@ -333,6 +351,11 @@ class IndicadoresView(APIView):
         
         if not data_inicio or not data_fim:
             return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
+        
+        meses_periodo   = _meses_no_periodo(data_inicio, data_fim)
+        num_meses       = max(len(meses_periodo), 1)
+        multiplos_meses = num_meses > 1
+
 
         # ===== LOG DO PERFIL QUE ESTÁ FAZENDO A CHAMADA =====
         ctx = get_role_context(request.user)
@@ -523,25 +546,7 @@ class IndicadoresView(APIView):
         objetivo_mix          = objetivo["objetivo_mix"]
         objetivo_peso         = objetivo["objetivo_peso"]
         objetivo_positivacao  = objetivo["objetivo_positivacao"]
-
-        # helpers p/ tipos
-        def _to_int(v):
-            try:
-                return int(str(v).strip())
-            except (TypeError, ValueError):
-                return None
-
-        def _to_float(v):
-            try:
-                return float(v or 0)
-            except (TypeError, ValueError):
-                return 0.0
-
-        def _num(v):
-            try:
-                return float(v or 0)
-            except Exception:
-                return 0.0
+        
 
         vendedores_list = vendedores or []
         vendedores_set = { _to_int(v) for v in vendedores_list if _to_int(v) is not None }
@@ -920,6 +925,48 @@ class IndicadoresView(APIView):
         }
         #print(f"DEBUG VENDA DO ANO ANTERIOR MES COMPLETO {ano_anterior_agregado_mes}")
 
+        #  POSITIVAÇÃO (área)
+        _esc_pos = sorted(vendedores) if vendedores else []
+        _rotas_key = sorted(rotas_codigos) if rotas_codigos else []
+ 
+        if not multiplos_meses:
+            # ── 1 mês: comportamento atual (uma query cada) ──────────────────
+            _esc_mix = sorted(vendedores) if vendedores else []
+            dados_mix = get_cache_mes("venda_mix", data_inicio, data_fim, _esc_mix)
+            if dados_mix is None:
+                dados_mix = buscar_venda_mix(data_inicio, data_fim, cod_vendedores=vendedores)
+                set_cache_mes("venda_mix", data_inicio, data_fim, dados_mix, _esc_mix)
+            mix_realizado = float(dados_mix.get("mix_realizado") or 0)
+ 
+            _esc_pos = (sorted(vendedores) if vendedores else []) + (sorted(rotas_codigos) if rotas_codigos else [])
+            positivacao = get_cache_mes("positivacao", data_inicio, data_fim, _esc_pos)
+            if positivacao is None:
+                positivacao = buscar_positivacao_por_rota(
+                    data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores
+                )
+                set_cache_mes("positivacao", data_inicio, data_fim, positivacao, _esc_pos)
+            positivacao_realizado_geral = float(positivacao.get("positivacao_realizado_geral") or 0)
+ 
+            # Mapa simples por vendedor para 1 mês
+            _mix_media_por_vend = {}   # populado mais adiante no loop existente
+            _pos_media_por_vend = {}   # populado mais adiante no loop existente
+ 
+        else:
+            # ── n meses: consultas mensais + médias ──────────────────────────
+            _med = _calcular_media_mix_pos_por_mes(
+                meses_periodo, rotas_codigos, vendedores
+            )
+            mix_realizado               = _med["mix_global"]
+            positivacao_realizado_geral = _med["pos_global"]
+            _mix_media_por_vend         = _med["mix_por_vend"]
+            _pos_media_por_vend         = _med["pos_por_vend"]
+ 
+            # Reconstrói 'positivacao' como dict compatível com o restante do código
+            positivacao = {
+                "positivacao_realizado_geral": positivacao_realizado_geral,
+                "detalhado": _med["positivacao_detalhado_ultimo_mes"],
+            }
+
         if grupos_supervisao:
             print("\n[DEBUG][AREAS] iniciando soma ATUAL + AA por área...")
 
@@ -948,12 +995,32 @@ class IndicadoresView(APIView):
                         if 4 not in area_vendedores_mix:
                             area_vendedores_mix.append(4)
                 except: pass
-                mix_area = buscar_mix_agregado(
-                    data_inicio,
-                    data_fim,
-                    cod_vendedores=area_vendedores_mix 
-                )
+                area_vendedores     = [_to_int(v) for v in (area.get("vendedores") or []) if _to_int(v)]
+                area_vendedores_mix = list(area_vendedores)  # inclui vendedor 4 se regra 228 se aplicar
+ 
+                if multiplos_meses:
+                    # Média ponderada pelo objetivo de cada vendedor desta área
+                    mix_vend_area = {
+                        cod: _mix_media_por_vend[cod]
+                        for cod in area_vendedores if cod in _mix_media_por_vend
+                    }
+                    mix_area = _media_ponderada_supervisor(
+                        mix_vend_area, objetivos_vendedores, "objetivo_mix"
+                    )
+                    pos_vend_area = {
+                        cod: _pos_media_por_vend[cod]
+                        for cod in area_vendedores if cod in _pos_media_por_vend
+                    }
+                    pos_area = _media_ponderada_supervisor(
+                        pos_vend_area, objetivos_vendedores, "objetivo_positivacao"
+                    )
+                else:
+                     mix_area = buscar_mix_agregado(data_inicio, data_fim, cod_vendedores=area_vendedores_mix)
+                     pos_area = sum(pos_map.get(cod, 0.0) for cod in area_vendedores)
+
+                
                 area["mix_realizado_area"] = mix_area
+                area["pos_realizado_area"] = round(pos_area, 1)
                 
                 # =========
                 # ATUAL (período consultado)
@@ -987,34 +1054,26 @@ class IndicadoresView(APIView):
                     f"AA_TOTAL={area['venda_ano_anterior_area']}"
                 )
 
-
-
-
-        #  POSITIVAÇÃO (área)
-        _esc_pos = sorted(vendedores) if vendedores else []
-        _rotas_key = sorted(rotas_codigos) if rotas_codigos else []
+        if multiplos_meses and grupos_supervisao:
+            # Média ponderada entre supervisões (peso = n vendedores)
+            _mix_por_area_gerente = {
+                str(area.get("cod_area_supervisao")): {
+                    "media":         area.get("mix_realizado_area", 0.0),
+                    "n_vendedores":  len([v for v in (area.get("vendedores") or []) if _to_int(v)]),
+                }
+                for area in grupos_supervisao
+            }
+            _pos_por_area_gerente = {
+                str(area.get("cod_area_supervisao")): {
+                    "media":         area.get("pos_realizado_area", 0.0),
+                    "n_vendedores":  len([v for v in (area.get("vendedores") or []) if _to_int(v)]),
+                }
+                for area in grupos_supervisao
+            }
+            mix_realizado               = _media_ponderada_gerente(_mix_por_area_gerente)
+            positivacao_realizado_geral = _media_ponderada_gerente(_pos_por_area_gerente)
  
-        positivacao = get_cache_mes("positivacao", data_inicio, data_fim, _esc_pos + _rotas_key)
-        if positivacao is None:
-            positivacao = buscar_positivacao_por_rota(
-                data_inicio, data_fim,
-                rotas=rotas_codigos,
-                cod_vendedores=vendedores,
-            )
-            set_cache_mes("positivacao", data_inicio, data_fim, positivacao, _esc_pos + _rotas_key)
-        positivacao_realizado_geral = positivacao.get("positivacao_realizado_geral", 0)
-        objetivo_positivacao = objetivo.get('objetivo_positivacao', 0)
-        percentual_positivacao = safe_divide(positivacao_realizado_geral, objetivo_positivacao) * 100
-        variacao_positivacao = positivacao_realizado_geral  - objetivo_positivacao
 
-        # MIX (área)
-        _esc_mix = sorted(vendedores) if vendedores else []
-        dados_mix = get_cache_mes("venda_mix", data_inicio, data_fim, _esc_mix)
-        if dados_mix is None:
-            dados_mix = buscar_venda_mix(data_inicio, data_fim, cod_vendedores=vendedores)
-            set_cache_mes("venda_mix", data_inicio, data_fim, dados_mix, _esc_mix)
-        mix_realizado = dados_mix["mix_realizado"]
-        
         # Pré-venda (área)
         _esc_prev = sorted(vendedores) if vendedores else []
         prevenda = get_cache_mes("pre_venda", data_inicio, data_fim, _esc_prev)
@@ -1174,12 +1233,15 @@ class IndicadoresView(APIView):
         # 3) Positivação detalhada (esperado: positivacao['detalhado'] = [{CodVendedor, Realizado|QtdClientes}, ...])
         pos_by_cod = {}
         try:
-            for itpos in (positivacao.get("detalhado") or []):
-                cod_v = _to_int(itpos.get("CodVendedor"))
-                if cod_v is None:
-                    continue
-                realizado = itpos.get("Realizado", itpos.get("QtdClientes", 0))
-                pos_by_cod[cod_v] = _num(realizado)
+            if multiplos_meses:
+                pos_by_cod = {cod: v for cod, v in _pos_media_por_vend.items()}
+            else:
+                for itpos in (positivacao.get("detalhado") or []):
+                    cod_v = _to_int(itpos.get("CodFuncionario"))
+                    if cod_v is None:
+                        continue
+                    realizado = itpos.get("Realizado", itpos.get("QtdClientes", 0))
+                    pos_by_cod[cod_v] = _num(realizado)
         except Exception:
             pos_by_cod = {}
 
@@ -1216,7 +1278,7 @@ class IndicadoresView(APIView):
             if minha_linha or obj_meu:
                 my_venda = _to_float((minha_linha or {}).get("ValorLiquido"))
                 my_peso  = _to_float((minha_linha or {}).get("PesoTotal"))
-                my_mix   = _to_float((minha_linha or {}).get("Mix"))
+                my_mix = _mix_media_por_vend.get(meu_cod, _to_float((minha_linha or {}).get("Mix")))
 
                 my_obj_fin  = _to_float((obj_meu or {}).get("objetivo_financeiro"))
                 my_obj_peso = _to_float((obj_meu or {}).get("objetivo_peso"))
@@ -1271,6 +1333,7 @@ class IndicadoresView(APIView):
         peso_pdv_total  = float(dados_pdv.get("peso_pdv") or 0)
         tem_pdv = venda_pdv_total > 0
 
+        
         if tem_pdv:
             dados_cupons_pdv = get_cache_mes("cupons_pdv", data_inicio, data_fim)
             if dados_cupons_pdv is None:
@@ -1278,6 +1341,8 @@ class IndicadoresView(APIView):
                 set_cache_mes("cupons_pdv", data_inicio, data_fim, dados_cupons_pdv)
         else:
             dados_cupons_pdv = []
+        cupons_pdv_total = sum(int(r.get("QuantidadeCupons") or 0) for r in dados_cupons_pdv)
+ 
         _esc_pos = sorted(vendedores) if vendedores else []
         _rotas_key = sorted(rotas_codigos) if rotas_codigos else []
  
@@ -1288,7 +1353,7 @@ class IndicadoresView(APIView):
                 rotas=rotas_codigos,
                 cod_vendedores=vendedores,
             )
-            set_cache_mes("positivacao", data_inicio, data_fim, positivacao, _esc_pos + _rotas_key)
+            set_cache_mes("positivacao", data_inicio, data_fim, dados_positivacao, _esc_pos + _rotas_key)
        
         # 2. Valores Totais Gerais
         venda_pdv_total = float(dados_pdv.get("valor_pdv") or 0)
@@ -1300,11 +1365,6 @@ class IndicadoresView(APIView):
         peso_total_empresa = peso_realizado + peso_pdv_total
 
         # Verificação de PDV (Solicitação do usuário: não calcular se for zero)
-        tem_pdv = venda_pdv_total > 0
-
-        # Cupons PDV — só busca se houver PDV
-        dados_cupons_pdv = buscar_cupons_por_vendedor(data_inicio, data_fim) if tem_pdv else []
-        cupons_pdv_total = sum(int(r.get("QuantidadeCupons") or 0) for r in dados_cupons_pdv)
         
         _mapa_vend_ugs = {} 
 
@@ -1394,6 +1454,8 @@ class IndicadoresView(APIView):
 
         # Positivação (Geral)
         projecao_positivacao_geral = calcular_matematica_projecao(pos_realizado_geral, objetivo_positivacao, dias_info)
+        percentual_positivacao = round(safe_divide(positivacao_realizado_geral, objetivo_positivacao) * 100, 2) if objetivo_positivacao else 0.0
+        variacao_positivacao   = round(positivacao_realizado_geral - objetivo_positivacao, 2)
 
         # [LOG EMPRESA DETALHADO]
         logger.info("========================================")
@@ -1412,14 +1474,24 @@ class IndicadoresView(APIView):
                 # Valores Realizados
                 val_rotas = float(vend.get("ValorLiquido") or 0)
                 peso_rotas = float(vend.get("PesoTotal") or 0)
-                val_mix = float(vend.get("Mix") or 0)  # <--- Recupera Mix realizado
+                cod_vend_int = int(vend.get("codcampo") or 0)
+ 
+                if multiplos_meses:
+                    # Usa médias mensais pré-calculadas
+                    val_mix = _mix_media_por_vend.get(cod_vend_int,
+                                round(float(vend.get("Mix") or 0) / num_meses, 1))
+                    pos_rotas       = _pos_media_por_vend.get(cod_vend_int, 0.0)
+                    qtd_cupons_pdv  = round(cupons_map.get(cod_vend_int, 0) / num_meses, 1) if tem_pdv else 0
+                    val_pos         = round(pos_rotas + qtd_cupons_pdv, 1)
+                else:
+                    # 1 mês: comportamento original
+                    val_mix         = float(vend.get("Mix") or 0)
+                    pos_rotas       = pos_map.get(cod_vend_int, 0.0)
+                    qtd_cupons_pdv  = cupons_map.get(cod_vend_int, 0) if tem_pdv else 0
+                    val_pos         = pos_rotas + qtd_cupons_pdv
                 
                 val_pdv = pdv_map[vid]["fin"]
                 peso_pdv = pdv_map[vid]["peso"]
-                pos_rotas = pos_map[vid]
-                qtd_cupons_pdv = cupons_map.get(vid, 0) if tem_pdv else 0
-                val_pos = pos_rotas + qtd_cupons_pdv
-
                 total_fin = val_rotas + val_pdv
                 total_peso = peso_rotas + peso_pdv
 
@@ -1655,6 +1727,14 @@ class IndicadoresView(APIView):
                     "total": venda_total_empresa
                 },
                  "mix_pdv_empresa": _mix_pdv_empresa,
+                 "num_meses":       num_meses,         
+                 "multiplos_meses": multiplos_meses,   
+            },
+            "periodo_info": {
+                "num_meses":        num_meses,
+                "multiplos_meses":  multiplos_meses,
+                "de":               data_inicio,
+                "ate":              data_fim,
             },
         })
         
@@ -1769,9 +1849,10 @@ def get_objetivo_mensal_serializado(user, data_inicio, data_fim=None, cod_vended
     try:
         if user.is_anonymous:
             user = User.objects.filter(is_superuser=True).first()
-
-        meses = _meses_no_periodo(data_inicio, data_fim or data_inicio)
-
+ 
+        meses    = _meses_no_periodo(data_inicio, data_fim or data_inicio)
+        num_meses = max(len(meses), 1)
+ 
         if cod_vendedores:
             ids = [str(v) for v in cod_vendedores]
             agg = ObjetivoMensalVendedor.objects.filter(
@@ -1783,37 +1864,28 @@ def get_objetivo_mensal_serializado(user, data_inicio, data_fim=None, cod_vended
                 objetivo_peso=Sum('objetivo_peso'),
                 objetivo_positivacao=Sum('objetivo_positivacao'),
             )
-            return {
-                "objetivo_financeiro": float(agg.get('objetivo_financeiro') or 0),
-                "objetivo_mix": float(agg.get('objetivo_mix') or 0),
-                "objetivo_peso": float(agg.get('objetivo_peso') or 0),
-                "objetivo_positivacao": float(agg.get('objetivo_positivacao') or 0),
-            }
-
-        # Fallback: soma todos os meses do usuário no período
-        agg = ObjetivoMensal.objects.filter(
-            usuario=user,
-            mes_referencia__in=meses
-        ).aggregate(
-            objetivo_financeiro=Sum('objetivo_financeiro'),
-            objetivo_mix=Sum('objetivo_mix'),
-            objetivo_peso=Sum('objetivo_peso'),
-            objetivo_positivacao=Sum('objetivo_positivacao'),
-        )
+        else:
+            agg = ObjetivoMensal.objects.filter(
+                usuario=user,
+                mes_referencia__in=meses
+            ).aggregate(
+                objetivo_financeiro=Sum('objetivo_financeiro'),
+                objetivo_mix=Sum('objetivo_mix'),
+                objetivo_peso=Sum('objetivo_peso'),
+                objetivo_positivacao=Sum('objetivo_positivacao'),
+            )
+ 
         return {
+            # Financeiro e Peso: SOMA (acumulam no tempo)
             "objetivo_financeiro": float(agg.get('objetivo_financeiro') or 0),
-            "objetivo_mix": float(agg.get('objetivo_mix') or 0),
-            "objetivo_peso": float(agg.get('objetivo_peso') or 0),
-            "objetivo_positivacao": float(agg.get('objetivo_positivacao') or 0),
+            "objetivo_peso":       float(agg.get('objetivo_peso') or 0),
+            # Mix e Positivação: MÉDIA (metas mensais recorrentes)
+            "objetivo_mix":         round(float(agg.get('objetivo_mix') or 0) / num_meses, 1),
+            "objetivo_positivacao": round(float(agg.get('objetivo_positivacao') or 0) / num_meses, 1),
         }
-
     except Exception:
-        return {
-            "objetivo_financeiro": 0,
-            "objetivo_mix": 0,
-            "objetivo_peso": 0,
-            "objetivo_positivacao": 0,
-        }
+        return {"objetivo_financeiro": 0, "objetivo_mix": 0,
+                "objetivo_peso": 0,       "objetivo_positivacao": 0}
 
 def ajustar_data_para_ano_anterior(data_str):
     data_atual = datetime.strptime(data_str, "%Y-%m-%d")
@@ -2400,9 +2472,9 @@ class ObjetivoMensalVendedorView(APIView):
 
 
 def get_objetivos_vendedores_por_mes(data_inicio, data_fim=None):
-    meses = _meses_no_periodo(data_inicio, data_fim or data_inicio)
-
-    # Agrega por vendedor somando todos os meses do período
+    meses    = _meses_no_periodo(data_inicio, data_fim or data_inicio)
+    num_meses = max(len(meses), 1)
+ 
     from django.db.models import Sum as DjangoSum
     qs = (
         ObjetivoMensalVendedor.objects
@@ -2417,12 +2489,14 @@ def get_objetivos_vendedores_por_mes(data_inicio, data_fim=None):
     )
     return [
         {
-            "vendedor_id": row['vendedor_id'],
+            "vendedor_id":   row['vendedor_id'],
             "nome_vendedor": row['nome_vendedor'],
+            # Financeiro e Peso: SOMA
             "objetivo_financeiro": float(row['objetivo_financeiro'] or 0),
-            "objetivo_mix": float(row['objetivo_mix'] or 0),
-            "objetivo_peso": float(row['objetivo_peso'] or 0),
-            "objetivo_positivacao": int(row['objetivo_positivacao'] or 0),
+            "objetivo_peso":       float(row['objetivo_peso'] or 0),
+            # Mix e Positivação: MÉDIA mensal
+            "objetivo_mix":         round(float(row['objetivo_mix'] or 0) / num_meses, 1),
+            "objetivo_positivacao": round(float(row['objetivo_positivacao'] or 0) / num_meses, 1),
         }
         for row in qs
     ]
@@ -2880,29 +2954,22 @@ class ClientesPositivacaoView(APIView):
             return Response({"error": "Parâmetros obrigatórios: de, ate, cod_vendedor"}, status=400)
 
         try:
-            resultado = buscar_positivacao_por_rota(
-                data_inicio=de,
-                data_fim=ate,
-                cod_vendedores=[cod_vend_int],
+            cod_vend_int = int(cod_vend)
+            
+            # A MÁGICA ESTÁ AQUI: Usar a mesma função da visão de Área!
+            clientes = buscar_clientes_positivacao_lista(
+                de, ate, cod_vend_int, apenas_positivados=positivados
             )
 
-            clientes = []
-            for linha in resultado.get("detalhamento", []):
-                valor = float(linha.get("ValorLiquido") or 0)
-                if positivados and valor <= 0:
-                    continue
-                if not positivados and valor > 0:
-                    continue
-                clientes.append({
-                    "CodCliente"     : linha.get("CodCampo"),
-                    "Cliente"        : (linha.get("Campo") or "").strip(),
-                    "ClienteFantasia": "",
-                    "Rota"           : (linha.get("Rota") or "").strip(),
-                    "positivado"     : positivados,
-                })
-
+            # Organiza alfabeticamente pela Rota e depois pelo Cliente
             clientes.sort(key=lambda x: (x.get("Rota",""), x.get("Cliente","")))
-            return Response({"clientes": clientes, "total": len(clientes), "positivados": positivados})
+            
+            return Response({
+                "clientes": clientes, 
+                "total": len(clientes), 
+                "positivados": positivados
+            })
+            
         except Exception:
             logger.exception("[ClientesPositivacaoView] erro")
             return Response({"error": "Erro interno"}, status=500)
@@ -3183,4 +3250,159 @@ class CacheMesAdminView(APIView):
  
         return Response({"error": f"Modo desconhecido: '{modo}'."}, status=400)
  
+def _calcular_media_mix_pos_por_mes(
+    meses_periodo: list,
+    rotas_codigos,
+    vendedores,
+) -> dict:
+    """
+    Consulta mix e positivação mês a mês (usando cache) e devolve:
+    {
+        "mix_global":      float,   # média mensal do grupo inteiro
+        "pos_global":      float,   # média mensal do grupo inteiro
+        "mix_por_vend":    {cod: float},  # média mensal por vendedor
+        "pos_por_vend":    {cod: float},  # média mensal por vendedor
+        "positivacao_detalhado_ultimo_mes": list,  # último mês (para merges)
+        "cupons_pdv_total": int,
+    }
+    """
+    from datetime import date, timedelta
+ 
+    mix_totais    = []   # [mix_jan, mix_fev, mix_mar]
+    pos_totais    = []   # [pos_jan, pos_fev, pos_mar]
+ 
+    # acumuladores por vendedor: {cod: [v_jan, v_fev, v_mar]}
+    mix_por_vend_acc = {}
+    pos_por_vend_acc = {}
+ 
+    positivacao_detalhado_ultimo = []
+ 
+    for mes_date in meses_periodo:
+        mes_ini = mes_date.strftime("%Y-%m-%d")
+        # último dia do mês
+        if mes_date.month == 12:
+            ultimo = date(mes_date.year + 1, 1, 1) - timedelta(days=1)
+        else:
+            ultimo = date(mes_date.year, mes_date.month + 1, 1) - timedelta(days=1)
+        mes_fim = ultimo.strftime("%Y-%m-%d")
+ 
+        _esc_v = sorted(int(v) for v in (vendedores or []) if v is not None)
+        _esc_r = sorted(int(r) for r in (rotas_codigos or []) if r is not None)
+        _esc_pos = _esc_v + _esc_r
+ 
+        # ── Mix global do mês ────────────────────────────────────────────────
+        dm = get_cache_mes("venda_mix", mes_ini, mes_fim, _esc_v)
+        if dm is None:
+            dm = buscar_venda_mix(mes_ini, mes_fim, cod_vendedores=vendedores)
+            set_cache_mes("venda_mix", mes_ini, mes_fim, dm, _esc_v)
+        mix_totais.append(float(dm.get("mix_realizado") or 0))
+ 
+        # ── Mix por vendedor (vem do campo Mix em vendas_por_vendedor) ───────
+        vv = get_cache_mes("vendas_por_vendedor", mes_ini, mes_fim, _esc_v)
+        if vv is None:
+            vv = buscar_vendas_por_vendedor(
+                mes_ini, mes_fim,
+                cod_vendedores=vendedores if vendedores else None
+            )
+            set_cache_mes("vendas_por_vendedor", mes_ini, mes_fim, vv, _esc_v)
+ 
+        for row in (vv.get("vendas_por_vendedor") or []):
+            cod = _to_int(row.get("codcampo"))
+            if cod is not None:
+                mix_por_vend_acc.setdefault(cod, []).append(
+                    float(row.get("Mix") or 0)
+                )
+ 
+        # ── Positivação global do mês ────────────────────────────────────────
+        pm = get_cache_mes("positivacao", mes_ini, mes_fim, _esc_pos)
+        if pm is None:
+            pm = buscar_positivacao_por_rota(
+                mes_ini, mes_fim,
+                rotas=rotas_codigos,
+                cod_vendedores=vendedores,
+            )
+            set_cache_mes("positivacao", mes_ini, mes_fim, pm, _esc_pos)
+        pos_totais.append(float(pm.get("positivacao_realizado_geral") or 0))
+        positivacao_detalhado_ultimo = pm.get("detalhado") or []
+ 
+        # ── Positivação por vendedor ─────────────────────────────────────────
+        for item in positivacao_detalhado_ultimo:
+            cod = _to_int(item.get("CodFuncionario"))
+            if cod is not None:
+                realizado = float(
+                    item.get("ClientesPositivadosRota")
+                    or item.get("Realizado")
+                    or 0
+                )
+                pos_por_vend_acc.setdefault(cod, []).append(realizado)
+ 
+    n = max(len(meses_periodo), 1)
+ 
+    # Médias simples por vendedor
+    mix_media_vend = {
+        cod: round(sum(vals) / len(vals), 1)
+        for cod, vals in mix_por_vend_acc.items()
+    }
+    pos_media_vend = {
+        cod: round(sum(vals) / len(vals), 1)
+        for cod, vals in pos_por_vend_acc.items()
+    }
+ 
+    return {
+        "mix_global":   round(sum(mix_totais) / n, 1),
+        "pos_global":   round(sum(pos_totais) / n, 1),
+        "mix_por_vend": mix_media_vend,
+        "pos_por_vend": pos_media_vend,
+        "positivacao_detalhado_ultimo_mes": positivacao_detalhado_ultimo,
+    }
+ 
+ 
+def _media_ponderada_supervisor(
+    mix_ou_pos_por_vend: dict,
+    objetivos_vendedores: list,
+    chave_obj: str,  # "objetivo_mix" ou "objetivo_positivacao"
+) -> float:
+    """
+    Média ponderada de mix/pos do grupo de um supervisor.
+    Peso = objetivo individual do vendedor (maior meta → maior peso).
+ 
+    Retorna 0.0 se não houver dados.
+    """
+    soma_numerador   = 0.0
+    soma_denominador = 0.0
+ 
+    obj_map = {
+        str(o.get("vendedor_id")): float(o.get(chave_obj) or 0)
+        for o in (objetivos_vendedores or [])
+    }
+ 
+    for cod, media_vend in mix_ou_pos_por_vend.items():
+        peso = obj_map.get(str(cod), 0.0)
+        if peso > 0:
+            soma_numerador   += media_vend * peso
+            soma_denominador += peso
+ 
+    if soma_denominador == 0:
+        # fallback: média simples quando não há objetivos cadastrados
+        vals = list(mix_ou_pos_por_vend.values())
+        return round(sum(vals) / len(vals), 1) if vals else 0.0
+ 
+    return round(soma_numerador / soma_denominador, 1)
+ 
+ 
+def _media_ponderada_gerente(
+    mix_ou_pos_por_area: dict,  # {cod_area: {"media": float, "n_vendedores": int}}
+) -> float:
+    """
+    Média ponderada entre supervisões.
+    Peso = número de vendedores de cada área.
+    """
+    soma_num = 0.0
+    soma_den = 0
+    for area_data in mix_ou_pos_por_area.values():
+        n = area_data.get("n_vendedores", 0)
+        m = area_data.get("media", 0.0)
+        soma_num += m * n
+        soma_den += n
+    return round(soma_num / soma_den, 1) if soma_den else 0.0
  
