@@ -2339,6 +2339,29 @@ class VendasPorVendedorView(APIView):
 
         print(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
 
+        _rup_by_cod = {}
+        try:
+            _ids_ruptura = [
+                to_int(v.get("codcampo"))
+                for v in resultado.get("vendas_por_vendedor", [])
+                if to_int(v.get("codcampo"))
+            ]
+            if _ids_ruptura:
+                if len(_ids_ruptura) == 1:
+                    _rup_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=_ids_ruptura[0], cod_vendedores=None)
+                else:
+                    _rup_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=_ids_ruptura)
+                for _r in (_rup_dados.get("resumo") or []):
+                    _cod_v = to_int(_r.get("CodVendedor"))
+                    if _cod_v is not None:
+                        _rup_by_cod[_cod_v] = float(_r.get("TotalValor") or 0)
+            print(f"[DEBUG] Ruptura por vendedor carregada: {len(_rup_by_cod)} registros")
+        except Exception as _e:
+            print(f"[DEBUG] Erro ao calcular ruptura por vendedor: {_e}")
+
+        
+        
+        
         # Enriquecendo vendedores
         for vendedor in resultado.get("vendas_por_vendedor", []):
             codcampo_int = to_int(vendedor.get("codcampo"))
@@ -2353,6 +2376,7 @@ class VendasPorVendedorView(APIView):
             vendedor["mix_pdv_realizado"] = _mix_pdv_por_vendedor.get(codcampo_int, 0)
             vendedor["Ano_anterior_ValorLiquido"]     = _aa_by_cod.get(codcampo_int, 0)     
             vendedor["Ano_anterior_mes_ValorLiquido"] = _aa_mes_by_cod.get(codcampo_int, 0)
+            vendedor["Ruptura_TotalValor"]            = _rup_by_cod.get(codcampo_int, 0.0)
             # ── venda/dia: PDV conta sábado, rota só seg-sex ──
 
             print(

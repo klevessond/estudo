@@ -135,6 +135,7 @@ useEffect(() => {
           mix_pdv: Number(vendedor.mix_pdv_realizado || 0),
           Ano_anterior_ValorLiquido:     Number(vendedor.Ano_anterior_ValorLiquido || 0),
           Ano_anterior_mes_ValorLiquido: Number(vendedor.Ano_anterior_mes_ValorLiquido || 0),
+          Ruptura_TotalValor:            Number(vendedor.Ruptura_TotalValor || 0),  
 
         }));
 

@@ -160,9 +160,8 @@ useEffect(() => {
     doc.save(`mix_${nomeVendedor.replace(/\s+/g, '_')}_${periodoSelecionado?.de}.pdf`);
   };
 
-  const exportarPosicaoPDF = () => {
-    // eslint-disable-next-line no-undef
-    const { jsPDF } = window.jspdf;
+const exportarPosicaoPDF = () => {
+    // 1. Usa o jsPDF importado diretamente do topo do arquivo
     const doc = new jsPDF();
     const titulo = mostrarNaoPositivados ? 'Clientes Não Positivados' : 'Clientes Positivados';
     const nomeVendedor = colaborador?.colaborador || 'Vendedor';
@@ -175,7 +174,8 @@ useEffect(() => {
     doc.text(`Período: ${periodoSelecionado?.de} a ${periodoSelecionado?.ate}`, 14, 28);
     doc.text(`Total: ${clientesPos.length} clientes`, 14, 34);
 
-    doc.autoTable({
+    // 2. Usa a função autoTable corretamente passando o 'doc' como primeiro parâmetro
+    autoTable(doc, {
       head: [['#', 'Cliente', 'Rota']],
       body: clientesPos.map((c, i) => [
         i + 1,
@@ -246,6 +246,10 @@ useEffect(() => {
 
 
 const alocado = colaborador.alocado || 0;
+const captado        = colaborador.Ruptura_TotalValor || colaborador.ruptura_total_valor || 0;
+const percCaptado    = faturado > 0 ? (captado / faturado) * 100 : 0;
+const captadoProjTotal = faturado + captado;
+const captadoProjPerc  = objetivoFinanceiro > 0 ? (captadoProjTotal / objetivoFinanceiro) * 100 : 0;
 
   // % do Alocado em relação ao objetivo financeiro
   const percentualAlocado = objetivoFinanceiro > 0 ? (alocado / objetivoFinanceiro) * 100 : 0;
@@ -555,6 +559,32 @@ const alocado = colaborador.alocado || 0;
                 </>
               )}
             </div>
+          <div className="card" style={{ background: '#fff7ed' }}>
+              <div className="card-title">Captado </div>
+              <div>
+                R$ {captado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#555', marginTop: '2px' }}>
+                {percCaptado.toFixed(1)}% do faturado
+              </div>
+              {objetivoFinanceiro > 0 && (
+                <>
+                  <div style={{
+                    marginTop: '6px', padding: '4px 8px',
+                    background: 'rgba(0,0,0,0.05)', borderRadius: '6px', fontSize: '0.75rem',
+                  }}>
+                    <div style={{ color: '#555' }}>Se vender captado:</div>
+                    <div style={{ fontWeight: 700, color: captadoProjPerc >= 100 ? '#16a34a' : '#d97706' }}>
+                      R$ {captadoProjTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                    <div style={{ color: captadoProjPerc >= 100 ? '#16a34a' : '#d97706' }}>
+                      {captadoProjPerc.toFixed(1)}% da meta
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
 
 
           <div className="card" style={{ background: '#eafae1' }}>
