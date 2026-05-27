@@ -907,7 +907,7 @@ def buscar_comissoes_vendedor(cod_vendedor: int, data_inicio: str = None, data_f
         AND NO.Venda     = 1
         AND M.EmbRetornavel = 0
         AND PV.Status    = 0
-        AND PV.Situacao = 'T'
+        AND PV.Situacao <> 'C'
         AND PV.CodVendedor = ?
         AND PV.DataVenda  >= ?
         AND PV.DataVenda   < ?
