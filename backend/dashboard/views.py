@@ -1016,7 +1016,11 @@ class IndicadoresView(APIView):
                     )
                 else:
                      mix_area = buscar_mix_agregado(data_inicio, data_fim, cod_vendedores=area_vendedores_mix)
-                     pos_area = sum(pos_map.get(cod, 0.0) for cod in area_vendedores)
+                     pos_area = 0.0
+                     for itpos in (positivacao.get("detalhado") or []):
+                         c_vend = _to_int(itpos.get("CodFuncionario"))
+                         if c_vend in area_vendedores:
+                             pos_area += float(itpos.get("Realizado") or itpos.get("QtdClientes") or 0)
 
                 
                 area["mix_realizado_area"] = mix_area
