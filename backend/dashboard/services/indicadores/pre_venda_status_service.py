@@ -71,7 +71,7 @@ def buscar_status_pre_vendas(
 
         SELECT
             PD.CodPocket,
-            PD.CodPocketDocumento,
+            PD.Coddoc,
             PD.CodVendedor,
             F.Funcionario,
             C.Cliente,
@@ -92,7 +92,7 @@ def buscar_status_pre_vendas(
         FROM PocketDocumento PD
         LEFT JOIN PocketDocProcessDoc DPPC
             ON  DPPC.CodPocket          = PD.CodPocket
-            AND DPPC.CodPocketDocumento = PD.CodPocketDocumento
+            AND DPPC.CodPocketDocumento = PD.Coddoc
 
         JOIN Funcionario        F    ON PD.CodVendedor         = F.CodFuncionario
         JOIN Cliente            C    ON PD.CodCliente          = C.CodCliente
