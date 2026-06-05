@@ -1058,16 +1058,24 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
           objetivos.push(...vendedoresComVenda);
         }
 
-        // 2. Unifica os dados
+// 2. Unifica os dados para não ter o mesmo vendedor duplicado (Protegendo as metas!)
         let objetivosUnificados = objetivos.reduce((acc, curr) => {
           const existente = acc.find(
             (o) => o.codFuncionario === curr.codFuncionario
           );
-          if (!existente) acc.push(curr);
-          else Object.assign(existente, { ...existente, ...curr });
+          
+          if (!existente) {
+            acc.push(curr);
+          } else {
+            // Se o vendedor já existe na lista, NÃO deixamos os zeros apagarem as metas reais!
+            existente.objetivo_financeiro = existente.objetivo_financeiro || curr.objetivo_financeiro || 0;
+            existente.objetivo_mix = existente.objetivo_mix || curr.objetivo_mix || 0;
+            existente.objetivo_peso = existente.objetivo_peso || curr.objetivo_peso || 0;
+            existente.objetivo_positivacao = existente.objetivo_positivacao || curr.objetivo_positivacao || 0;
+            existente.nomeFuncionario = existente.nomeFuncionario || curr.nomeFuncionario;
+          }
           return acc;
         }, []);
-
         // ---> 🚨 INÍCIO DOS LOGS DE DEBUG 🚨 <---
         console.log("🔍 1. Quantos vendedores existem ANTES do filtro?", objetivosUnificados.length);
         
