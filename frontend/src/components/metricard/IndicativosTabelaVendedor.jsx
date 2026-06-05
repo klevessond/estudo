@@ -173,7 +173,7 @@ useEffect(() => {
     }
 
     let vendedoresComPDV = 0;
-    const enriched = baseData.map((row) => {
+    let enriched = baseData.map((row) => {
       const objetivo = Number(objetivoFinanceiroMap.get(row.codFuncionario) || 0);
 
       // Valores originais
@@ -225,6 +225,32 @@ useEffect(() => {
 
     dlog('Resumo enriquecimento → usarPDV:', usarPDV, '| vendedoresComPDV:', vendedoresComPDV, '/', baseData.length);
 
+    // ---> INÍCIO DA BARREIRA DA TABELA <---
+    enriched = enriched.filter((item) => {
+      // Usando os nomes corretos que a Tabela gerou
+      const faturado = Math.abs(Number(item.faturado) || 0);
+      const preVenda = Math.abs(Number(item.aFaturar) || 0);
+      const pesoVend = Math.abs(Number(item.pesototalvendido) || 0);
+
+      // Verifica as metas
+      const temMetaFinanceira = Number(item.objetivoFinanceiro) > 0;
+      
+      const objCompleto = (objetivosVendedores || []).find(
+        o => Number(o.codFuncionario || o.vendedor_id) === Number(item.codFuncionario)
+      ) || {};
+      
+      const temOutrasMetas = 
+        Number(objCompleto.objetivo_peso) > 0 || 
+        Number(objCompleto.objetivo_mix) > 0 || 
+        Number(objCompleto.objetivo_positivacao) > 0;
+
+      const atividadeTotal = faturado + preVenda + pesoVend;
+
+      // Só deixa a linha existir na tabela se houver meta OU atividade
+      return atividadeTotal > 0.01 || temMetaFinanceira || temOutrasMetas;
+    });
+
+    
     setData(enriched);
 
     // ---- Proteção contra loop: só emite se mudou de verdade ----

@@ -38,6 +38,9 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   const [clientesPos, setClientesPos]               = useState([]);
   const [loadingPos, setLoadingPos]                 = useState(false);
   const [mostrarNaoPositivados, setMostrarNaoPositivados] = useState(false);
+  const [modalPreVendaAberto,  setModalPreVendaAberto]  = useState(false);
+  const [pendenciasPreVenda,   setPendenciasPreVenda]   = useState([]);
+  const [loadingPreVenda,      setLoadingPreVenda]      = useState(false);
 
   
   useEffect(() => {
@@ -64,6 +67,23 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
     .finally(() => setLoadingPos(false));
 
 }, [modalPosAberto, mostrarNaoPositivados, codFuncionario, periodoSelecionado]);
+
+  // === Modal Pré-Venda Status (pendências do vendedor individual) ===
+  useEffect(() => {
+    if (!modalPreVendaAberto || !codFuncionario || !periodoSelecionado) return;
+    setLoadingPreVenda(true);
+    setPendenciasPreVenda([]);
+    api.get('/indicadores/pre-venda-status/', {
+      params: {
+        de:         periodoSelecionado.de,
+        ate:        periodoSelecionado.ate,
+        vendedores: codFuncionario,
+      },
+    })
+      .then(({ data }) => setPendenciasPreVenda(data.pendencias || []))
+      .catch(err => console.error('[PreVendaStatus] erro:', err))
+      .finally(() => setLoadingPreVenda(false));
+  }, [modalPreVendaAberto, codFuncionario, periodoSelecionado]);
 
 
   
@@ -546,6 +566,17 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
           <div className="card" style={{ background: '#eaf2fa' }}>
             <div className="card-title">A Faturar:</div>
             R$ {colaborador.aFaturar?.toLocaleString('pt-BR')}
+            <button
+              onClick={() => setModalPreVendaAberto(true)}
+              style={{
+                marginTop: '8px', width: '100%', padding: '4px 0',
+                background: '#dbeafe', border: '1px solid #93c5fd',
+                borderRadius: '6px', fontSize: '0.78rem', cursor: 'pointer',
+                color: '#1d4ed8', fontWeight: 600,
+              }}
+            >
+              📋 Detalhar Pré-Vendas
+            </button>
           </div>
 
             <div className="card" style={{ background: '#f9f0e6' }}>
@@ -563,6 +594,7 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
                   <div>Progresso: {percentualAlocado.toFixed(1)}%</div>
                 </>
               )}
+
             </div>
           <div className="card" style={{ background: '#fff7ed' }}>
               <div className="card-title">Captado </div>
@@ -984,6 +1016,105 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
     </div>
   </div>
 )}
+
+  {/* ===== Modal Pré-Venda Status ===== */}
+  {modalPreVendaAberto && (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 1000,
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: '12px', padding: '1.5rem',
+        width: '90%', maxWidth: '820px', maxHeight: '85vh',
+        display: 'flex', flexDirection: 'column', gap: '1rem',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>
+              📋 Pendências de Pré-Venda — {colaborador?.colaborador || 'Vendedor'}
+            </h3>
+            <span style={{ fontSize: '0.8rem', color: '#888' }}>
+              {pendenciasPreVenda.length} pendência(s) encontrada(s)
+            </span>
+          </div>
+          <button onClick={() => setModalPreVendaAberto(false)}
+            style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+            ✕
+          </button>
+        </div>
+        <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.8rem' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+            Não processada
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+            Processada com problema
+          </span>
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {loadingPreVenda ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>Carregando...</div>
+          ) : pendenciasPreVenda.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#22c55e', fontWeight: 600 }}>
+              ✅ Nenhuma pendência no período.
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ background: '#f3f4f6', textAlign: 'left' }}>
+                  <th style={{ padding: '8px' }}>#</th>
+                  <th style={{ padding: '8px' }}>Cliente</th>
+                  <th style={{ padding: '8px' }}>Data</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>Valor</th>
+                  <th style={{ padding: '8px' }}>Situação</th>
+                  <th style={{ padding: '8px' }}>Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendenciasPreVenda.map((p, i) => {
+                  const isProblema = p.Situacao === 'COM_PROBLEMA';
+                  return (
+                    <tr key={p.CodPocketDocumento}
+                      style={{
+                        borderBottom: '1px solid #eee',
+                        background: isProblema
+                          ? (i % 2 === 0 ? '#fff5f5' : '#ffe4e4')
+                          : (i % 2 === 0 ? '#fffbeb' : '#fef3c7'),
+                      }}>
+                      <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <div>{p.Cliente}</div>
+                        {p.ClienteFantasia && p.ClienteFantasia !== p.Cliente && (
+                          <div style={{ fontSize: '0.75rem', color: '#888' }}>{p.ClienteFantasia}</div>
+                        )}
+                      </td>
+                      <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{p.DataDoc}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>
+                        {Number(p.Valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>
+                        {isProblema
+                          ? <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.78rem' }}>❌ Com problema</span>
+                          : <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.78rem' }}>⏳ Não processada</span>
+                        }
+                      </td>
+                      <td style={{ padding: '6px 8px', color: '#555', fontSize: '0.78rem' }}>
+                        {p.Motivo || (isProblema ? '—' : 'Aguardando processamento')}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  )}
+
     </>
   );
   

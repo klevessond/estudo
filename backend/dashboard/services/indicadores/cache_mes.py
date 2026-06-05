@@ -279,7 +279,7 @@ def listar_periodos_cacheados() -> list:
             for r in rows:
                 # Ordena os tipos em Python (evita incompatibilidade do SQLite)
                 tipos_raw = r["tipos"] or ""
-                tipos = sorted(t.strip() for t in tipos_raw.split(",") if t.strip())
+                tipos = sorted(set(t.strip() for t in tipos_raw.split(",") if t.strip()))
 
                 resultado.append({
                     "data_ini":  r["data_ini"],
