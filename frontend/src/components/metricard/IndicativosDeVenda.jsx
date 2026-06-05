@@ -574,6 +574,9 @@ const IndicadoresCards = ({
 
   const [vendaDia, setVendaDia] = useState(0);
   const [showProjectionModal, setShowProjectionModal] = useState(false);
+  const [modalPreVendaAberto, setModalPreVendaAberto] = useState(false);
+  const [pendenciasPreVenda,  setPendenciasPreVenda]  = useState([]);
+  const [loadingPreVenda,     setLoadingPreVenda]     = useState(false);
   const [projecaoPercentual, setProjecaoPercentual] = useState(null);
   const [projecaoRotasValor, setProjecaoRotasValor] = useState(null);
   const [projPercentFin, setProjPercentFin] = useState('--');
@@ -666,6 +669,18 @@ const IndicadoresCards = ({
   const [supervisaoSelecionada, setSupervisaoSelecionada] = useState([]);
   const [mapSupVendedores, setMapSupVendedores] = useState({});
   const [modalMixAreaAberto,  setModalMixAreaAberto]  = useState(false);
+
+  // === Modal Pré-Venda Status ===
+  useEffect(() => {
+    if (!modalPreVendaAberto || !periodoSelecionado) return;
+    setLoadingPreVenda(true);
+    setPendenciasPreVenda([]);
+    const { de, ate } = periodoSelecionado;
+    api.get('/indicadores/pre-venda-status/', { params: { de, ate } })
+      .then(({ data }) => setPendenciasPreVenda(data.pendencias || []))
+      .catch(err => console.error('[PreVendaStatus] erro:', err))
+      .finally(() => setLoadingPreVenda(false));
+  }, [modalPreVendaAberto, periodoSelecionado]);
   const [modalPosAreaAberto,  setModalPosAreaAberto]   = useState(false);
   const [itensMixArea,        setItensMixArea]         = useState([]);
   const [clientesPosArea,     setClientesPosArea]      = useState([]);
@@ -1030,7 +1045,21 @@ setAlocacaoVariacao(
           objetivos.push(...vendedores);
         }
 
-        const objetivosUnificados = objetivos.reduce((acc, curr) => {
+// 1. Injeta todos que estão na lista de vendas (para garantir que os desligados entrem)
+if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
+          const vendedoresComVenda = data.vendas.vendas_por_vendedor.map((item) => ({
+            codFuncionario: Number(item.codcampo),
+            nomeFuncionario: item.Campo,
+            objetivo_financeiro: 0,
+            objetivo_mix: 0,
+            objetivo_peso: 0,
+            objetivo_positivacao: 0,
+          }));
+          objetivos.push(...vendedoresComVenda);
+        }
+
+        // 2. Unifica os dados
+        let objetivosUnificados = objetivos.reduce((acc, curr) => {
           const existente = acc.find(
             (o) => o.codFuncionario === curr.codFuncionario
           );
@@ -1038,6 +1067,38 @@ setAlocacaoVariacao(
           else Object.assign(existente, { ...existente, ...curr });
           return acc;
         }, []);
+
+        // ---> 🚨 INÍCIO DOS LOGS DE DEBUG 🚨 <---
+        console.log("🔍 1. Quantos vendedores existem ANTES do filtro?", objetivosUnificados.length);
+        
+        const listaVendasParaFiltro = data?.vendas?.vendas_por_vendedor || [];
+        
+        objetivosUnificados = objetivosUnificados.filter((obj) => {
+          const dadosVenda = listaVendasParaFiltro.find(v => Number(v.codcampo) === obj.codFuncionario);
+          
+          const faturado = Math.abs(Number(dadosVenda?.ValorLiquido) || 0);
+          const preVenda = Math.abs(Number(dadosVenda?.PreVenda_Valor) || 0);
+          const pesoVend = Math.abs(Number(dadosVenda?.PesoTotal) || 0);
+          const pdvCupon = Math.abs(Number(dadosVenda?.pos_cupons_pdv) || 0);
+          
+          const atividadeTotal = faturado + preVenda + pesoVend + pdvCupon;
+          const passouNoFiltro = atividadeTotal > 0.01;
+          
+          // Imprime o "raciocínio" do sistema para CADA vendedor
+          console.log(`👤 Vendedor: [${obj.codFuncionario}] ${obj.nomeFuncionario} | ` +
+                      `Faturado: ${faturado} | Pre: ${preVenda} | Peso: ${pesoVend} | PDV: ${pdvCupon} | ` +
+                      `Total: ${atividadeTotal} -> PASSOU? ${passouNoFiltro ? "✅ SIM" : "❌ NÃO"}`);
+
+          return passouNoFiltro;
+        });
+
+        console.log("🔍 2. Quantos vendedores sobraram DEPOIS do filtro?", objetivosUnificados.length);
+        // ---> 🚨 FIM DOS LOGS DE DEBUG 🚨 <---
+
+        // 4. Envia para o React gerar os cards
+        if (onObjetivosRecebidos) {
+          onObjetivosRecebidos(objetivosUnificados);
+        }
 
             if (onObjetivosRecebidos) onObjetivosRecebidos(objetivosUnificados);
 
@@ -2201,6 +2262,7 @@ setMixVariacao(String(mixReal - metaMixFinal));
             subtitle2=" Cobertura Prevista"
             variation={alocacaoVariacao ?? '...'}
             className="card-alocacao"
+            onDetailClick={() => setModalPreVendaAberto(true)}
           />
 
           <Card
@@ -2572,7 +2634,118 @@ setMixVariacao(String(mixReal - metaMixFinal));
     </div>
   </div>
 )}
+  
+
+  {/* ===== Modal Pré-Venda Status (Pendências Alocação) ===== */}
+  {modalPreVendaAberto && (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 1000,
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: '12px', padding: '1.5rem',
+        width: '90%', maxWidth: '820px', maxHeight: '85vh',
+        display: 'flex', flexDirection: 'column', gap: '1rem', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+      }}>
+
+        {/* Cabeçalho */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>
+              📋 Pendências de Pré-Venda
+            </h3>
+            <span style={{ fontSize: '0.8rem', color: '#888' }}>
+              {pendenciasPreVenda.length} pendência(s) encontrada(s)
+            </span>
+          </div>
+          <button onClick={() => setModalPreVendaAberto(false)}
+            style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+            ✕
+          </button>
+        </div>
+
+        {/* Legenda */}
+        <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.8rem' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+            Não processada
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+            Processada com problema
+          </span>
+        </div>
+
+        {/* Conteúdo */}
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {loadingPreVenda ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>Carregando...</div>
+          ) : pendenciasPreVenda.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#22c55e', fontWeight: 600 }}>
+              ✅ Nenhuma pendência encontrada no período.
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ background: '#f3f4f6', textAlign: 'left' }}>
+                  <th style={{ padding: '8px' }}>#</th>
+                  <th style={{ padding: '8px' }}>Vendedor</th>
+                  <th style={{ padding: '8px' }}>Cliente</th>
+                  <th style={{ padding: '8px' }}>Data</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>Valor</th>
+                  <th style={{ padding: '8px' }}>Situação</th>
+                  <th style={{ padding: '8px' }}>Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendenciasPreVenda.map((p, i) => {
+                  const isProblema = p.Situacao === 'COM_PROBLEMA';
+                  return (
+                    <tr key={`${p.CodPocket}-${p.CodDoc}`}
+                      style={{
+                        borderBottom: '1px solid #eee',
+                        background: isProblema
+                          ? (i % 2 === 0 ? '#fff5f5' : '#ffe4e4')
+                          : (i % 2 === 0 ? '#fffbeb' : '#fef3c7'),
+                      }}>
+                      <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
+                      <td style={{ padding: '6px 8px', fontWeight: 500 }}>{p.Funcionario}</td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <div>{p.Cliente}</div>
+                        {p.ClienteFantasia && p.ClienteFantasia !== p.Cliente && (
+                          <div style={{ fontSize: '0.75rem', color: '#888' }}>{p.ClienteFantasia}</div>
+                        )}
+                      </td>
+                      <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{p.DataDoc}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>
+                        {Number(p.Valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>
+                        {isProblema ? (
+                          <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.78rem' }}>
+                            ❌ Com problema
+                          </span>
+                        ) : (
+                          <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.78rem' }}>
+                            ⏳ Não processada
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '6px 8px', color: '#555', fontSize: '0.78rem' }}>
+                        {p.Motivo || (isProblema ? '—' : 'Aguardando processamento')}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
     </div>
+  )}
+  </div>
   );
 };
 

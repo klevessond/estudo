@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from .views import IndicadoresView, ObjetivoMensalView,ObjetivoMensalResumoView,IndicadoresPDV,VendasPorVendedorView,ObjetivoMensalVendedorView,ComissoesVendedorView
 from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionario_detail, me,TodosVendedoresView,RupturaView
-from .views import CacheMesAdminView,ClientesPositivacaoAreaView,MixItensAreaView,ClientesPositivacaoView,MixItensPorVendedorView,ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
+from .views import PreVendaStatusView,CacheMesAdminView,ClientesPositivacaoAreaView,MixItensAreaView,ClientesPositivacaoView,MixItensPorVendedorView,ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
 urlpatterns = [
     path('dados-sql/', views.get_dados_sql, name='get_dados_sql'),
     path('api/clientes/', views.get_dados_sql_api, name='get_dados_sql_api'),
@@ -31,4 +31,5 @@ urlpatterns = [
     path('indicadores/mix-itens-area/', MixItensAreaView.as_view(), name='mix-itens-area'),
     path('indicadores/clientes-positivacao-area/', ClientesPositivacaoAreaView.as_view(), name='clientes-positivacao-area'),
     path('admin/cache-mes/', CacheMesAdminView.as_view(), name='cache-mes-admin'),
+    path('indicadores/pre-venda-status/', PreVendaStatusView.as_view(), name='pre-venda-status'),
 ]

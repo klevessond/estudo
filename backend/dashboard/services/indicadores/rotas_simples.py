@@ -1,6 +1,8 @@
 # backend/dashboard/services/indicadores/rotas_simples.py
 from typing import Dict, Any, List
 from dashboard.db_conn import query_all  # usa a conexão pyodbc via FreeTDS
+import logging
+logger = logging.getLogger(__name__)
 
 
 def buscar_rotas_usuario(ctx, db_alias: str = "dados_industria") -> Dict[str, Any]:
@@ -215,9 +217,19 @@ def buscar_rotas_usuario(ctx, db_alias: str = "dados_industria") -> Dict[str, An
         dados: List[Dict[str, Any]] = query_all(sql, [cod_sup])
 
         rotas = [int(d["CodRota"]) for d in dados] if dados else []
-        vendedores = sorted(
-            {int(d["CodVendedor"]) for d in dados if d.get("CodVendedor") is not None}
-        )
+        vendedores_set = {int(d["CodVendedor"]) for d in dados if d.get("CodVendedor") is not None}
+
+        sql_inativos = """
+            SELECT CodFuncionario 
+            FROM dbo.Funcionario 
+            WHERE Vendedor = 1 AND CodSupervisor = ?
+        """
+        dados_inativos = query_all(sql_inativos, [cod_sup])
+        
+        logger.warning(f"🚨 [DEBUG ROTAS_SIMPLES 2.3] cod_sup={cod_sup} | inativos={dados_inativos}")
+        
+        vendedores_set.update({int(d["CodFuncionario"]) for d in dados_inativos if d.get("CodFuncionario") is not None})
+        vendedores = sorted(vendedores_set)
 
         return {
             "rotas": rotas,
