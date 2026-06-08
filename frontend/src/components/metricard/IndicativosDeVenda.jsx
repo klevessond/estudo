@@ -276,7 +276,7 @@ const fmtMoeda = (n) =>
   Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const fmtNum2 = (n) =>
-  Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const pct = (num, den) => (Number(den) ? (Number(num) / Number(den)) * 100 : 0);
 

@@ -716,7 +716,7 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
                         {projPeso.atingimento_projetado?.toFixed(1)}%
                       </div>
                       <div style={{ fontSize: '0.75rem', color: '#777' }}>
-                        Proj: {Number(projPeso.projecao_final || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg
+                        Proj: {Number(projPeso.projecao_final || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2,maximumFractionDigits: 2 })} kg
                       </div>
                     </div>
                   )}
