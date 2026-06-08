@@ -119,24 +119,39 @@ def buscar_status_pre_vendas(
 
     rows = query_all(sql)
 
-    resultado = []
+    dedup_map = {}
+
     for r in rows:
+        # Pegamos a chave única do documento (CodPocket + CodDoc)
+        # Usamos .get("CodDoc") por causa da alteração que fizemos no SQL
+        cod_pocket = int(r.get("CodPocket") or 0)
+        cod_doc    = int(r.get("CodDoc") or r.get("CodPocketDocumento") or 0)
+        chave_unica = (cod_pocket, cod_doc)
+
+        # Se esta pré-venda já estiver no nosso mapa, ignoramos a linha (evita os erros duplicados)
+        if chave_unica in dedup_map:
+            continue
+
         situacao = (r.get("Situacao") or "NAO_PROCESSADA").strip()
         obs_raw  = (r.get("ObservacaoProcessamento") or "").strip()
 
-        resultado.append({
-            "CodPocket":           int(r.get("CodPocket")           or 0),
-            "CodPocketDocumento":  int(r.get("CodPocketDocumento")  or 0),
+        # Guarda a pré-venda no mapa
+        dedup_map[chave_unica] = {
+            "CodPocket":           cod_pocket,
+            "CodPocketDocumento":  cod_doc,
             "CodVendedor":         int(r.get("CodVendedor")         or 0),
-            "Funcionario":  (r.get("Funcionario")    or "").strip(),
-            "Cliente":      (r.get("Cliente")        or "").strip(),
-            "ClienteFantasia": (r.get("ClienteFantasia") or "").strip(),
-            "DataDoc":      (r.get("DataDoc")        or ""),
-            "Valor":        round(float(r.get("Valor") or 0), 2),
-            "Situacao":     situacao,
-            # Motivo só exibe quando há problema; NAO_PROCESSADA não tem obs
-            "Motivo":       obs_raw if situacao == "COM_PROBLEMA" and obs_raw else None,
-            "StatusCodigo": int(r.get("StatusProcessamento")) if r.get("StatusProcessamento") is not None else None,
-        })
+            "Funcionario":         (r.get("Funcionario")    or "").strip(),
+            "Cliente":             (r.get("Cliente")        or "").strip(),
+            "ClienteFantasia":     (r.get("ClienteFantasia") or "").strip(),
+            "DataDoc":             (r.get("DataDoc")        or ""),
+            "Valor":               round(float(r.get("Valor") or 0), 2),
+            "Situacao":            situacao,
+            "Motivo":              obs_raw if situacao == "COM_PROBLEMA" and obs_raw else None,
+            "StatusCodigo":        int(r.get("StatusProcessamento")) if r.get("StatusProcessamento") is not None else None,
+        }
+
+    # Transforma o nosso mapa (sem duplicados) de volta numa lista para o React
+    resultado = list(dedup_map.values())
+    # ---> FIM DA CORREÇÃO <---
 
     return resultado
