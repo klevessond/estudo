@@ -49,12 +49,11 @@ def buscar_pdv_por_unid_gestora(
     unid_gestoras: Optional[List[str]] = None
 ) -> List[Dict[str, Any]]:
     """
-    Retorna lista agregada por UnidGestora no intervalo [data_inicio, data_fim).
-    Cada item: { UnidGestora, Qtd, QtdEmbalagem, ValorProdutos, Peso }
+    Retorna lista agregada por UnidGestora.
+    Calcula ValorLiquido (ValorProdutos - Desconto) diretamente no SQL.
     """
     di = _as_date(data_inicio)
     df = _as_date(data_fim)
-
     di_dt, df_dt = _intervalo_exclusivo(di, df)
 
     filtro_ugs = ""
@@ -70,10 +69,15 @@ def buscar_pdv_por_unid_gestora(
     sql = f"""
             SELECT
                 V.UnidGestora,
-                SUM(VI.quantidade * VI.qtdembalagem)                                       AS Qtd,
-                CAST(SUM(dbo.Round2(VI.quantidade * VI.qtdembalagem / M.QtdVolume)) AS INT) AS QtdEmbalagem,
-                SUM(dbo.Round2(VI.quantidade * VI.ValorEmbalagem))                         AS ValorProdutos,
-                SUM(VI.Quantidade * VI.QtdEmbalagem * M.PesoBruto)                         AS Peso,
+                SUM(VI.quantidade * VI.qtdembalagem) AS Qtd,
+                CAST(SUM(dbo.Round2(VI.quantidade * VI.qtdembalagem / NULLIF(M.QtdVolume, 0))) AS INT) AS QtdEmbalagem,
+                -- Valor Bruto
+                SUM(dbo.Round2(VI.quantidade * VI.ValorEmbalagem)) AS ValorProdutos,
+                -- Desconto Total
+                SUM(dbo.Round2(VI.DescontoRef + (VI.Desconto * VI.quantidade))) AS Desconto,
+                -- Valor Líquido (Bruto - Desconto)
+                SUM(dbo.Round2(VI.quantidade * VI.ValorEmbalagem)) - SUM(dbo.Round2(VI.DescontoRef + (VI.Desconto * VI.quantidade))) AS ValorLiquido,
+                SUM(VI.Quantidade * VI.QtdEmbalagem * M.PesoBruto) AS Peso,
                 F1.CodFuncionario,
                 F1.Nome
             FROM ViewVenda V
@@ -88,15 +92,14 @@ def buscar_pdv_por_unid_gestora(
             OUTER APPLY (
                 SELECT TOP 1 F.CodFuncionario, F.Nome
                 FROM Funcionario F
-                WHERE F.UnidGestora = V.UnidGestora and F.Vendedor=1
-                ORDER BY F.CodFuncionario -- sua regra de desempate
+                WHERE F.UnidGestora = V.UnidGestora AND F.Vendedor=1
+                ORDER BY F.CodFuncionario
             ) F1
             WHERE
                 M.EmbRetornavel = 0
                 AND N.Venda = 1
                 AND V.Status = 0
                 AND V.CodPedidoVenda = 0
-                AND V.UnidGestora IN (SELECT UnidGestora FROM UnidadeGestora)
                 AND V.DataVenda >= ?
                 AND V.DataVenda  < ?
                 {filtro_ugs}
@@ -104,15 +107,28 @@ def buscar_pdv_por_unid_gestora(
                 V.UnidGestora, F1.CodFuncionario, F1.Nome
             ORDER BY
                 V.UnidGestora;
-
     """
     rows = query_all(sql, params)
-    # normalização
+    
+# normalização
     for r in rows:
         r["Qtd"] = int(r.get("Qtd") or 0)
         r["QtdEmbalagem"] = int(r.get("QtdEmbalagem") or 0)
-        r["ValorProdutos"] = float(r.get("ValorProdutos") or 0)
+        
+        # Cálculo do valor líquido: (Bruto - Desconto)
+        bruto = float(r.get("ValorProdutos") or 0)
+        desconto = float(r.get("Desconto") or 0)
+        valor_liquido = bruto - desconto
+        
+        # Sobrescrevemos ValorProdutos com o valor líquido para 
+        # manter a compatibilidade com o que o frontend espera
+        r["ValorProdutos"] = valor_liquido
+        
+        # Adicionamos o campo Desconto para referência, se necessário
+        r["Desconto"] = desconto
+        
         r["Peso"] = float(r.get("Peso") or 0)
+        
     return rows
 
 
