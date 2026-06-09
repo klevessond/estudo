@@ -574,12 +574,19 @@ def buscar_vendas_por_vendedor(
     data_fim: str | date,
     rotas: Optional[Iterable[int]] = None,
     cod_vendedores: Optional[Iterable[int]] = None,
+    unid_gestora: Optional[int] = None,          # <-- NOVO
+    agrupar_por_filial: bool = False,            # <-- NOVO
+    cod_representante: Optional[int] = None,     # <-- NOVO
 ) -> Dict[str, Any]:
     p1, p2 = _dt_bounds(data_inicio, data_fim)
 
-    # ✅ filtro opcional por vendedores (não altera comportamento quando None/vazio)
+    # Filtro de Vendedores
     vend_list = [int(v) for v in (cod_vendedores or []) if v is not None]
     vend_list = list(dict.fromkeys(vend_list))
+
+    # NOVO: Se for agrupar a filial, ignoramos qualquer restrição de vendedor na query SQL
+    if agrupar_por_filial and unid_gestora:
+        vend_list = []
 
     if len(vend_list) == 0:
         vend_filter_sql = ""
@@ -591,6 +598,14 @@ def buscar_vendas_por_vendedor(
         in_list = ",".join(map(str, vend_list))
         vend_filter_sql = f" AND PedidoVenda.CodVendedor IN ({in_list}) "
         vend_filter_mix_sql = f" AND PV.CodVendedor IN ({in_list}) "
+
+    # ---> NOVO: Filtro de Unidade Gestora <---
+    ug_filter_sql = " AND PedidoVenda.UnidGestora in (select UnidGestora from unidadegestora) "
+    ug_filter_mix_sql = " AND PV.UnidGestora IN (1, 2, 3, 4, 5, 6, 8, 9, 10) "
+    
+    if unid_gestora:
+        ug_filter_sql = f" AND PedidoVenda.UnidGestora = {int(unid_gestora)} "
+        ug_filter_mix_sql = f" AND PV.UnidGestora = {int(unid_gestora)} "
 
     sql = f"""
         DECLARE @P1 datetime2 = '{p1:%Y-%m-%d %H:%M:%S}';
@@ -609,7 +624,7 @@ def buscar_vendas_por_vendedor(
                    LEFT JOIN NaturezaOperacao NOP ON PV.CodNaturezaOperacao = NOP.CodNaturezaOperacao
                    WHERE PV.Status = 0
                      AND (NOP.Venda = 1 OR NOP.Bonificacao = 1)
-                     AND PV.UnidGestora IN (1, 2, 3, 4, 5, 6, 8, 9, 10)
+                     {ug_filter_mix_sql}
                      AND PV.DataVenda >= @P1
                      AND PV.DataVenda <  @P2
                      AND M.EmbRetornavel = 0
@@ -632,7 +647,7 @@ def buscar_vendas_por_vendedor(
                      END) As QtdEmbalagem,
                    SUM(
                      CASE NaturezaOperacao.Venda
-                       WHEN 1 THEN (PedidoVendaItens.Quantidade * PedidoVendaItens.QtdEmbalagem * Material.VolumeBruto)
+                       WHEN 1 THEN (PedidoVendaItens.Quantidade * PedidoVendaItens.QtdEmbalagem * Material.PesoBruto)
                        ELSE 0
                      END) As Volume,
                    SUM(
@@ -658,7 +673,7 @@ def buscar_vendas_por_vendedor(
             WHERE Material.EmbRetornavel = 0
               AND PedidoVenda.Status = 0
               AND (NaturezaOperacao.Venda = 1)
-              AND PedidoVenda.UnidGestora in (select UnidGestora from unidadegestora)
+              {ug_filter_sql}
               AND PedidoVenda.DataVenda >= @P1
               AND PedidoVenda.DataVenda < @P2
               {vend_filter_sql}
@@ -668,6 +683,24 @@ def buscar_vendas_por_vendedor(
         ORDER BY Campo
     """
     dados = query_all(sql)
+    
+    # ---> NOVO: AGREGAR A FILIAL INTEIRA EM 1 CARD <---
+    if agrupar_por_filial and unid_gestora:
+        soma_liq = sum(float(r.get("ValorLiquido") or 0) for r in dados)
+        soma_peso = sum(float(r.get("PesoTotal") or 0) for r in dados)
+        soma_cli = sum(int(r.get("QtdClientes") or 0) for r in dados)
+        max_mix = max([int(r.get("Mix") or 0) for r in dados] + [0])
+        
+        nome = f"VENDAS GERAIS - FILIAL {unid_gestora}"
+        return {"vendas_por_vendedor": [{
+            "codcampo": str(cod_representante or 99999),
+            "Campo": nome,
+            "ValorLiquido": soma_liq,
+            "PesoTotal": soma_peso,
+            "Mix": max_mix,
+            "QtdClientes": soma_cli
+        }]}
+        
     return {"vendas_por_vendedor": dados}
 
 

@@ -372,7 +372,8 @@ class IndicadoresView(APIView):
             request.META.get("REMOTE_ADDR"),
         )
         # ====================================================
-
+        is_filial = bool(ctx.cod_unid_gestora and str(ctx.cod_unid_gestora) not in ('', '1', 'None'))
+        ug_filial = int(ctx.cod_unid_gestora) if is_filial else None
         # 1) Rotas / vendedores conforme papel
         rotas_info = buscar_rotas_usuario(ctx)  # -> {'rotas': None|[...], 'detalhado': [...], 'vendedores': [...]}
         logger.info(
@@ -388,6 +389,10 @@ class IndicadoresView(APIView):
             (rotas_info.get("detalhado") or [])[:3],  # só uma amostra pra não floodar o log
             
         )
+        if is_filial:
+            vendedores = [int(ctx.cod_funcionario)] # Força ser só ele
+        elif getattr(ctx, "is_supervisor", False):
+            vendedores = rotas_info.get("vendedores") if rotas_info else None
 
         
         rotas_codigos = rotas_info.get("rotas") if rotas_info else None
@@ -569,10 +574,16 @@ class IndicadoresView(APIView):
         # =========================
         eh_gerente = getattr(ctx, "is_supervisor", False) and rotas_info.get("e_gerente")
 
-        # Se for GERENTE, já manda os vendedores para o SQL
         _esc_vend = sorted(vendedores_set) if vendedores_set else []
  
-        if eh_gerente and vendedores_set:
+        if is_filial:
+            vendido = buscar_vendas_por_vendedor(
+                data_inicio, data_fim, 
+                unid_gestora=ug_filial, 
+                agrupar_por_filial=True, 
+                cod_representante=ctx.cod_funcionario
+            )
+        elif eh_gerente and vendedores_set:
             vendido = get_cache_mes("vendas_por_vendedor", data_inicio, data_fim, _esc_vend)
             if vendido is None:
                 vendido = buscar_vendas_por_vendedor(
@@ -805,9 +816,17 @@ class IndicadoresView(APIView):
         _aa_ini_s = aa_ini.strftime("%Y-%m-%d")
         _aa_fim_s = aa_fim.strftime("%Y-%m-%d")
         res_aa = get_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s)
-        if res_aa is None:
-            res_aa = buscar_vendas_por_vendedor(_aa_ini_s, _aa_fim_s)
-            set_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s, res_aa)
+        if is_filial:
+            res_aa = buscar_vendas_por_vendedor(
+                _aa_ini_s, _aa_fim_s, 
+                unid_gestora=ug_filial, 
+                agrupar_por_filial=True, 
+                cod_representante=ctx.cod_funcionario)
+        else:
+            res_aa = get_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s)
+            if res_aa is None:
+                res_aa = buscar_vendas_por_vendedor(_aa_ini_s, _aa_fim_s)
+                set_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s, res_aa)
         print(
             "[DEBUG][VENDA ANO ANTERIOR]\n"
             f"  Total registros retornados: {len(res_aa.get('vendas_por_vendedor', []) or [])}\n"
@@ -884,9 +903,18 @@ class IndicadoresView(APIView):
         _aa_mes_ini_s = aa_mes_ini.strftime("%Y-%m-%d")
         _aa_mes_fim_s = aa_mes_fim.strftime("%Y-%m-%d")
         res_aa_mes = get_cache_aa("vendas_vendedor_mes", _aa_mes_ini_s, _aa_mes_fim_s)
-        if res_aa_mes is None:
-            res_aa_mes = buscar_vendas_por_vendedor(_aa_mes_ini_s, _aa_mes_fim_s)
-            set_cache_aa("vendas_vendedor_mes", _aa_mes_ini_s, _aa_mes_fim_s, res_aa_mes)
+        if is_filial:
+            res_aa_mes = buscar_vendas_por_vendedor(
+                _aa_mes_ini_s, _aa_mes_fim_s, 
+                unid_gestora=ug_filial, 
+                agrupar_por_filial=True, 
+                cod_representante=ctx.cod_funcionario
+            )
+        else:
+            res_aa_mes = get_cache_aa("vendas_vendedor_mes", _aa_mes_ini_s, _aa_mes_fim_s)
+            if res_aa_mes is None:
+                res_aa_mes = buscar_vendas_por_vendedor(_aa_mes_ini_s, _aa_mes_fim_s)
+                set_cache_aa("vendas_vendedor_mes", _aa_mes_ini_s, _aa_mes_fim_s, res_aa_mes)
         lista_aa_mes = res_aa_mes.get("vendas_por_vendedor", []) or []
 
         # aplica o MESMO filtro de escopo de vendedores
@@ -2100,7 +2128,9 @@ class VendasPorVendedorView(APIView):
         # usa getattr para não quebrar se o atributo não existir
         is_vendedor = getattr(ctx, "is_vendedor", False)
         is_supervisor = getattr(ctx, "is_supervisor", False)
-        is_gerente = getattr(ctx, "is_gerente", False)  # 👈 NOVO
+        is_gerente = getattr(ctx, "is_gerente", False) 
+        is_filial = bool(ctx.cod_unid_gestora and str(ctx.cod_unid_gestora) not in ('', '1', 'None'))
+        ug_filial = int(ctx.cod_unid_gestora) if is_filial else None
 
         print(f"[DEBUG] Usuário: {request.user}")
         print(
@@ -2150,11 +2180,20 @@ class VendasPorVendedorView(APIView):
         print("----------------------------")
 
         # --- 2. BUSCA DADOS NO BANCO (Restaurado - AQUI estava o erro) ---
-        _esc_tabela = []   # sem escopo = todos (a filtragem é feita em memória depois)
-        resultado = get_cache_mes("vendas_por_vendedor", data_inicio, data_fim, _esc_tabela)
-        if resultado is None:
-            resultado = buscar_vendas_por_vendedor(data_inicio, data_fim)
-            set_cache_mes("vendas_por_vendedor", data_inicio, data_fim, resultado, _esc_tabela)
+        if is_filial:
+            resultado = buscar_vendas_por_vendedor(
+                data_inicio, data_fim, 
+                unid_gestora=ug_filial, 
+                agrupar_por_filial=True, 
+                cod_representante=ctx.cod_funcionario
+            )
+        else:
+            _esc_tabela = []   # sem escopo = todos
+            resultado = get_cache_mes("vendas_por_vendedor", data_inicio, data_fim, _esc_tabela)
+            if resultado is None:
+                resultado = buscar_vendas_por_vendedor(data_inicio, data_fim)
+                set_cache_mes("vendas_por_vendedor", data_inicio, data_fim, resultado, _esc_tabela)
+        
         lista = resultado.get("vendas_por_vendedor", []) or []
 
         print(f"[DEBUG] Total bruto retornado por buscar_vendas_por_vendedor: {len(lista)} vendedores")
@@ -2309,6 +2348,7 @@ class VendasPorVendedorView(APIView):
         # ── Linha 2168 — ADICIONAR após o bloco de mix_pdv (────────────) ──
 
             # Ano anterior por vendedor — envolvido em try para não quebrar a view
+# Ano anterior por vendedor
             _aa_by_cod = {}
             _aa_mes_by_cod = {}
             try:
@@ -2321,17 +2361,32 @@ class VendasPorVendedorView(APIView):
                 _aa_fim = min(_aa_fim_candidato, _hoje_aa)
 
                 # até hoje do AA
-                _res_aa = buscar_vendas_por_vendedor(_aa_ini.strftime("%Y-%m-%d"), _aa_fim.strftime("%Y-%m-%d"))
+                if is_filial:
+                    _res_aa = buscar_vendas_por_vendedor(
+                        _aa_ini.strftime("%Y-%m-%d"), _aa_fim.strftime("%Y-%m-%d"), 
+                        unid_gestora=ug_filial, agrupar_por_filial=True, cod_representante=ctx.cod_funcionario
+                    )
+                else:
+                    _res_aa = buscar_vendas_por_vendedor(_aa_ini.strftime("%Y-%m-%d"), _aa_fim.strftime("%Y-%m-%d"))
+                    
                 for _it in (_res_aa.get("vendas_por_vendedor") or []):
                     _cod = to_int(_it.get("codcampo"))
                     if _cod:
                         _aa_by_cod[_cod] = float(_it.get("ValorLiquido") or 0)
 
-                # mês completo do AA — calcula último dia sem depender de função externa
+                # mês completo do AA
                 import calendar
                 _aa_mes_ultimo = calendar.monthrange(_aa_ini.year, _aa_ini.month)[1]
                 _aa_mes_fim = _aa_ini.replace(day=_aa_mes_ultimo)
-                _res_aa_mes = buscar_vendas_por_vendedor(_aa_ini.strftime("%Y-%m-%d"), _aa_mes_fim.strftime("%Y-%m-%d"))
+                
+                if is_filial:
+                    _res_aa_mes = buscar_vendas_por_vendedor(
+                        _aa_ini.strftime("%Y-%m-%d"), _aa_mes_fim.strftime("%Y-%m-%d"), 
+                        unid_gestora=ug_filial, agrupar_por_filial=True, cod_representante=ctx.cod_funcionario
+                    )
+                else:
+                    _res_aa_mes = buscar_vendas_por_vendedor(_aa_ini.strftime("%Y-%m-%d"), _aa_mes_fim.strftime("%Y-%m-%d"))
+                    
                 for _it in (_res_aa_mes.get("vendas_por_vendedor") or []):
                     _cod = to_int(_it.get("codcampo"))
                     if _cod:
