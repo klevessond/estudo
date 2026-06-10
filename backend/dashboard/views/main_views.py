@@ -7,8 +7,8 @@ from django.db.models import Sum
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import ObjetivoMensal,ObjetivoMensalVendedor,ObjetivoMixNivel,Feriado
-from .serializers import ObjetivoMensalSerializer, CustomUserSerializer,MeSerializer,ObjetivoMixNivelSerializer,FeriadoSerializer
+from dashboard.models import ObjetivoMensal,ObjetivoMensalVendedor,ObjetivoMixNivel,Feriado
+from dashboard.serializers import ObjetivoMensalSerializer, CustomUserSerializer,MeSerializer,ObjetivoMixNivelSerializer,FeriadoSerializer
 from datetime import datetime,date
 from decimal import Decimal
 from collections import defaultdict
@@ -23,7 +23,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser
-from .models import Profile
+from dashboard.models import Profile
 from dashboard.services.usuarios.funcionario_service import listar_funcionarios,get_funcionario_por_codigo,obter_unid_gestora,obter_unid_gestoras_por_vendedores
 import logging
 from decimal import Decimal
@@ -372,7 +372,11 @@ class IndicadoresView(APIView):
             request.META.get("REMOTE_ADDR"),
         )
         # ====================================================
-        is_filial = bool(ctx.cod_unid_gestora and str(ctx.cod_unid_gestora) not in ('', '1', 'None'))
+        is_filial = (
+            bool(ctx.cod_unid_gestora and str(ctx.cod_unid_gestora) not in ('', '1', 'None'))
+            and not getattr(ctx, "is_supervisor", False)   # ← supervisor nunca é "filial"
+            and not getattr(ctx, "is_vendedor",   False)
+        )
         ug_filial = int(ctx.cod_unid_gestora) if is_filial else None
         # 1) Rotas / vendedores conforme papel
         rotas_info = buscar_rotas_usuario(ctx)  # -> {'rotas': None|[...], 'detalhado': [...], 'vendedores': [...]}
@@ -2129,7 +2133,11 @@ class VendasPorVendedorView(APIView):
         is_vendedor = getattr(ctx, "is_vendedor", False)
         is_supervisor = getattr(ctx, "is_supervisor", False)
         is_gerente = getattr(ctx, "is_gerente", False) 
-        is_filial = bool(ctx.cod_unid_gestora and str(ctx.cod_unid_gestora) not in ('', '1', 'None'))
+        is_filial = (
+            bool(ctx.cod_unid_gestora and str(ctx.cod_unid_gestora) not in ('', '1', 'None'))
+            and not getattr(ctx, "is_supervisor", False)   # ← supervisor nunca é "filial"
+            and not getattr(ctx, "is_vendedor",   False)
+        )
         ug_filial = int(ctx.cod_unid_gestora) if is_filial else None
 
         print(f"[DEBUG] Usuário: {request.user}")
