@@ -42,7 +42,14 @@ const Sidebar = () => {
                         {isCollapsed ? '📅' : 'Feriados'}
                     </Link>
                     </li>
+                    
                 )}
+
+                <li>
+                    <Link to="/pivot-vendas" style={{ textDecoration: 'none', color: 'inherit' }}>
+                        {isCollapsed ? '⚙️' : 'Tabela Dinâmica'}
+                    </Link>
+                </li>
                         </ul>
         </aside>
     );

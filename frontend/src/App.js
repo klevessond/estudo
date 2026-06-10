@@ -13,6 +13,7 @@ import Feriados from './components/pages/register/Feriados.jsx';
 
 
 
+
 const App = () => {
   return (
    <AuthProvider>
@@ -79,6 +80,17 @@ const App = () => {
           </PrivateRoute>
         } 
       />
+<Route
+  path="/pivot-vendas"
+  element={
+    <PrivateRoute>
+      <Layout>
+        {/* Passamos datas fixas por enquanto ou um estado inicial */}
+        <PivotVendas periodoSelecionado={{ de: '2026-06-01', ate: '2026-06-09' }} />
+      </Layout>
+    </PrivateRoute>
+  }
+/>
       </Routes>
     </Router></AuthProvider>
   );
