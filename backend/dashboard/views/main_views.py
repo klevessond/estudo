@@ -46,6 +46,8 @@ from dashboard.services.indicadores.pdv_mix_service import buscar_itens_nao_vend
 from dashboard.services.indicadores.cache_aa import get_cache_aa, set_cache_aa
 from dashboard.services.indicadores.cache_mes import get_cache_mes, set_cache_mes, periodo_cacheavel,invalidar_cache_mes, invalidar_por_periodo, invalidar_por_tipo_e_periodo, listar_periodos_cacheados, stats_cache_mes # útil para logs/debug
 from dashboard.services.indicadores.pre_venda_status_service import buscar_status_pre_vendas
+from dashboard.services.indicadores.venda_hoje_service import buscar_venda_hoje
+from dashboard.mixins import RoleContextMixin   # mesmo padrão das outras views
 
 # Create your views here.
 
@@ -3551,4 +3553,33 @@ class PreVendaStatusView(APIView):
 
         except Exception:
             logger.exception("[PreVendaStatusView] erro")
+            return Response({"error": "Erro interno"}, status=500)
+
+class VendaHojeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        ctx = get_role_context(request.user)
+
+        try:
+            # Mesmo critério de escopo usado em IndicadoresView / VendasPorVendedorView
+            rotas_info = buscar_rotas_usuario(ctx)
+
+            if getattr(ctx, "is_supervisor", False):
+                # supervisor/gerente: vendedores do seu escopo de rotas
+                cod_vendedores = rotas_info.get("vendedores") or []
+
+            elif getattr(ctx, "is_vendedor", False):
+                # vendedor puro: só ele mesmo (a tela de hoje é individual)
+                cod_vendedores = [ctx.cod_funcionario] if ctx.cod_funcionario else []
+
+            else:
+                # admin/outros: sem filtro → todos
+                cod_vendedores = None
+
+            resultado = buscar_venda_hoje(cod_vendedores=cod_vendedores)
+            return Response(resultado)
+
+        except Exception:
+            logger.exception("[VendaHojeView] erro")
             return Response({"error": "Erro interno"}, status=500)

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import './IndicativosDeVenda.css';
 import ReactSpeedometer from 'react-d3-speedometer';
 import api from '../../api';
@@ -375,6 +375,143 @@ const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, v
   
 );
 
+/* ========= HELPER: DIAS ÚTEIS (front-end, sem feriados externos) ========= */
+function diasUteisEntre(inicio, fim) {
+  const dias = [];
+  const cur = new Date(inicio); cur.setHours(0,0,0,0);
+  const end = new Date(fim);    end.setHours(0,0,0,0);
+  while (cur <= end) {
+    if (cur.getDay() !== 0 && cur.getDay() !== 6) dias.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dias;
+}
+
+/* ========= CARD DIÁRIO NECESSÁRIO ========= */
+const CardDiarioNecessario = ({
+  periodoSelecionado,
+  objetivoFinanceiroBase,
+  vendaRealizadaBase,
+  usarPDV,
+  vendaPDVBase,
+  diasInfo,  
+}) => {
+  const [vendaHoje, setVendaHoje] = useState(null);  // null = ainda carregando
+  const [loadingHoje, setLoadingHoje] = useState(false);
+
+  // Busca venda do dia (atualiza quando o período muda — dia pode ter virado)
+  useEffect(() => {
+    let cancelado = false;
+    setLoadingHoje(true);
+    api.get('/indicadores/venda-hoje/')
+      .then(({ data }) => {
+        if (!cancelado) setVendaHoje(Number(data?.total_hoje || 0));
+      })
+      .catch(() => { if (!cancelado) setVendaHoje(0); })
+      .finally(() => { if (!cancelado) setLoadingHoje(false); });
+    return () => { cancelado = true; };
+  }, [periodoSelecionado?.de]);   // re-busca se o mês mudar
+
+const calc = useMemo(() => {
+    if (!periodoSelecionado?.de || !periodoSelecionado?.ate || !objetivoFinanceiroBase) return null;
+
+    const di   = new Date(periodoSelecionado.de  + 'T00:00:00');
+    const df   = new Date(periodoSelecionado.ate + 'T00:00:00');
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+
+    // fallback local (sem feriados) caso o backend ainda não tenha respondido
+    const totalUteis = diasUteisEntre(di, df);
+    const decorridos = diasUteisEntre(di, hoje <= df ? hoje : df);
+    const amanha     = new Date(hoje); amanha.setDate(hoje.getDate() + 1);
+    const restantes  = hoje < df ? diasUteisEntre(amanha, df) : [];
+
+    // prioriza os valores do backend (inclui feriados, mesma fonte do card Venda Realizada)
+    const nTotal      = diasInfo?.totais      ?? totalUteis.length;
+    const nDecorridos = diasInfo?.decorridos  ?? decorridos.length;
+    const nRestantes  = diasInfo?.restantes   ?? restantes.length;
+
+    const pdvNum = usarPDV ? (Number(vendaPDVBase) || 0) : 0;
+    const venda  = (Number(vendaRealizadaBase) || 0) + pdvNum;
+    const meta   = Number(objetivoFinanceiroBase) || 0;
+
+    const falta    = Math.max(meta - venda, 0);
+    const batida   = venda >= meta;
+    const diaNec   = (!batida && nRestantes > 0) ? falta / nRestantes : 0;
+    const mediaDia = nDecorridos > 0 ? venda / nDecorridos : 0;
+
+    return { nTotal, nDecorridos, nRestantes, falta, diaNec, mediaDia, batida };
+  }, [periodoSelecionado, objetivoFinanceiroBase, vendaRealizadaBase, usarPDV, vendaPDVBase, diasInfo]);
+
+  if (!calc) return null;
+
+  const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  // Cor do diário necessário: verde se batida, vermelho se ritmo muito abaixo, amarelo se próximo
+  const corDiaNec = calc.batida
+    ? '#4ade80'
+    : calc.diaNec > calc.mediaDia * 1.3
+    ? '#fca5a5'
+    : '#fde68a';
+
+  // Cor da venda de hoje: verde se >= necessário, amarelo se próximo, vermelho se baixo
+  const corHoje = vendaHoje === null
+    ? 'rgba(255,255,255,0.6)'
+    : vendaHoje >= calc.diaNec
+    ? '#4ade80'
+    : vendaHoje >= calc.diaNec * 0.7
+    ? '#fde68a'
+    : '#fca5a5';
+
+  return (
+    <div className="indicativo-card card-diario">
+      <div className="card-header">
+        <h2>Diário Necessário</h2>
+      </div>
+
+      {/* Necessário por dia */}
+      <div className="card-value" style={{ color: corDiaNec }}>
+        {calc.batida
+          ? '🏆 Meta atingida!'
+          : calc.nRestantes === 0
+          ? 'Período encerrado'
+          : fmt(calc.diaNec)}
+      </div>
+      <p className="card-subtitle">necessário/dia para bater a meta</p>
+
+      {/* Separador */}
+      <div style={{ borderTop:'1px solid rgba(255,255,255,0.2)', margin:'4px 0' }} />
+
+      {/* Vendido HOJE */}
+      <div className="card-value" style={{ color: corHoje, fontSize:'clamp(11px,3vw,13px)' }}>
+        {loadingHoje
+          ? '...'
+          : vendaHoje === null
+          ? '--'
+          : fmt(vendaHoje)}
+      </div>
+      <p className="card-subtitle">vendido hoje</p>
+
+      {/* Separador */}
+      <div style={{ borderTop:'1px solid rgba(255,255,255,0.2)', margin:'4px 0' }} />
+
+      {/* Média diária acumulada */}
+      <p className="card-subtitle" style={{ margin:'2px 0' }}>
+        Média/dia: {fmt(calc.mediaDia)}
+      </p>
+
+      {/* Calendário + falta */}
+      <p className="card-subtitle" style={{ margin:'2px 0' }}>
+        🗓 {calc.nDecorridos}/{calc.nTotal} dias · {calc.nRestantes} rest.
+      </p>
+      {!calc.batida && (
+        <p className="card-subtitle" style={{ opacity:0.8, margin:'1px 0' }}>
+          Falta: {fmt(calc.falta)}
+        </p>
+      )}
+    </div>
+  );
+};
+
 /* ========= NOVO COMPONENTE: MODAL DE PROJEÇÃO ========= */
 const ProjectionModal = ({ onClose, data, usarPDV }) => {
     if (!data) return null;
@@ -618,6 +755,7 @@ const IndicadoresCards = ({
   const [mixVariacao, setMixVariacao] = useState(null);
 
   const [objetivoFinanceiro, setObjetivoFinanceiro] = useState(null);
+  const [objetivoFinanceiroBase, setObjetivoFinanceiroBase] = useState(0); // valor numérico para cálculos
   const [objetivoMix, setObjetivoMix] = useState(null);
 
   const [alocacaoRealizada, setAlocacaoRealizada] = useState(null);
@@ -752,6 +890,7 @@ const IndicadoresCards = ({
       setVendaRealizada(fmtMoeda(m.realizado_financeiro));
       setVendaRealizadaBase(m.realizado_financeiro);
       setObjetivoFinanceiro(fmtMoeda(m.objetivo_financeiro));
+      setObjetivoFinanceiroBase(Number(m.objetivo_financeiro) || 0);
       setVendaPercentual(`${Number(m.percentual_cobertura || 0).toFixed(2)}%`);
       setVendaVariacao(
         `R$ ${
@@ -800,6 +939,7 @@ const IndicadoresCards = ({
         `${variacaoVenda < 0 ? '-' : ''}${fmtMoeda(Math.abs(variacaoVenda))}`
       );
       setObjetivoFinanceiro(fmtMoeda(data.objetivo?.financeiro || 0));
+      setObjetivoFinanceiroBase(Number(data.objetivo?.financeiro) || 0);
 
       setVendaRealizadaBase(valorVenda);
       setPesoRealizadoBase(realizadoPeso);
@@ -886,6 +1026,7 @@ const IndicadoresCards = ({
       )}`
     );
     setObjetivoFinanceiro(fmtMoeda(Number(data.objetivo?.financeiro || 0)));
+    setObjetivoFinanceiroBase(Number(data.objetivo?.financeiro) || 0);
 
     const realizadoPesoGrupo = Number(
       data.realizado_peso?.realizado ?? data.vendas?.peso_realizado ?? 0
@@ -1058,16 +1199,24 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
           objetivos.push(...vendedoresComVenda);
         }
 
-        // 2. Unifica os dados
+// 2. Unifica os dados para não ter o mesmo vendedor duplicado (Protegendo as metas!)
         let objetivosUnificados = objetivos.reduce((acc, curr) => {
           const existente = acc.find(
             (o) => o.codFuncionario === curr.codFuncionario
           );
-          if (!existente) acc.push(curr);
-          else Object.assign(existente, { ...existente, ...curr });
+          
+          if (!existente) {
+            acc.push(curr);
+          } else {
+            // Se o vendedor já existe na lista, NÃO deixamos os zeros apagarem as metas reais!
+            existente.objetivo_financeiro = existente.objetivo_financeiro || curr.objetivo_financeiro || 0;
+            existente.objetivo_mix = existente.objetivo_mix || curr.objetivo_mix || 0;
+            existente.objetivo_peso = existente.objetivo_peso || curr.objetivo_peso || 0;
+            existente.objetivo_positivacao = existente.objetivo_positivacao || curr.objetivo_positivacao || 0;
+            existente.nomeFuncionario = existente.nomeFuncionario || curr.nomeFuncionario;
+          }
           return acc;
         }, []);
-
         // ---> 🚨 INÍCIO DOS LOGS DE DEBUG 🚨 <---
         console.log("🔍 1. Quantos vendedores existem ANTES do filtro?", objetivosUnificados.length);
         
@@ -2013,6 +2162,7 @@ const applySupervisaoFromRaw = (data, selecionadas) => {
 
   // 1) Objetivo Financeiro (card "Objetivo & Evolução")
   setObjetivoFinanceiro(fmtMoeda(obj.objetivo_financeiro));
+  setObjetivoFinanceiroBase(Number(obj.objetivo_financeiro) || 0);
 
   // 2) Atualiza % cobertura e desvio da VENDA usando o objetivo novo
   const vendaPerc = obj.objetivo_financeiro > 0 ? (atual / obj.objetivo_financeiro) * 100 : 0;
@@ -2306,6 +2456,16 @@ setMixVariacao(String(mixReal - metaMixFinal));
             subtitle2={!usarPDV ? ' Cobertura potencial' : ' Cobertura'}
             variation="0"
             className="card-captar"
+          />
+
+          {/* ===== CARD DIÁRIO NECESSÁRIO ===== */}
+          <CardDiarioNecessario
+            periodoSelecionado={periodoSelecionado}
+            objetivoFinanceiroBase={objetivoFinanceiroBase}
+            vendaRealizadaBase={vendaRealizadaBase ?? 0}
+            usarPDV={usarPDV}
+            vendaPDVBase={usarPDV ? (somarArea ? pdvValorArea : pdvValorUG) ?? 0 : 0}
+            diasInfo={dataEscopoAtual?.projecao_empresa?.dias_uteis ?? null}
           />
 
           <Card
