@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from .views import IndicadoresView, ObjetivoMensalView,ObjetivoMensalResumoView,IndicadoresPDV,VendasPorVendedorView,ObjetivoMensalVendedorView,ComissoesVendedorView
 from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionario_detail, me,TodosVendedoresView,RupturaView
-from .views import PreVendaStatusView,CacheMesAdminView,ClientesPositivacaoAreaView,MixItensAreaView,ClientesPositivacaoView,MixItensPorVendedorView,ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
+from .views import VendaHojeView, PreVendaStatusView,CacheMesAdminView,ClientesPositivacaoAreaView,MixItensAreaView,ClientesPositivacaoView,MixItensPorVendedorView,ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
 from .views.pivot_views import PivotVendasView
 urlpatterns = [
     path('dados-sql/', views.get_dados_sql, name='get_dados_sql'),
@@ -34,4 +34,6 @@ urlpatterns = [
     path('admin/cache-mes/', CacheMesAdminView.as_view(), name='cache-mes-admin'),
     path('indicadores/pre-venda-status/', PreVendaStatusView.as_view(), name='pre-venda-status'),
     path('indicadores/pivot-vendas/', PivotVendasView.as_view(), name='pivot-vendas'),
+    path('indicadores/venda-hoje/', VendaHojeView.as_view(), name='venda-hoje'),
+
 ]

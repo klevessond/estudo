@@ -213,6 +213,51 @@ const exportarPosicaoPDF = () => {
     doc.save(`positivacao_${nomeVendedor.replace(/\s+/g, '_')}_${periodoSelecionado?.de}.pdf`);
   };
 
+  const exportarPreVendaPDF = () => {
+    const doc = new jsPDF();
+    const nomeVendedor = colaborador?.colaborador || 'Vendedor';
+
+    doc.setFontSize(14);
+    doc.text(`Pendências de Pré-Venda — ${nomeVendedor}`, 14, 15);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Período: ${periodoSelecionado?.de} a ${periodoSelecionado?.ate}`, 14, 22);
+    doc.text(`Total: ${pendenciasPreVenda.length} pendência(s)`, 14, 28);
+
+    const linhas = pendenciasPreVenda.map((p, i) => {
+      const isProblema = p.Status === 1;
+      return [
+        i + 1,
+        p.Cliente || '',
+        p.DataDoc || '',
+        Number(p.Valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        isProblema ? 'Com problema' : 'Não processada',
+        p.Motivo || (isProblema ? '—' : 'Aguardando processamento'),
+      ];
+    });
+
+    autoTable(doc, {
+      head: [['#', 'Cliente', 'Data', 'Valor', 'Status', 'Motivo']],
+      body: linhas,
+      startY: 34,
+      styles: { fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: [245, 158, 11] },
+      alternateRowStyles: { fillColor: [255, 251, 235] },
+      didParseCell: (data) => {
+        // Linha vermelha para "Com problema"
+        if (data.section === 'body' && data.column.index === 4) {
+          const val = data.cell.raw;
+          if (val === 'Com problema') {
+            data.cell.styles.textColor = [220, 38, 38];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+      },
+    });
+
+    doc.save(`pre_venda_${nomeVendedor.replace(/\s+/g, '_')}_${periodoSelecionado?.de}.pdf`);
+  };
+
   // early return DEPOIS de todos os hooks
   if (!colaborador) return null;
   const indiceAtual = vendedoresList.findIndex(
@@ -622,7 +667,85 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
               )}
             </div>
 
+          {/* ===== CARD DIÁRIO NECESSÁRIO (vendedor individual) ===== */}
+          {(() => {
+            const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+            // Dias úteis: prioriza diasInfo do backend (via projecoes), fallback local seg-sex
+            const diasInfo = projecoes?.financeiro_total?.dias_info ?? projecoes?.dias_info ?? null;
+
+            let nDecorridos, nRestantes, nTotal;
+            if (diasInfo) {
+              nDecorridos = diasInfo.decorridos ?? 1;
+              nRestantes  = diasInfo.restantes  ?? 0;
+              nTotal      = diasInfo.totais      ?? 20;
+            } else {
+              // fallback: conta seg-sex no período
+              const di   = periodoSelecionado?.de  ? new Date(periodoSelecionado.de  + 'T00:00:00') : null;
+              const df   = periodoSelecionado?.ate ? new Date(periodoSelecionado.ate + 'T00:00:00') : null;
+              const hoje = new Date(); hoje.setHours(0,0,0,0);
+              const amanha = new Date(hoje); amanha.setDate(hoje.getDate() + 1);
+
+              const contarDias = (ini, fim) => {
+                if (!ini || !fim) return 0;
+                let n = 0, c = new Date(ini); c.setHours(0,0,0,0);
+                while (c <= fim) { const d = c.getDay(); if (d !== 0 && d !== 6) n++; c.setDate(c.getDate() + 1); }
+                return n;
+              };
+
+              nTotal      = di && df ? contarDias(di, df) : 20;
+              nDecorridos = di && df ? contarDias(di, hoje <= df ? hoje : df) : 1;
+              nRestantes  = di && df && hoje < df ? contarDias(amanha, df) : 0;
+            }
+
+            const meta   = objetivoFinanceiro || 0;
+            const venda  = faturado || 0;
+            const falta  = Math.max(meta - venda, 0);
+            const batida = venda >= meta;
+            const diaNec = (!batida && nRestantes > 0) ? falta / nRestantes : 0;
+            const mediaDia = nDecorridos > 0 ? venda / nDecorridos : 0;
+
+            const corDiaNec = batida ? '#16a34a'
+              : diaNec > mediaDia * 1.3 ? '#dc2626'
+              : '#d97706';
+
+            if (!meta) return null;
+
+            return (
+              <div className="card" style={{ background: '#f0fdfa', borderLeft: '4px solid #0f766e' }}>
+                <div className="card-title" style={{ color: '#0f766e' }}>📅 Diário Necessário</div>
+
+                {/* Valor necessário por dia */}
+                <div style={{ fontSize: '1.15rem', fontWeight: 800, color: corDiaNec, margin: '4px 0' }}>
+                  {batida ? '🏆 Meta atingida!'
+                    : nRestantes === 0 ? 'Período encerrado'
+                    : fmt(diaNec)}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#555' }}>necessário/dia para bater a meta</div>
+
+                {/* Barra de progresso */}
+                <div className="progress-container" style={{ height: 6, margin: '6px 0' }}>
+                  <div
+                    className={`progress-bar ${batida ? 'progress-high' : falta / meta < 0.5 ? 'progress-medium' : 'progress-low'}`}
+                    style={{ width: `${Math.min((venda / meta) * 100, 100).toFixed(1)}%` }}
+                  />
+                </div>
+
+                {/* Comparativo */}
+                <div style={{ fontSize: '0.78rem', color: '#555', marginTop: '2px' }}>
+                  Média/dia: {fmt(mediaDia)}
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#555' }}>
+                  🗓 {nDecorridos}/{nTotal} dias · {nRestantes} restantes
+                </div>
+                {!batida && (
+                  <div style={{ fontSize: '0.78rem', color: '#888', marginTop: '2px' }}>
+                    Falta: {fmt(falta)}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="card" style={{ background: '#eafae1' }}>
             <div className="card-title">Peso Vendido:</div>
@@ -1039,10 +1162,24 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
               {pendenciasPreVenda.length} pendência(s) encontrada(s)
             </span>
           </div>
-          <button onClick={() => setModalPreVendaAberto(false)}
-            style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
-            ✕
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {pendenciasPreVenda.length > 0 && (
+              <button
+                onClick={exportarPreVendaPDF}
+                style={{
+                  padding: '6px 12px', background: '#f59e0b', color: '#fff',
+                  border: 'none', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '0.8rem', fontWeight: 600,
+                }}
+              >
+                📄 Exportar PDF
+              </button>
+            )}
+            <button onClick={() => setModalPreVendaAberto(false)}
+              style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+              ✕
+            </button>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.8rem' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
