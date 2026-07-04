@@ -381,7 +381,8 @@ function diasUteisEntre(inicio, fim) {
   const cur = new Date(inicio); cur.setHours(0,0,0,0);
   const end = new Date(fim);    end.setHours(0,0,0,0);
   while (cur <= end) {
-    if (cur.getDay() !== 0 && cur.getDay() !== 6) dias.push(new Date(cur));
+    const d = cur.getDay();
+    if (d !== 0 && d !== 6) dias.push(new Date(cur)); // seg-sex apenas (exclui sáb e dom)
     cur.setDate(cur.getDate() + 1);
   }
   return dias;
@@ -394,41 +395,39 @@ const CardDiarioNecessario = ({
   vendaRealizadaBase,
   usarPDV,
   vendaPDVBase,
-  diasInfo,  
 }) => {
-  const [vendaHoje, setVendaHoje] = useState(null);  // null = ainda carregando
+  const [vendaHojeInfo, setVendaHojeInfo] = useState(null);  // { total, rotas, preVenda } | null = ainda carregando
   const [loadingHoje, setLoadingHoje] = useState(false);
 
-  // Busca venda do dia (atualiza quando o período muda — dia pode ter virado)
+  // Busca venda do dia (rotas + pré-venda) — atualiza quando o período muda
   useEffect(() => {
     let cancelado = false;
     setLoadingHoje(true);
     api.get('/indicadores/venda-hoje/')
       .then(({ data }) => {
-        if (!cancelado) setVendaHoje(Number(data?.total_hoje || 0));
+        if (cancelado) return;
+        setVendaHojeInfo({
+          total: Number(data?.total_hoje || 0),
+          rotas: Number(data?.total_rotas_hoje || 0),
+          preVenda: Number(data?.total_pre_venda_hoje || 0),
+        });
       })
-      .catch(() => { if (!cancelado) setVendaHoje(0); })
+      .catch(() => { if (!cancelado) setVendaHojeInfo({ total: 0, rotas: 0, preVenda: 0 }); })
       .finally(() => { if (!cancelado) setLoadingHoje(false); });
     return () => { cancelado = true; };
   }, [periodoSelecionado?.de]);   // re-busca se o mês mudar
 
-const calc = useMemo(() => {
+  const calc = useMemo(() => {
     if (!periodoSelecionado?.de || !periodoSelecionado?.ate || !objetivoFinanceiroBase) return null;
 
     const di   = new Date(periodoSelecionado.de  + 'T00:00:00');
     const df   = new Date(periodoSelecionado.ate + 'T00:00:00');
     const hoje = new Date(); hoje.setHours(0,0,0,0);
 
-    // fallback local (sem feriados) caso o backend ainda não tenha respondido
     const totalUteis = diasUteisEntre(di, df);
     const decorridos = diasUteisEntre(di, hoje <= df ? hoje : df);
     const amanha     = new Date(hoje); amanha.setDate(hoje.getDate() + 1);
     const restantes  = hoje < df ? diasUteisEntre(amanha, df) : [];
-
-    // prioriza os valores do backend (inclui feriados, mesma fonte do card Venda Realizada)
-    const nTotal      = diasInfo?.totais      ?? totalUteis.length;
-    const nDecorridos = diasInfo?.decorridos  ?? decorridos.length;
-    const nRestantes  = diasInfo?.restantes   ?? restantes.length;
 
     const pdvNum = usarPDV ? (Number(vendaPDVBase) || 0) : 0;
     const venda  = (Number(vendaRealizadaBase) || 0) + pdvNum;
@@ -436,29 +435,43 @@ const calc = useMemo(() => {
 
     const falta    = Math.max(meta - venda, 0);
     const batida   = venda >= meta;
-    const diaNec   = (!batida && nRestantes > 0) ? falta / nRestantes : 0;
-    const mediaDia = nDecorridos > 0 ? venda / nDecorridos : 0;
+    const diaNec   = (!batida && restantes.length > 0) ? falta / restantes.length : 0;
 
-    return { nTotal, nDecorridos, nRestantes, falta, diaNec, mediaDia, batida };
-  }, [periodoSelecionado, objetivoFinanceiroBase, vendaRealizadaBase, usarPDV, vendaPDVBase, diasInfo]);
+    return {
+      nTotal: totalUteis.length,
+      nDecorridos: decorridos.length,
+      nRestantes: restantes.length,
+      falta,
+      diaNec,
+      batida,
+    };
+  }, [periodoSelecionado, objetivoFinanceiroBase, vendaRealizadaBase, usarPDV, vendaPDVBase]);
 
   if (!calc) return null;
 
   const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // Cor do diário necessário: verde se batida, vermelho se ritmo muito abaixo, amarelo se próximo
-  const corDiaNec = calc.batida
-    ? '#4ade80'
-    : calc.diaNec > calc.mediaDia * 1.3
-    ? '#fca5a5'
-    : '#fde68a';
+  const vendaHojeTotal = vendaHojeInfo?.total ?? null;
 
-  // Cor da venda de hoje: verde se >= necessário, amarelo se próximo, vermelho se baixo
-  const corHoje = vendaHoje === null
+  // Cor do diário necessário: verde se batida, vermelho se ritmo muito abaixo, amarelo se próximo
+  const corDiaNec = calc.batida ? '#4ade80' : '#fde68a';
+
+  // Cor da venda de hoje (sem pré-venda): verde se >= necessário, amarelo se próximo, vermelho se baixo
+  const vendaHojeSemPre = vendaHojeInfo?.rotas ?? null;
+  const corHojeSemPre = vendaHojeSemPre === null
     ? 'rgba(255,255,255,0.6)'
-    : vendaHoje >= calc.diaNec
+    : vendaHojeSemPre >= calc.diaNec
     ? '#4ade80'
-    : vendaHoje >= calc.diaNec * 0.7
+    : vendaHojeSemPre >= calc.diaNec * 0.7
+    ? '#fde68a'
+    : '#fca5a5';
+
+  // Cor da venda de hoje (com pré-venda): mesma régua, mas sobre o total
+  const corHojeComPre = vendaHojeTotal === null
+    ? 'rgba(255,255,255,0.6)'
+    : vendaHojeTotal >= calc.diaNec
+    ? '#4ade80'
+    : vendaHojeTotal >= calc.diaNec * 0.7
     ? '#fde68a'
     : '#fca5a5';
 
@@ -481,22 +494,32 @@ const calc = useMemo(() => {
       {/* Separador */}
       <div style={{ borderTop:'1px solid rgba(255,255,255,0.2)', margin:'4px 0' }} />
 
-      {/* Vendido HOJE */}
-      <div className="card-value" style={{ color: corHoje, fontSize:'clamp(11px,3vw,13px)' }}>
+      {/* Vendido HOJE — sem pré-venda */}
+      <div className="card-value" style={{ color: corHojeSemPre, fontSize:'clamp(11px,3vw,13px)' }}>
         {loadingHoje
           ? '...'
-          : vendaHoje === null
+          : vendaHojeSemPre === null
           ? '--'
-          : fmt(vendaHoje)}
+          : fmt(vendaHojeSemPre)}
       </div>
-      <p className="card-subtitle">vendido hoje</p>
+      <p className="card-subtitle">vendido hoje (sem pré-venda)</p>
+
+      {/* Vendido HOJE — com pré-venda somada */}
+      <div className="card-value" style={{ color: corHojeComPre, fontSize:'clamp(11px,3vw,13px)', marginTop: 4 }}>
+        {loadingHoje
+          ? '...'
+          : vendaHojeTotal === null
+          ? '--'
+          : fmt(vendaHojeTotal)}
+      </div>
+      <p className="card-subtitle">vendido hoje (com pré-venda)</p>
 
       {/* Separador */}
       <div style={{ borderTop:'1px solid rgba(255,255,255,0.2)', margin:'4px 0' }} />
 
-      {/* Média diária acumulada */}
+      {/* Pré-venda efetuada hoje (valor isolado, para referência) */}
       <p className="card-subtitle" style={{ margin:'2px 0' }}>
-        Média/dia: {fmt(calc.mediaDia)}
+        Pré-venda: {loadingHoje ? '...' : fmt(vendaHojeInfo?.preVenda)}
       </p>
 
       {/* Calendário + falta */}
@@ -958,7 +981,9 @@ const IndicadoresCards = ({
     const pre = Number(linha?.PreVenda_Valor || 0);
     const ruptura = Number(linha?.Ruptura_TotalValor || 0);
 
-    const posReal = Number(linha?.QtdClientes || 0);
+    const posReal = Number(
+      m?.realizado_positivacao ?? linha?.QtdClientes ?? 0
+    );
     const objPos = Number(
       m?.objetivo_positivacao ??
         data?.objetivo?.objetivo_positivacao ??
@@ -1070,7 +1095,8 @@ const IndicadoresCards = ({
         : soma('Ruptura_TotalValor')
     );
     const posAgg = Number(
-      (agg.QtdClientes ?? null) !== null ? agg.QtdClientes : soma('QtdClientes')
+      data?.positivacao?.realizado ??
+        ((agg.QtdClientes ?? null) !== null ? agg.QtdClientes : soma('QtdClientes'))
     );
 
     dlog('AREA preAgg:', preAgg, 'rupAgg:', rupAgg, 'posAgg(QtdClientes soma):', posAgg);
@@ -2465,7 +2491,6 @@ setMixVariacao(String(mixReal - metaMixFinal));
             vendaRealizadaBase={vendaRealizadaBase ?? 0}
             usarPDV={usarPDV}
             vendaPDVBase={usarPDV ? (somarArea ? pdvValorArea : pdvValorUG) ?? 0 : 0}
-            diasInfo={dataEscopoAtual?.projecao_empresa?.dias_uteis ?? null}
           />
 
           <Card
