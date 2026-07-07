@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 from .views import IndicadoresView, ObjetivoMensalView,ObjetivoMensalResumoView,IndicadoresPDV,VendasPorVendedorView,ObjetivoMensalVendedorView,ComissoesVendedorView
-from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionario_detail, me,TodosVendedoresView,RupturaView
+from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionario_detail, me,TodosVendedoresView,RupturaView,RupturaItensView
 from .views import VendaHojeView, PreVendaStatusView,CacheMesAdminView,ClientesPositivacaoAreaView,MixItensAreaView,ClientesPositivacaoView,MixItensPorVendedorView,ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
 from .views.pivot_views import PivotVendasView
 urlpatterns = [
@@ -20,6 +20,7 @@ urlpatterns = [
     path("me/", me, name="me"),
     path('todos-vendedores/', TodosVendedoresView.as_view(), name='todos-vendedores'),
     path('ruptura/', RupturaView.as_view(), name='ruptura'),
+    path('indicadores/ruptura-itens/', RupturaItensView.as_view(), name='ruptura-itens'),
     path('resumo-segmento-area-venda/', ResumoSegmentoAreaVendaView.as_view(), name='resumo-segmento-area-venda'),
     path('indicadores/minha-ug/', MinhaUnidGestoraView.as_view(), name='minha-ug'),
     path('indicadores/pdv-por-vendedor/', PDVPorVendedorAPIView.as_view(), name='pdv-por-vendedor'),

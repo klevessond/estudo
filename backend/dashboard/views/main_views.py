@@ -30,7 +30,7 @@ from decimal import Decimal
 from dashboard.roles import get_role_context  
 from dashboard.services.indicadores.info_service import Todos_Vendedores, obter_cod_supervisor
 from dashboard.services.indicadores.calculos_projecao import get_dias_uteis_info, calcular_matematica_projecao
-from dashboard.services.indicadores.ruptura_service import buscar_ruptura
+from dashboard.services.indicadores.ruptura_service import buscar_ruptura, buscar_ruptura_itens_detalhado
 from dashboard.db_conn import query_all
 
 logger = logging.getLogger(__name__)
@@ -2861,6 +2861,40 @@ class RupturaView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=500)
     
+
+class RupturaItensView(APIView):
+    """
+    Detalhamento da ruptura por ITEM (Material) — usado pelo modal "Detalhar"
+    do card Captado (IndicativosDeVenda) e pela aba Ruptura (CardsDetalhadosVendedor).
+
+    Recebe: de, ate, vendedores=178,190,224 (CSV), criterio=valor|qtd (default: valor)
+    """
+    def get(self, request):
+        de         = request.GET.get("de")
+        ate        = request.GET.get("ate")
+        vendedores = request.GET.get("vendedores", "")
+        criterio   = request.GET.get("criterio", "valor")
+
+        if not de or not ate or not vendedores:
+            return Response({"error": "Parâmetros obrigatórios: de, ate, vendedores"}, status=400)
+
+        try:
+            ids = [int(v.strip()) for v in vendedores.split(",") if v.strip()]
+        except ValueError:
+            return Response({"error": "vendedores inválidos"}, status=400)
+
+        if not ids:
+            return Response({"error": "Nenhum vendedor válido informado"}, status=400)
+
+        try:
+            resultado = buscar_ruptura_itens_detalhado(
+                de, ate, cod_vendedores=ids, criterio=criterio
+            )
+            return Response(resultado)
+        except Exception:
+            logger.exception("[RupturaItensView] erro")
+            return Response({"error": "Erro interno"}, status=500)
+
 
 class ResumoSegmentoAreaVendaView(APIView):
     # permission_classes = [IsAuthenticated]

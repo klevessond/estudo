@@ -129,3 +129,110 @@ def buscar_ruptura(
 
     resumo = [{"CodVendedor": k, "TotalValor": v} for k, v in resumo_dict.items()]
     return {"detalhes": detalhes, "resumo": resumo}
+
+
+def buscar_ruptura_itens_detalhado(
+    data_inicio: str,
+    data_fim: str,
+    cod_vendedores: Optional[Iterable[int]] = None,
+    criterio: str = "valor",  # "valor" | "qtd"
+) -> Dict[str, Any]:
+    """
+    Detalha a ruptura por ITEM (Material), para o modal "Detalhar" do card Captado —
+    mesmo padrão dos modais de Mix e Positivação.
+
+    Filtro de vendedor: idêntico ao de buscar_ruptura (IN (...) parametrizado
+    quando 2+ vendedores, '=' quando 1 único, sem filtro quando None/vazio).
+
+    Retorno:
+    {
+        "itens": [
+            {
+                "CodMaterial": int,
+                "Material": str,
+                "Grupo": str,
+                "QtdItens": float,      # soma de Quantidade não atendida
+                "ValorTotal": float,    # soma do Valor não atendido
+                "PercQtd": float,       # % sobre o total de qtd em ruptura
+                "PercValor": float,     # % sobre o total de valor em ruptura
+            }, ...
+        ],  # ordenado conforme `criterio`
+        "total_valor": float,
+        "total_qtd": float,
+        "qtd_itens_distintos": int,
+    }
+    """
+    di = _validar_data(data_inicio)
+    df = _validar_data(data_fim) + timedelta(days=1)  # intervalo [di, df)
+
+    vend_filter_sql = ""
+    params: List[Any] = [di, df]
+
+    vend_list = _to_int_list(cod_vendedores)
+    if vend_list and len(vend_list) >= 2:
+        placeholders = ",".join(["?"] * len(vend_list))
+        vend_filter_sql = f" AND PD.CodVendedor IN ({placeholders}) "
+        params.extend(vend_list)
+    elif vend_list and len(vend_list) == 1:
+        vend_filter_sql = " AND PD.CodVendedor = ? "
+        params.append(vend_list[0])
+
+    sql = f"""
+        SELECT
+          M.CodMaterial,
+          M.Material,
+          G.Grupo,
+          SUM(PDI.Qtd1)                       AS QtdItens,
+          SUM(PDI.Qtd1 * PDI.ValorEmbalagem1) AS ValorTotal
+        FROM
+          Pocket P,
+          PocketDocumento PD,
+          PocketDocumentoItens PDI,
+          Material M,
+          Grupo G,
+          TipoDocumento,
+          NaturezaOperacao N
+        WHERE
+          P.CodPocket = PD.CodPocket
+          AND PD.CodPocket = PDI.CodPocket
+          AND PD.CodDoc = PDI.CodDoc
+          AND PDI.CodMaterial1 = M.CodMaterial
+          AND M.CodGrupo = G.CodGrupo
+          AND PD.CodTipoDoc = TipoDocumento.CodTipoDoc
+          AND TipoDocumento.CodNaturezaOperacao = N.CodNaturezaOperacao
+          AND PDI.Status IN (20) -- Item não atendido
+          AND PD.DataDoc >= ?
+          AND PD.DataDoc <  ?
+          {vend_filter_sql}
+          AND PD.UnidGestora IN (
+            SELECT UnidGestora FROM UserUsuarioUnidade WHERE ID = 'ESIGMA'
+          )
+        GROUP BY M.CodMaterial, M.Material, G.Grupo
+        ORDER BY {"ValorTotal" if criterio == "valor" else "QtdItens"} DESC
+    """
+
+    rows = query_all(sql, params)
+
+    total_valor = sum(float(r.get("ValorTotal") or 0) for r in rows)
+    total_qtd   = sum(float(r.get("QtdItens") or 0) for r in rows)
+
+    itens = []
+    for r in rows:
+        valor = round(float(r.get("ValorTotal") or 0), 2)
+        qtd   = round(float(r.get("QtdItens") or 0), 2)
+        itens.append({
+            "CodMaterial": int(r.get("CodMaterial") or 0),
+            "Material":    (r.get("Material") or "").strip(),
+            "Grupo":       (r.get("Grupo") or "").strip(),
+            "QtdItens":    qtd,
+            "ValorTotal":  valor,
+            "PercQtd":     round((qtd   / total_qtd)   * 100, 1) if total_qtd   else 0.0,
+            "PercValor":   round((valor / total_valor) * 100, 1) if total_valor else 0.0,
+        })
+
+    return {
+        "itens": itens,
+        "total_valor": round(total_valor, 2),
+        "total_qtd": round(total_qtd, 2),
+        "qtd_itens_distintos": len(itens),
+    }

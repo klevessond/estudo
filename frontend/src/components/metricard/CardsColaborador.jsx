@@ -172,6 +172,13 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   const [pendenciasPreVenda,   setPendenciasPreVenda]   = useState([]);
   const [loadingPreVenda,      setLoadingPreVenda]      = useState(false);
 
+  // === Modal Ruptura (Captado) ===
+  const [modalRupturaAberto,   setModalRupturaAberto]   = useState(false);
+  const [itensRuptura,         setItensRuptura]         = useState([]);
+  const [loadingRuptura,       setLoadingRuptura]       = useState(false);
+  const [criterioValorRuptura, setCriterioValorRuptura] = useState(true); // true = valor, false = qtd
+  const [totaisRuptura,        setTotaisRuptura]        = useState({ total_valor: 0, total_qtd: 0 });
+
   
   useEffect(() => {
   if (!modalPosAberto || !codFuncionario || !periodoSelecionado) return;
@@ -214,6 +221,34 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
       .catch(err => console.error('[PreVendaStatus] erro:', err))
       .finally(() => setLoadingPreVenda(false));
   }, [modalPreVendaAberto, codFuncionario, periodoSelecionado]);
+
+  // Busca itens de ruptura ao abrir o modal ou trocar o critério — SEMPRE só este vendedor
+  useEffect(() => {
+    if (!modalRupturaAberto || !codFuncionario || !periodoSelecionado) return;
+
+    setLoadingRuptura(true);
+    api.get('/indicadores/ruptura-itens/', {
+      params: {
+        de:         periodoSelecionado.de,
+        ate:        periodoSelecionado.ate,
+        vendedores: String(codFuncionario), // apenas o vendedor em questão
+        criterio:   criterioValorRuptura ? "valor" : "qtd",
+      }
+    })
+      .then(({ data }) => {
+        setItensRuptura(data?.itens || []);
+        setTotaisRuptura({
+          total_valor: data?.total_valor || 0,
+          total_qtd:   data?.total_qtd || 0,
+        });
+      })
+      .catch(() => {
+        setItensRuptura([]);
+        setTotaisRuptura({ total_valor: 0, total_qtd: 0 });
+      })
+      .finally(() => setLoadingRuptura(false));
+
+  }, [modalRupturaAberto, criterioValorRuptura, codFuncionario, periodoSelecionado]);
 
 
   
@@ -386,6 +421,39 @@ const exportarPosicaoPDF = () => {
     });
 
     doc.save(`pre_venda_${nomeVendedor.replace(/\s+/g, '_')}_${periodoSelecionado?.de}.pdf`);
+  };
+
+  const exportarRupturaPDF = () => {
+    const doc = new jsPDF();
+    const nomeVendedor = colaborador?.colaborador || 'Vendedor';
+
+    doc.setFontSize(14);
+    doc.text(`Itens em Ruptura — ${nomeVendedor}`, 14, 15);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Período: ${periodoSelecionado?.de} a ${periodoSelecionado?.ate}`, 14, 22);
+    doc.text(
+      `Total: ${totaisRuptura.total_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} | ${totaisRuptura.total_qtd.toLocaleString('pt-BR')} unid.`,
+      14, 28
+    );
+
+    autoTable(doc, {
+      head: [['#', 'Produto', 'Grupo', 'Qtd', 'Valor (R$)', '%']],
+      body: itensRuptura.map((item, i) => [
+        i + 1,
+        item.Material || `Cod: ${item.CodMaterial}`,
+        item.Grupo || '',
+        Number(item.QtdItens).toLocaleString('pt-BR'),
+        Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        `${criterioValorRuptura ? (item.PercValor ?? 0) : (item.PercQtd ?? 0)}%`,
+      ]),
+      startY: 34,
+      styles: { fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: [220, 38, 38] },
+      alternateRowStyles: { fillColor: [254, 242, 242] },
+    });
+
+    doc.save(`ruptura_${nomeVendedor.replace(/\s+/g, '_')}_${periodoSelecionado?.de}.pdf`);
   };
 
   // early return DEPOIS de todos os hooks
@@ -795,6 +863,16 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
                   </div>
                 </>
               )}
+              <button
+                onClick={() => setModalRupturaAberto(true)}
+                style={{
+                  background: 'none', border: 'none', color: '#dc2626',
+                  cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline',
+                  padding: 0, marginTop: '8px', display: 'block',
+                }}
+              >
+                Detalhar 🔍
+              </button>
             </div>
 
           {/* ===== CARD DIÁRIO NECESSÁRIO (vendedor individual) ===== */}
@@ -1303,6 +1381,149 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  )}
+
+  {modalRupturaAberto && (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 1000,
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: '12px', padding: '1.5rem',
+        width: '90%', maxWidth: '620px', maxHeight: '85vh',
+        display: 'flex', flexDirection: 'column', gap: '1rem',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+      }}>
+        {/* Cabeçalho */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>
+              🚫 Ruptura — {colaborador?.colaborador || 'Vendedor'}
+              <span style={{ fontSize: '0.8rem', fontWeight: 400, color: '#888', marginLeft: 8 }}>
+                ({itensRuptura.length} produtos)
+              </span>
+            </h3>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {itensRuptura.length > 0 && (
+              <button
+                onClick={exportarRupturaPDF}
+                style={{
+                  padding: '6px 12px', background: '#dc2626', color: '#fff',
+                  border: 'none', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '0.8rem', fontWeight: 600,
+                }}
+              >
+                📄 Exportar PDF
+              </button>
+            )}
+            <button onClick={() => setModalRupturaAberto(false)}
+              style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Totais resumidos */}
+        <div style={{
+          display: 'flex', gap: '1.5rem', padding: '10px 14px',
+          background: '#fef2f2', borderRadius: '8px', fontSize: '0.85rem',
+        }}>
+          <div>
+            <div style={{ color: '#888', fontSize: '0.75rem' }}>Valor total em ruptura</div>
+            <div style={{ fontWeight: 700, color: '#dc2626' }}>
+              {totaisRuptura.total_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </div>
+          </div>
+          <div>
+            <div style={{ color: '#888', fontSize: '0.75rem' }}>Quantidade total</div>
+            <div style={{ fontWeight: 700, color: '#dc2626' }}>
+              {totaisRuptura.total_qtd.toLocaleString('pt-BR')}
+            </div>
+          </div>
+        </div>
+
+        {/* Toggle critério de ordenação */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <span style={{ fontSize: '0.875rem', color: criterioValorRuptura ? '#aaa' : '#1e88e5', fontWeight: criterioValorRuptura ? 400 : 600 }}>
+            📦 Quantidade
+          </span>
+          <div onClick={() => setCriterioValorRuptura(v => !v)}
+            style={{
+              width: '44px', height: '24px', borderRadius: '999px', cursor: 'pointer',
+              background: criterioValorRuptura ? '#dc2626' : '#9ca3af',
+              position: 'relative', transition: 'background 0.2s',
+            }}>
+            <div style={{
+              position: 'absolute', top: '3px',
+              left: criterioValorRuptura ? '23px' : '3px',
+              width: '18px', height: '18px', borderRadius: '50%',
+              background: '#fff', transition: 'left 0.2s',
+            }} />
+          </div>
+          <span style={{ fontSize: '0.875rem', color: criterioValorRuptura ? '#dc2626' : '#aaa', fontWeight: criterioValorRuptura ? 600 : 400 }}>
+            💰 Valor
+          </span>
+        </div>
+
+        {/* Lista */}
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {loadingRuptura ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>Carregando...</div>
+          ) : itensRuptura.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#22c55e', fontWeight: 600 }}>
+              ✅ Nenhum item em ruptura no período.
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ background: '#fee2e2', textAlign: 'left' }}>
+                  <th style={{ padding: '8px' }}>#</th>
+                  <th style={{ padding: '8px' }}>Produto</th>
+                  <th style={{ padding: '8px' }}>Grupo</th>
+                  <th style={{ padding: '8px', textAlign: 'right',
+                              color: criterioValorRuptura ? '#aaa' : '#dc2626', fontWeight: criterioValorRuptura ? 400 : 700 }}>
+                    Qtd {!criterioValorRuptura && '▼'}
+                  </th>
+                  <th style={{ padding: '8px', textAlign: 'right',
+                              color: criterioValorRuptura ? '#dc2626' : '#aaa', fontWeight: criterioValorRuptura ? 700 : 400 }}>
+                    Valor {criterioValorRuptura && '▼'}
+                  </th>
+                  <th style={{ padding: '8px', textAlign: 'right', color: '#dc2626' }}>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itensRuptura.map((item, i) => (
+                  <tr key={item.CodMaterial}
+                    style={{ borderBottom: '1px solid #eee', background: i % 2 === 0 ? '#fef2f2' : '#fff' }}>
+                    <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
+                    <td style={{ padding: '6px 8px' }}>{item.Material || `Cod: ${item.CodMaterial}`}</td>
+                    <td style={{ padding: '6px 8px', color: '#555', fontSize: '0.8rem' }}>{item.Grupo}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right',
+                                fontWeight: criterioValorRuptura ? 400 : 700,
+                                color: criterioValorRuptura ? '#555' : '#000' }}>
+                      {Number(item.QtdItens).toLocaleString('pt-BR')}
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right',
+                                fontWeight: criterioValorRuptura ? 700 : 400,
+                                color: criterioValorRuptura ? '#000' : '#555' }}>
+                      {Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', color: '#dc2626', fontWeight: 500 }}>
+                      {criterioValorRuptura
+                        ? `${Number(item.PercValor || 0).toFixed(1)}%`
+                        : `${Number(item.PercQtd   || 0).toFixed(1)}%`
+                      }
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}
