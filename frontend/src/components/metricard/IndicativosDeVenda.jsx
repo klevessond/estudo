@@ -381,7 +381,8 @@ function diasUteisEntre(inicio, fim) {
   const cur = new Date(inicio); cur.setHours(0,0,0,0);
   const end = new Date(fim);    end.setHours(0,0,0,0);
   while (cur <= end) {
-    if (cur.getDay() !== 0 && cur.getDay() !== 6) dias.push(new Date(cur));
+    const d = cur.getDay();
+    if (d !== 0 && d !== 6) dias.push(new Date(cur)); // seg-sex apenas (exclui sáb e dom)
     cur.setDate(cur.getDate() + 1);
   }
   return dias;
@@ -394,41 +395,39 @@ const CardDiarioNecessario = ({
   vendaRealizadaBase,
   usarPDV,
   vendaPDVBase,
-  diasInfo,  
 }) => {
-  const [vendaHoje, setVendaHoje] = useState(null);  // null = ainda carregando
+  const [vendaHojeInfo, setVendaHojeInfo] = useState(null);  // { total, rotas, preVenda } | null = ainda carregando
   const [loadingHoje, setLoadingHoje] = useState(false);
 
-  // Busca venda do dia (atualiza quando o período muda — dia pode ter virado)
+  // Busca venda do dia (rotas + pré-venda) — atualiza quando o período muda
   useEffect(() => {
     let cancelado = false;
     setLoadingHoje(true);
     api.get('/indicadores/venda-hoje/')
       .then(({ data }) => {
-        if (!cancelado) setVendaHoje(Number(data?.total_hoje || 0));
+        if (cancelado) return;
+        setVendaHojeInfo({
+          total: Number(data?.total_hoje || 0),
+          rotas: Number(data?.total_rotas_hoje || 0),
+          preVenda: Number(data?.total_pre_venda_hoje || 0),
+        });
       })
-      .catch(() => { if (!cancelado) setVendaHoje(0); })
+      .catch(() => { if (!cancelado) setVendaHojeInfo({ total: 0, rotas: 0, preVenda: 0 }); })
       .finally(() => { if (!cancelado) setLoadingHoje(false); });
     return () => { cancelado = true; };
   }, [periodoSelecionado?.de]);   // re-busca se o mês mudar
 
-const calc = useMemo(() => {
+  const calc = useMemo(() => {
     if (!periodoSelecionado?.de || !periodoSelecionado?.ate || !objetivoFinanceiroBase) return null;
 
     const di   = new Date(periodoSelecionado.de  + 'T00:00:00');
     const df   = new Date(periodoSelecionado.ate + 'T00:00:00');
     const hoje = new Date(); hoje.setHours(0,0,0,0);
 
-    // fallback local (sem feriados) caso o backend ainda não tenha respondido
     const totalUteis = diasUteisEntre(di, df);
     const decorridos = diasUteisEntre(di, hoje <= df ? hoje : df);
     const amanha     = new Date(hoje); amanha.setDate(hoje.getDate() + 1);
     const restantes  = hoje < df ? diasUteisEntre(amanha, df) : [];
-
-    // prioriza os valores do backend (inclui feriados, mesma fonte do card Venda Realizada)
-    const nTotal      = diasInfo?.totais      ?? totalUteis.length;
-    const nDecorridos = diasInfo?.decorridos  ?? decorridos.length;
-    const nRestantes  = diasInfo?.restantes   ?? restantes.length;
 
     const pdvNum = usarPDV ? (Number(vendaPDVBase) || 0) : 0;
     const venda  = (Number(vendaRealizadaBase) || 0) + pdvNum;
@@ -436,29 +435,43 @@ const calc = useMemo(() => {
 
     const falta    = Math.max(meta - venda, 0);
     const batida   = venda >= meta;
-    const diaNec   = (!batida && nRestantes > 0) ? falta / nRestantes : 0;
-    const mediaDia = nDecorridos > 0 ? venda / nDecorridos : 0;
+    const diaNec   = (!batida && restantes.length > 0) ? falta / restantes.length : 0;
 
-    return { nTotal, nDecorridos, nRestantes, falta, diaNec, mediaDia, batida };
-  }, [periodoSelecionado, objetivoFinanceiroBase, vendaRealizadaBase, usarPDV, vendaPDVBase, diasInfo]);
+    return {
+      nTotal: totalUteis.length,
+      nDecorridos: decorridos.length,
+      nRestantes: restantes.length,
+      falta,
+      diaNec,
+      batida,
+    };
+  }, [periodoSelecionado, objetivoFinanceiroBase, vendaRealizadaBase, usarPDV, vendaPDVBase]);
 
   if (!calc) return null;
 
   const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // Cor do diário necessário: verde se batida, vermelho se ritmo muito abaixo, amarelo se próximo
-  const corDiaNec = calc.batida
-    ? '#4ade80'
-    : calc.diaNec > calc.mediaDia * 1.3
-    ? '#fca5a5'
-    : '#fde68a';
+  const vendaHojeTotal = vendaHojeInfo?.total ?? null;
 
-  // Cor da venda de hoje: verde se >= necessário, amarelo se próximo, vermelho se baixo
-  const corHoje = vendaHoje === null
+  // Cor do diário necessário: verde se batida, vermelho se ritmo muito abaixo, amarelo se próximo
+  const corDiaNec = calc.batida ? '#4ade80' : '#fde68a';
+
+  // Cor da venda de hoje (sem pré-venda): verde se >= necessário, amarelo se próximo, vermelho se baixo
+  const vendaHojeSemPre = vendaHojeInfo?.rotas ?? null;
+  const corHojeSemPre = vendaHojeSemPre === null
     ? 'rgba(255,255,255,0.6)'
-    : vendaHoje >= calc.diaNec
+    : vendaHojeSemPre >= calc.diaNec
     ? '#4ade80'
-    : vendaHoje >= calc.diaNec * 0.7
+    : vendaHojeSemPre >= calc.diaNec * 0.7
+    ? '#fde68a'
+    : '#fca5a5';
+
+  // Cor da venda de hoje (com pré-venda): mesma régua, mas sobre o total
+  const corHojeComPre = vendaHojeTotal === null
+    ? 'rgba(255,255,255,0.6)'
+    : vendaHojeTotal >= calc.diaNec
+    ? '#4ade80'
+    : vendaHojeTotal >= calc.diaNec * 0.7
     ? '#fde68a'
     : '#fca5a5';
 
@@ -481,22 +494,32 @@ const calc = useMemo(() => {
       {/* Separador */}
       <div style={{ borderTop:'1px solid rgba(255,255,255,0.2)', margin:'4px 0' }} />
 
-      {/* Vendido HOJE */}
-      <div className="card-value" style={{ color: corHoje, fontSize:'clamp(11px,3vw,13px)' }}>
+      {/* Vendido HOJE — sem pré-venda */}
+      <div className="card-value" style={{ color: corHojeSemPre, fontSize:'clamp(11px,3vw,13px)' }}>
         {loadingHoje
           ? '...'
-          : vendaHoje === null
+          : vendaHojeSemPre === null
           ? '--'
-          : fmt(vendaHoje)}
+          : fmt(vendaHojeSemPre)}
       </div>
-      <p className="card-subtitle">vendido hoje</p>
+      <p className="card-subtitle">vendido hoje (sem pré-venda)</p>
+
+      {/* Vendido HOJE — com pré-venda somada */}
+      <div className="card-value" style={{ color: corHojeComPre, fontSize:'clamp(11px,3vw,13px)', marginTop: 4 }}>
+        {loadingHoje
+          ? '...'
+          : vendaHojeTotal === null
+          ? '--'
+          : fmt(vendaHojeTotal)}
+      </div>
+      <p className="card-subtitle">vendido hoje (com pré-venda)</p>
 
       {/* Separador */}
       <div style={{ borderTop:'1px solid rgba(255,255,255,0.2)', margin:'4px 0' }} />
 
-      {/* Média diária acumulada */}
+      {/* Pré-venda efetuada hoje (valor isolado, para referência) */}
       <p className="card-subtitle" style={{ margin:'2px 0' }}>
-        Média/dia: {fmt(calc.mediaDia)}
+        Pré-venda: {loadingHoje ? '...' : fmt(vendaHojeInfo?.preVenda)}
       </p>
 
       {/* Calendário + falta */}
@@ -828,6 +851,13 @@ const IndicadoresCards = ({
   const [mostrarNaoPosArea,   setMostrarNaoPosArea]    = useState(false);
   const [criterioValorArea,   setCriterioValorArea]    = useState(false);
 
+  // === Modal Ruptura (Captado) ===
+  const [modalRupturaAberto,   setModalRupturaAberto]   = useState(false);
+  const [itensRupturaArea,     setItensRupturaArea]     = useState([]);
+  const [loadingRupturaArea,   setLoadingRupturaArea]   = useState(false);
+  const [criterioValorRuptura, setCriterioValorRuptura] = useState(true); // true = valor, false = qtd
+  const [totaisRuptura,        setTotaisRuptura]        = useState({ total_valor: 0, total_qtd: 0 });
+
 
   // === evolução base (sem PDV)
   const applyEvolucaoFromRaw = (data, isArea, atualOverride) => {
@@ -958,7 +988,9 @@ const IndicadoresCards = ({
     const pre = Number(linha?.PreVenda_Valor || 0);
     const ruptura = Number(linha?.Ruptura_TotalValor || 0);
 
-    const posReal = Number(linha?.QtdClientes || 0);
+    const posReal = Number(
+      m?.realizado_positivacao ?? linha?.QtdClientes ?? 0
+    );
     const objPos = Number(
       m?.objetivo_positivacao ??
         data?.objetivo?.objetivo_positivacao ??
@@ -1070,7 +1102,8 @@ const IndicadoresCards = ({
         : soma('Ruptura_TotalValor')
     );
     const posAgg = Number(
-      (agg.QtdClientes ?? null) !== null ? agg.QtdClientes : soma('QtdClientes')
+      data?.positivacao?.realizado ??
+        ((agg.QtdClientes ?? null) !== null ? agg.QtdClientes : soma('QtdClientes'))
     );
 
     dlog('AREA preAgg:', preAgg, 'rupAgg:', rupAgg, 'posAgg(QtdClientes soma):', posAgg);
@@ -1874,6 +1907,43 @@ useEffect(() => {
 
 }, [modalPosAreaAberto, mostrarNaoPosArea, rawData, supervisaoSelecionada, periodoSelecionado]);
 
+useEffect(() => {
+  if (!modalRupturaAberto || !rawData) return;
+
+  const escopo = rawData?.escopo_rotas || {};
+  let vendedores = escopo.vendedores_escopo || [];
+
+  if (Boolean(escopo.e_gerente) && supervisaoSelecionada?.length > 0) {
+    const areas = escopo.areas_supervisao || [];
+    const idsSel = supervisaoSelecionada.map(s => String(s.value));
+    vendedores = areas
+      .filter(a => idsSel.includes(String(a.cod_area_supervisao)))
+      .flatMap(a => a.vendedores || []);
+  }
+
+  if (!vendedores.length) return;
+
+  setLoadingRupturaArea(true);
+  api.get('/indicadores/ruptura-itens/', {
+    params: {
+      de:         periodoSelecionado?.de,
+      ate:        periodoSelecionado?.ate,
+      vendedores: vendedores.join(','),
+      criterio:   criterioValorRuptura ? "valor" : "qtd",
+    }
+  })
+    .then(res => {
+      setItensRupturaArea(res.data?.itens || []);
+      setTotaisRuptura({
+        total_valor: res.data?.total_valor || 0,
+        total_qtd:   res.data?.total_qtd || 0,
+      });
+    })
+    .catch(() => { setItensRupturaArea([]); setTotaisRuptura({ total_valor: 0, total_qtd: 0 }); })
+    .finally(() => setLoadingRupturaArea(false));
+
+}, [modalRupturaAberto, criterioValorRuptura, rawData, supervisaoSelecionada, periodoSelecionado]);
+
 const exportarMixAreaPDF = () => {
   const doc = new jsPDF();
   autoTable(doc, {
@@ -1906,6 +1976,31 @@ const exportarPosAreaPDF = () => {
     headStyles: { fillColor: mostrarNaoPosArea ? [239, 68, 68] : [34, 197, 94] },
   });
   doc.save(`positivacao_area_${periodoSelecionado?.de}.pdf`);
+};
+
+const exportarRupturaPDF = () => {
+  const doc = new jsPDF();
+  doc.setFontSize(13);
+  doc.text('Itens em Ruptura (não atendidos)', 14, 15);
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.text(`Total: ${totaisRuptura.total_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} | ${totaisRuptura.total_qtd.toLocaleString('pt-BR')} unid.`, 14, 21);
+
+  autoTable(doc, {
+    head: [['#', 'Produto', 'Grupo', 'Qtd', 'Valor (R$)', '%']],
+    body: itensRupturaArea.map((item, i) => [
+      i + 1,
+      item.Material || `Cod: ${item.CodMaterial}`,
+      item.Grupo || '',
+      Number(item.QtdItens).toLocaleString('pt-BR'),
+      Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      `${criterioValorRuptura ? (item.PercValor ?? 0) : (item.PercQtd ?? 0)}%`,
+    ]),
+    startY: 27,
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [239, 68, 68] },
+  });
+  doc.save(`ruptura_itens_${periodoSelecionado?.de}.pdf`);
 };
 
 
@@ -2456,6 +2551,7 @@ setMixVariacao(String(mixReal - metaMixFinal));
             subtitle2={!usarPDV ? ' Cobertura potencial' : ' Cobertura'}
             variation="0"
             className="card-captar"
+            onDetailClick={() => setModalRupturaAberto(true)}
           />
 
           {/* ===== CARD DIÁRIO NECESSÁRIO ===== */}
@@ -2465,7 +2561,6 @@ setMixVariacao(String(mixReal - metaMixFinal));
             vendaRealizadaBase={vendaRealizadaBase ?? 0}
             usarPDV={usarPDV}
             vendaPDVBase={usarPDV ? (somarArea ? pdvValorArea : pdvValorUG) ?? 0 : 0}
-            diasInfo={dataEscopoAtual?.projecao_empresa?.dias_uteis ?? null}
           />
 
           <Card
@@ -2784,6 +2879,145 @@ setMixVariacao(String(mixReal - metaMixFinal));
                   </td>
                   <td style={{ padding: '6px 8px', color: '#555', fontSize: '0.8rem' }}>
                     {cliente.Rota}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
+{modalRupturaAberto && (
+  <div style={{
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 1000,
+  }}>
+    <div style={{
+      background: '#fff', borderRadius: '12px', padding: '1.5rem',
+      width: '90%', maxWidth: '600px', maxHeight: '80vh',
+      display: 'flex', flexDirection: 'column', gap: '1rem',
+    }}>
+      {/* Cabeçalho */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0 }}>
+          🚫 Ruptura — Itens não atendidos
+          <span style={{ fontSize: '0.875rem', fontWeight: 400, color: '#888', marginLeft: 8 }}>
+            ({itensRupturaArea.length} produtos)
+          </span>
+        </h3>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button
+            onClick={exportarRupturaPDF}
+            style={{
+              background: '#dc2626', color: '#fff', border: 'none',
+              borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem'
+            }}
+          >
+            📄 Exportar PDF
+          </button>
+          <button onClick={() => setModalRupturaAberto(false)}
+            style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {/* Totais resumidos */}
+      <div style={{
+        display: 'flex', gap: '1.5rem', padding: '10px 14px',
+        background: '#fef2f2', borderRadius: '8px', fontSize: '0.85rem',
+      }}>
+        <div>
+          <div style={{ color: '#888', fontSize: '0.75rem' }}>Valor total em ruptura</div>
+          <div style={{ fontWeight: 700, color: '#dc2626' }}>
+            {totaisRuptura.total_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          </div>
+        </div>
+        <div>
+          <div style={{ color: '#888', fontSize: '0.75rem' }}>Quantidade total</div>
+          <div style={{ fontWeight: 700, color: '#dc2626' }}>
+            {totaisRuptura.total_qtd.toLocaleString('pt-BR')}
+          </div>
+        </div>
+      </div>
+
+      {/* Toggle critério de ordenação */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <span style={{ fontSize: '0.875rem', color: criterioValorRuptura ? '#aaa' : '#1e88e5', fontWeight: criterioValorRuptura ? 400 : 600 }}>
+          📦 Quantidade
+        </span>
+        <div onClick={() => setCriterioValorRuptura(v => !v)}
+          style={{
+            width: '44px', height: '24px', borderRadius: '999px', cursor: 'pointer',
+            background: criterioValorRuptura ? '#dc2626' : '#9ca3af',
+            position: 'relative', transition: 'background 0.2s',
+          }}>
+          <div style={{
+            position: 'absolute', top: '3px',
+            left: criterioValorRuptura ? '23px' : '3px',
+            width: '18px', height: '18px', borderRadius: '50%',
+            background: '#fff', transition: 'left 0.2s',
+          }} />
+        </div>
+        <span style={{ fontSize: '0.875rem', color: criterioValorRuptura ? '#dc2626' : '#aaa', fontWeight: criterioValorRuptura ? 600 : 400 }}>
+          💰 Valor
+        </span>
+      </div>
+
+      {/* Lista */}
+      <div style={{ overflowY: 'auto', flex: 1 }}>
+        {loadingRupturaArea ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+            Carregando...
+          </div>
+        ) : itensRupturaArea.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+            Nenhum item em ruptura no período.
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <thead>
+              <tr style={{ background: '#fee2e2', textAlign: 'left' }}>
+                <th style={{ padding: '8px' }}>#</th>
+                <th style={{ padding: '8px' }}>Produto</th>
+                <th style={{ padding: '8px' }}>Grupo</th>
+                <th style={{ padding: '8px', textAlign: 'right',
+                            color: criterioValorRuptura ? '#aaa' : '#dc2626', fontWeight: criterioValorRuptura ? 400 : 700 }}>
+                  Qtd {!criterioValorRuptura && '▼'}
+                </th>
+                <th style={{ padding: '8px', textAlign: 'right',
+                            color: criterioValorRuptura ? '#dc2626' : '#aaa', fontWeight: criterioValorRuptura ? 700 : 400 }}>
+                  Valor {criterioValorRuptura && '▼'}
+                </th>
+                <th style={{ padding: '8px', textAlign: 'right', color: '#dc2626' }}>%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itensRupturaArea.map((item, i) => (
+                <tr key={item.CodMaterial}
+                  style={{ borderBottom: '1px solid #eee', background: i % 2 === 0 ? '#fef2f2' : '#fff' }}>
+                  <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
+                  <td style={{ padding: '6px 8px' }}>{item.Material || `Cod: ${item.CodMaterial}`}</td>
+                  <td style={{ padding: '6px 8px', color: '#555', fontSize: '0.8rem' }}>{item.Grupo}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right',
+                              fontWeight: criterioValorRuptura ? 400 : 700,
+                              color: criterioValorRuptura ? '#555' : '#000' }}>
+                    {Number(item.QtdItens).toLocaleString('pt-BR')}
+                  </td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right',
+                              fontWeight: criterioValorRuptura ? 700 : 400,
+                              color: criterioValorRuptura ? '#000' : '#555' }}>
+                    {Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', color: '#dc2626', fontWeight: 500 }}>
+                    {criterioValorRuptura
+                      ? `${Number(item.PercValor || 0).toFixed(1)}%`
+                      : `${Number(item.PercQtd   || 0).toFixed(1)}%`
+                    }
                   </td>
                 </tr>
               ))}

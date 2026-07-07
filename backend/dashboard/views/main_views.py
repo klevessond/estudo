@@ -30,7 +30,7 @@ from decimal import Decimal
 from dashboard.roles import get_role_context  
 from dashboard.services.indicadores.info_service import Todos_Vendedores, obter_cod_supervisor
 from dashboard.services.indicadores.calculos_projecao import get_dias_uteis_info, calcular_matematica_projecao
-from dashboard.services.indicadores.ruptura_service import buscar_ruptura
+from dashboard.services.indicadores.ruptura_service import buscar_ruptura, buscar_ruptura_itens_detalhado
 from dashboard.db_conn import query_all
 
 logger = logging.getLogger(__name__)
@@ -460,10 +460,23 @@ class IndicadoresView(APIView):
             
             for m in mix_nivel_qs:
                 if m.nivel == 'EMPRESA':
-                    mix_empresa_val += m.objetivo_mix          # ← acumula
+                    mix_empresa_val += m.objetivo_mix          # ← acumula (soma bruta dos meses)
                 elif m.nivel == 'SUPERVISOR':
                     cod = str(m.codigo_alvo)
-                    mix_supervisores_map[cod] = mix_supervisores_map.get(cod, 0) + m.objetivo_mix  # ← acumula
+                    mix_supervisores_map[cod] = mix_supervisores_map.get(cod, 0) + m.objetivo_mix  # ← acumula (soma bruta dos meses)
+
+            # 🔧 CORREÇÃO: Mix/Positivação são metas MENSAIS recorrentes — o restante
+            # do sistema (get_objetivo_mensal_serializado, get_objetivos_vendedores_por_mes,
+            # _calcular_media_mix_pos_por_mes) sempre trabalha com MÉDIA mensal.
+            # Aqui a soma dos meses precisa virar média também, senão o objetivo fica
+            # "num_meses vezes maior" que o realizado (que já vem em média) quando o
+            # período consultado abrange mais de um mês.
+            if num_meses > 1:
+                mix_empresa_val = round(mix_empresa_val / num_meses, 1)
+                mix_supervisores_map = {
+                    cod: round(valor / num_meses, 1)
+                    for cod, valor in mix_supervisores_map.items()
+                }
 
             # --- AJUSTE DO OBJETIVO PRINCIPAL (Card de Mix) ---
             # Se for Gerente/Admin, a meta geral padrão é a da EMPRESA
@@ -1318,6 +1331,8 @@ class IndicadoresView(APIView):
                 my_venda = _to_float((minha_linha or {}).get("ValorLiquido"))
                 my_peso  = _to_float((minha_linha or {}).get("PesoTotal"))
                 my_mix = _mix_media_por_vend.get(meu_cod, _to_float((minha_linha or {}).get("Mix")))
+                # pos_by_cod já resolve corretamente 1 mês (valor direto) e N meses (média mensal)
+                my_pos = pos_by_cod.get(meu_cod, 0.0)
 
                 my_obj_fin  = _to_float((obj_meu or {}).get("objetivo_financeiro"))
                 my_obj_peso = _to_float((obj_meu or {}).get("objetivo_peso"))
@@ -1330,6 +1345,7 @@ class IndicadoresView(APIView):
                     "realizado_financeiro": round(my_venda, 2),
                     "realizado_peso": round(my_peso, 2),
                     "mix_realizado": round(my_mix, 2),
+                    "realizado_positivacao": round(my_pos, 2),
                     "objetivo_financeiro": round(my_obj_fin, 2),
                     "objetivo_peso": round(my_obj_peso, 2),
                     "objetivo_mix": round(my_obj_mix, 2),
@@ -1340,6 +1356,8 @@ class IndicadoresView(APIView):
                     "variacao_peso": round(my_peso - my_obj_peso, 2),
                     "percentual_mix": round(safe_divide(my_mix, my_obj_mix) * 100, 2) if my_obj_mix else 0.0,
                     "variacao_mix": round(my_mix - my_obj_mix, 2),
+                    "percentual_positivacao": round(safe_divide(my_pos, my_obj_pos) * 100, 2) if my_obj_pos else 0.0,
+                    "variacao_positivacao": round(my_pos - my_obj_pos, 2),
                 }
         except Exception as e:
             logger.exception(f"[IndicadoresView][minha_visao] erro ao montar: {e}")
@@ -2843,6 +2861,40 @@ class RupturaView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=500)
     
+
+class RupturaItensView(APIView):
+    """
+    Detalhamento da ruptura por ITEM (Material) — usado pelo modal "Detalhar"
+    do card Captado (IndicativosDeVenda) e pela aba Ruptura (CardsDetalhadosVendedor).
+
+    Recebe: de, ate, vendedores=178,190,224 (CSV), criterio=valor|qtd (default: valor)
+    """
+    def get(self, request):
+        de         = request.GET.get("de")
+        ate        = request.GET.get("ate")
+        vendedores = request.GET.get("vendedores", "")
+        criterio   = request.GET.get("criterio", "valor")
+
+        if not de or not ate or not vendedores:
+            return Response({"error": "Parâmetros obrigatórios: de, ate, vendedores"}, status=400)
+
+        try:
+            ids = [int(v.strip()) for v in vendedores.split(",") if v.strip()]
+        except ValueError:
+            return Response({"error": "vendedores inválidos"}, status=400)
+
+        if not ids:
+            return Response({"error": "Nenhum vendedor válido informado"}, status=400)
+
+        try:
+            resultado = buscar_ruptura_itens_detalhado(
+                de, ate, cod_vendedores=ids, criterio=criterio
+            )
+            return Response(resultado)
+        except Exception:
+            logger.exception("[RupturaItensView] erro")
+            return Response({"error": "Erro interno"}, status=500)
+
 
 class ResumoSegmentoAreaVendaView(APIView):
     # permission_classes = [IsAuthenticated]
