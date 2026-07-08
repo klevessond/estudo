@@ -857,6 +857,7 @@ const IndicadoresCards = ({
   const [loadingRupturaArea,   setLoadingRupturaArea]   = useState(false);
   const [criterioValorRuptura, setCriterioValorRuptura] = useState(true); // true = valor, false = qtd
   const [totaisRuptura,        setTotaisRuptura]        = useState({ total_valor: 0, total_qtd: 0 });
+  const [filtroFabricanteRuptura, setFiltroFabricanteRuptura] = useState('Todos');
 
 
   // === evolução base (sem PDV)
@@ -1910,6 +1911,8 @@ useEffect(() => {
 useEffect(() => {
   if (!modalRupturaAberto || !rawData) return;
 
+  setFiltroFabricanteRuptura('Todos'); // reseta o filtro a cada abertura
+
   const escopo = rawData?.escopo_rotas || {};
   let vendedores = escopo.vendedores_escopo || [];
 
@@ -1943,6 +1946,38 @@ useEffect(() => {
     .finally(() => setLoadingRupturaArea(false));
 
 }, [modalRupturaAberto, criterioValorRuptura, rawData, supervisaoSelecionada, periodoSelecionado]);
+
+// Lista de fabricantes distintos presentes na ruptura (para o dropdown do modal)
+const fabricantesRupturaDisponiveis = useMemo(() => {
+  const nomes = new Set(itensRupturaArea.map(i => i.Fabricante || 'Sem fabricante'));
+  return ['Todos', ...Array.from(nomes).sort((a, b) => a.localeCompare(b))];
+}, [itensRupturaArea]);
+
+// Itens filtrados por fabricante + totais/percentuais RECALCULADOS sobre o subconjunto filtrado
+const { itensRupturaFiltrados, totaisRupturaFiltrados } = useMemo(() => {
+  const base = filtroFabricanteRuptura === 'Todos'
+    ? itensRupturaArea
+    : itensRupturaArea.filter(i => (i.Fabricante || 'Sem fabricante') === filtroFabricanteRuptura);
+
+  const totalValor = base.reduce((s, i) => s + Number(i.ValorTotal || 0), 0);
+  const totalQtd    = base.reduce((s, i) => s + Number(i.QtdItens   || 0), 0);
+
+  const recalculados = base.map(i => ({
+    ...i,
+    PercValor: totalValor ? Number(((i.ValorTotal / totalValor) * 100).toFixed(1)) : 0,
+    PercQtd:   totalQtd   ? Number(((i.QtdItens   / totalQtd)   * 100).toFixed(1)) : 0,
+  }));
+
+  // ordena conforme o critério ativo, já que a filtragem pode ter alterado a ordem relativa
+  recalculados.sort((a, b) =>
+    criterioValorRuptura ? b.ValorTotal - a.ValorTotal : b.QtdItens - a.QtdItens
+  );
+
+  return {
+    itensRupturaFiltrados: recalculados,
+    totaisRupturaFiltrados: { total_valor: totalValor, total_qtd: totalQtd },
+  };
+}, [itensRupturaArea, filtroFabricanteRuptura, criterioValorRuptura]);
 
 const exportarMixAreaPDF = () => {
   const doc = new jsPDF();
@@ -1984,14 +2019,19 @@ const exportarRupturaPDF = () => {
   doc.text('Itens em Ruptura (não atendidos)', 14, 15);
   doc.setFontSize(9);
   doc.setTextColor(100);
-  doc.text(`Total: ${totaisRuptura.total_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} | ${totaisRuptura.total_qtd.toLocaleString('pt-BR')} unid.`, 14, 21);
+  const filtroTxt = filtroFabricanteRuptura !== 'Todos' ? ` | Fabricante: ${filtroFabricanteRuptura}` : '';
+  doc.text(
+    `Total: ${totaisRupturaFiltrados.total_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} | ${totaisRupturaFiltrados.total_qtd.toLocaleString('pt-BR')} unid.${filtroTxt}`,
+    14, 21
+  );
 
   autoTable(doc, {
-    head: [['#', 'Produto', 'Grupo', 'Qtd', 'Valor (R$)', '%']],
-    body: itensRupturaArea.map((item, i) => [
+    head: [['#', 'Produto', 'Grupo', 'Fabricante', 'Qtd', 'Valor (R$)', '%']],
+    body: itensRupturaFiltrados.map((item, i) => [
       i + 1,
       item.Material || `Cod: ${item.CodMaterial}`,
       item.Grupo || '',
+      item.Fabricante || 'Sem fabricante',
       Number(item.QtdItens).toLocaleString('pt-BR'),
       Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
       `${criterioValorRuptura ? (item.PercValor ?? 0) : (item.PercQtd ?? 0)}%`,
@@ -2906,7 +2946,7 @@ setMixVariacao(String(mixReal - metaMixFinal));
         <h3 style={{ margin: 0 }}>
           🚫 Ruptura — Itens não atendidos
           <span style={{ fontSize: '0.875rem', fontWeight: 400, color: '#888', marginLeft: 8 }}>
-            ({itensRupturaArea.length} produtos)
+            ({itensRupturaFiltrados.length} produtos)
           </span>
         </h3>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -2926,7 +2966,34 @@ setMixVariacao(String(mixReal - metaMixFinal));
         </div>
       </div>
 
-      {/* Totais resumidos */}
+      {/* Filtro de Fabricante */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <label style={{ fontSize: '0.8rem', color: '#555', fontWeight: 600 }}>
+          🏭 Fabricante:
+        </label>
+        <select
+          value={filtroFabricanteRuptura}
+          onChange={(e) => setFiltroFabricanteRuptura(e.target.value)}
+          style={{
+            padding: '4px 8px', borderRadius: '6px', border: '1px solid #ddd',
+            fontSize: '0.8rem', flex: 1, maxWidth: '260px',
+          }}
+        >
+          {fabricantesRupturaDisponiveis.map(f => (
+            <option key={f} value={f}>{f}</option>
+          ))}
+        </select>
+        {filtroFabricanteRuptura !== 'Todos' && (
+          <button
+            onClick={() => setFiltroFabricanteRuptura('Todos')}
+            style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            limpar
+          </button>
+        )}
+      </div>
+
+      {/* Totais resumidos (já recalculados conforme o filtro) */}
       <div style={{
         display: 'flex', gap: '1.5rem', padding: '10px 14px',
         background: '#fef2f2', borderRadius: '8px', fontSize: '0.85rem',
@@ -2934,13 +3001,13 @@ setMixVariacao(String(mixReal - metaMixFinal));
         <div>
           <div style={{ color: '#888', fontSize: '0.75rem' }}>Valor total em ruptura</div>
           <div style={{ fontWeight: 700, color: '#dc2626' }}>
-            {totaisRuptura.total_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            {totaisRupturaFiltrados.total_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
           </div>
         </div>
         <div>
           <div style={{ color: '#888', fontSize: '0.75rem' }}>Quantidade total</div>
           <div style={{ fontWeight: 700, color: '#dc2626' }}>
-            {totaisRuptura.total_qtd.toLocaleString('pt-BR')}
+            {totaisRupturaFiltrados.total_qtd.toLocaleString('pt-BR')}
           </div>
         </div>
       </div>
@@ -2974,9 +3041,9 @@ setMixVariacao(String(mixReal - metaMixFinal));
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
             Carregando...
           </div>
-        ) : itensRupturaArea.length === 0 ? (
+        ) : itensRupturaFiltrados.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
-            Nenhum item em ruptura no período.
+            Nenhum item em ruptura no período{filtroFabricanteRuptura !== 'Todos' ? ' para este fabricante.' : '.'}
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
@@ -2985,6 +3052,7 @@ setMixVariacao(String(mixReal - metaMixFinal));
                 <th style={{ padding: '8px' }}>#</th>
                 <th style={{ padding: '8px' }}>Produto</th>
                 <th style={{ padding: '8px' }}>Grupo</th>
+                <th style={{ padding: '8px' }}>Fabricante</th>
                 <th style={{ padding: '8px', textAlign: 'right',
                             color: criterioValorRuptura ? '#aaa' : '#dc2626', fontWeight: criterioValorRuptura ? 400 : 700 }}>
                   Qtd {!criterioValorRuptura && '▼'}
@@ -2997,12 +3065,13 @@ setMixVariacao(String(mixReal - metaMixFinal));
               </tr>
             </thead>
             <tbody>
-              {itensRupturaArea.map((item, i) => (
+              {itensRupturaFiltrados.map((item, i) => (
                 <tr key={item.CodMaterial}
                   style={{ borderBottom: '1px solid #eee', background: i % 2 === 0 ? '#fef2f2' : '#fff' }}>
                   <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
                   <td style={{ padding: '6px 8px' }}>{item.Material || `Cod: ${item.CodMaterial}`}</td>
                   <td style={{ padding: '6px 8px', color: '#555', fontSize: '0.8rem' }}>{item.Grupo}</td>
+                  <td style={{ padding: '6px 8px', color: '#555', fontSize: '0.8rem' }}>{item.Fabricante}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right',
                               fontWeight: criterioValorRuptura ? 400 : 700,
                               color: criterioValorRuptura ? '#555' : '#000' }}>

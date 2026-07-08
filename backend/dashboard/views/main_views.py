@@ -2874,6 +2874,7 @@ class RupturaItensView(APIView):
         ate        = request.GET.get("ate")
         vendedores = request.GET.get("vendedores", "")
         criterio   = request.GET.get("criterio", "valor")
+        fabricante = request.GET.get("fabricante")  # opcional: CodFabricante
 
         if not de or not ate or not vendedores:
             return Response({"error": "Parâmetros obrigatórios: de, ate, vendedores"}, status=400)
@@ -2886,9 +2887,16 @@ class RupturaItensView(APIView):
         if not ids:
             return Response({"error": "Nenhum vendedor válido informado"}, status=400)
 
+        cod_fabricante = None
+        if fabricante not in (None, "", "todos", "Todos"):
+            try:
+                cod_fabricante = int(fabricante)
+            except ValueError:
+                return Response({"error": "fabricante inválido"}, status=400)
+
         try:
             resultado = buscar_ruptura_itens_detalhado(
-                de, ate, cod_vendedores=ids, criterio=criterio
+                de, ate, cod_vendedores=ids, criterio=criterio, cod_fabricante=cod_fabricante
             )
             return Response(resultado)
         except Exception:
