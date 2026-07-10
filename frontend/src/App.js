@@ -10,6 +10,7 @@ import Register from './components/pages/register/Register.jsx';
 import RegisterUser from './components/pages/register/RegisterUser.jsx';
 import EditarUsuario from './components/pages/register/EditarUsuario.jsx';
 import Feriados from './components/pages/register/Feriados.jsx';
+import TelegramConfig from './components/pages/TelegramConfig.jsx';
 
 const App = () => {
   return (
@@ -79,6 +80,17 @@ const App = () => {
               <PrivateRoute>
                 <Layout>
                   <Feriados />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/telegram"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <TelegramConfig />
                 </Layout>
               </PrivateRoute>
             }

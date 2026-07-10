@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -135,3 +136,78 @@ class Feriado(models.Model):
 
     def __str__(self):
         return f"{self.data.strftime('%d/%m/%Y')} - {self.descricao}"
+
+
+class TelegramLinkCode(models.Model):
+    """
+    Código temporário de 6 dígitos gerado pelo vendedor no dashboard
+    para vincular sua conta ao bot do Telegram.
+    """
+    cod_funcionario = models.IntegerField()
+    codigo = models.CharField(max_length=6, unique=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    expira_em = models.DateTimeField()
+    usado = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "telegram_link_code"
+
+    def __str__(self):
+        return f"{self.codigo} -> vendedor {self.cod_funcionario}"
+
+    def expirado(self) -> bool:
+        return timezone.now() > self.expira_em
+
+
+class VendedorTelegram(models.Model):
+    """
+    Vínculo definitivo entre um vendedor (CodFuncionario do ERP) e o
+    chat_id dele no Telegram, usado para enviar as notificações.
+    """
+    cod_funcionario = models.IntegerField(unique=True)
+    chat_id = models.BigIntegerField()
+    telegram_username = models.CharField(max_length=100, null=True, blank=True)
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "vendedor_telegram"
+
+    def __str__(self):
+        return f"Vendedor {self.cod_funcionario} -> chat {self.chat_id}"
+
+
+class RupturaNotificada(models.Model):
+    """
+    Tabela de controle: marca quais itens de ruptura (identificados pela
+    chave natural CodPocket + CodDoc + Sequencia) já foram detectados e/ou
+    notificados, evitando reenvio duplicado.
+    """
+    cod_pocket = models.IntegerField()
+    cod_doc = models.IntegerField()
+    sequencia = models.IntegerField()
+    cod_vendedor = models.IntegerField(null=True, blank=True)
+    enviado = models.BooleanField(default=False)
+    tentativas = models.IntegerField(default=0)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    ultima_tentativa = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "ruptura_notificada"
+        unique_together = ("cod_pocket", "cod_doc", "sequencia")
+
+    def __str__(self):
+        status = "enviado" if self.enviado else f"pendente ({self.tentativas}x)"
+        return f"Ruptura {self.cod_pocket}/{self.cod_doc}/{self.sequencia} — {status}"
+
+
+class TelegramPollState(models.Model):
+    """
+    Linha única (singleton) que guarda o último update_id processado do
+    getUpdates do bot, para não reprocessar as mesmas mensagens a cada execução.
+    """
+    last_update_id = models.BigIntegerField(default=0)
+
+    class Meta:
+        db_table = "telegram_poll_state"
