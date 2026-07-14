@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -135,3 +136,117 @@ class Feriado(models.Model):
 
     def __str__(self):
         return f"{self.data.strftime('%d/%m/%Y')} - {self.descricao}"
+
+
+class TelegramLinkCode(models.Model):
+    """
+    Código temporário de 6 dígitos gerado pelo vendedor no dashboard
+    para vincular sua conta ao bot do Telegram.
+    """
+    cod_funcionario = models.IntegerField()
+    codigo = models.CharField(max_length=6, unique=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    expira_em = models.DateTimeField()
+    usado = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "telegram_link_code"
+
+    def __str__(self):
+        return f"{self.codigo} -> vendedor {self.cod_funcionario}"
+
+    def expirado(self) -> bool:
+        return timezone.now() > self.expira_em
+
+
+class VendedorTelegram(models.Model):
+    """
+    Vínculo definitivo entre um vendedor (CodFuncionario do ERP) e o
+    chat_id dele no Telegram, usado para enviar as notificações.
+    """
+    cod_funcionario = models.IntegerField(unique=True)
+    chat_id = models.BigIntegerField()
+    telegram_username = models.CharField(max_length=100, null=True, blank=True)
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "vendedor_telegram"
+
+    def __str__(self):
+        return f"Vendedor {self.cod_funcionario} -> chat {self.chat_id}"
+
+
+class RupturaNotificada(models.Model):
+    """
+    Tabela de controle: marca quais itens de ruptura (identificados pela
+    chave natural CodPocket + CodDoc + Sequencia) já foram detectados e/ou
+    notificados, evitando reenvio duplicado.
+
+    O envio é rastreado separadamente para o VENDEDOR do cliente e para o
+    SUPERVISOR desse vendedor, já que um pode estar vinculado ao Telegram
+    e o outro não (ou vice-versa) — cada um tem seu próprio ciclo de retry.
+    Os GERENTES (que recebem TODAS as rupturas, de qualquer vendedor) são
+    rastreados à parte, na tabela RupturaNotificacaoGerente, pois pode
+    haver mais de um gerente ao mesmo tempo.
+    """
+    cod_pocket = models.IntegerField()
+    cod_doc = models.IntegerField()
+    sequencia = models.IntegerField()
+
+    cod_vendedor = models.IntegerField(null=True, blank=True)
+    cod_supervisor = models.IntegerField(null=True, blank=True)
+
+    enviado_vendedor = models.BooleanField(default=False)
+    enviado_supervisor = models.BooleanField(default=False)
+
+    tentativas_vendedor = models.IntegerField(default=0)
+    tentativas_supervisor = models.IntegerField(default=0)
+
+    criado_em = models.DateTimeField(auto_now_add=True)
+    ultima_tentativa = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "ruptura_notificada"
+        unique_together = ("cod_pocket", "cod_doc", "sequencia")
+
+    def __str__(self):
+        v = "enviado" if self.enviado_vendedor else f"pendente ({self.tentativas_vendedor}x)"
+        s = "enviado" if self.enviado_supervisor else f"pendente ({self.tentativas_supervisor}x)"
+        return f"Ruptura {self.cod_pocket}/{self.cod_doc}/{self.sequencia} — vend:{v} sup:{s}"
+
+
+class RupturaNotificacaoGerente(models.Model):
+    """
+    Rastreia, para cada item de ruptura, o envio individual a CADA gerente
+    ativo no sistema (pode haver mais de um gerente, diferente de vendedor/
+    supervisor que são únicos por item). Cada gerente tem seu próprio
+    ciclo de retry independente.
+    """
+    ruptura = models.ForeignKey(
+        RupturaNotificada, on_delete=models.CASCADE, related_name="notificacoes_gerente"
+    )
+    cod_gerente = models.IntegerField()
+    enviado = models.BooleanField(default=False)
+    tentativas = models.IntegerField(default=0)
+    ultima_tentativa = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "ruptura_notificacao_gerente"
+        unique_together = ("ruptura", "cod_gerente")
+
+    def __str__(self):
+        status = "enviado" if self.enviado else f"pendente ({self.tentativas}x)"
+        return f"Ruptura {self.ruptura_id} -> Gerente {self.cod_gerente} — {status}"
+
+
+class TelegramPollState(models.Model):
+    """
+    Linha única (singleton) que guarda o último update_id processado do
+    getUpdates do bot, para não reprocessar as mesmas mensagens a cada execução.
+    """
+    last_update_id = models.BigIntegerField(default=0)
+
+    class Meta:
+        db_table = "telegram_poll_state"

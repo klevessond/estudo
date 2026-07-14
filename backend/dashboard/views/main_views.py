@@ -49,6 +49,14 @@ from dashboard.services.indicadores.pre_venda_status_service import buscar_statu
 from dashboard.services.indicadores.venda_hoje_service import buscar_venda_hoje
 from dashboard.mixins import RoleContextMixin   # mesmo padrão das outras views
 
+# --- imports necessários para as views do Telegram ---
+import random
+import string
+from datetime import timedelta as _timedelta
+from django.conf import settings
+from django.utils import timezone
+from dashboard.models import TelegramLinkCode, VendedorTelegram
+
 # Create your views here.
 
 
@@ -2874,6 +2882,7 @@ class RupturaItensView(APIView):
         ate        = request.GET.get("ate")
         vendedores = request.GET.get("vendedores", "")
         criterio   = request.GET.get("criterio", "valor")
+        fabricante = request.GET.get("fabricante")  # opcional: CodFabricante
 
         if not de or not ate or not vendedores:
             return Response({"error": "Parâmetros obrigatórios: de, ate, vendedores"}, status=400)
@@ -2886,9 +2895,16 @@ class RupturaItensView(APIView):
         if not ids:
             return Response({"error": "Nenhum vendedor válido informado"}, status=400)
 
+        cod_fabricante = None
+        if fabricante not in (None, "", "todos", "Todos"):
+            try:
+                cod_fabricante = int(fabricante)
+            except ValueError:
+                return Response({"error": "fabricante inválido"}, status=400)
+
         try:
             resultado = buscar_ruptura_itens_detalhado(
-                de, ate, cod_vendedores=ids, criterio=criterio
+                de, ate, cod_vendedores=ids, criterio=criterio, cod_fabricante=cod_fabricante
             )
             return Response(resultado)
         except Exception:
@@ -3635,3 +3651,53 @@ class VendaHojeView(APIView):
         except Exception:
             logger.exception("[VendaHojeView] erro")
             return Response({"error": "Erro interno"}, status=500)
+
+class TelegramGerarCodigoView(APIView):
+    """
+    Gera um código de 6 dígitos, válido por 10 minutos, para o vendedor
+    logado vincular sua conta ao bot do Telegram.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        ctx = get_role_context(request.user)
+        cod_func = getattr(ctx, "cod_funcionario", None)
+        if not cod_func:
+            return Response({"error": "Usuário sem cod_funcionario associado."}, status=400)
+
+        # Invalida códigos antigos não usados deste vendedor (evita acúmulo de lixo)
+        TelegramLinkCode.objects.filter(cod_funcionario=cod_func, usado=False).delete()
+
+        codigo = "".join(random.choices(string.digits, k=6))
+        TelegramLinkCode.objects.create(
+            cod_funcionario=cod_func,
+            codigo=codigo,
+            expira_em=timezone.now() + _timedelta(minutes=10),
+        )
+        return Response({
+            "codigo": codigo,
+            "expira_em_minutos": 10,
+            "bot_username": getattr(settings, "TELEGRAM_BOT_USERNAME", None),
+        })
+
+
+class TelegramStatusView(APIView):
+    """Retorna se o vendedor logado já vinculou o Telegram."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        ctx = get_role_context(request.user)
+        cod_func = getattr(ctx, "cod_funcionario", None)
+        vinculado = VendedorTelegram.objects.filter(cod_funcionario=cod_func, ativo=True).exists()
+        return Response({"vinculado": vinculado})
+
+
+class TelegramDesvincularView(APIView):
+    """Desativa o vínculo do Telegram do vendedor logado."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        ctx = get_role_context(request.user)
+        cod_func = getattr(ctx, "cod_funcionario", None)
+        VendedorTelegram.objects.filter(cod_funcionario=cod_func).update(ativo=False)
+        return Response({"ok": True})

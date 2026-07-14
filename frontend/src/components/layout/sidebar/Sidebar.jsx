@@ -50,6 +50,11 @@ const Sidebar = () => {
                         {isCollapsed ? '⚙️' : 'Tabela Dinâmica'}
                     </Link>
                 </li>
+                <li>
+                    <Link to="/telegram" style={{ textDecoration: 'none', color: 'inherit' }}>
+                        {isCollapsed ? '📱' : 'Telegram'}
+                    </Link>
+                </li>
                         </ul>
         </aside>
     );

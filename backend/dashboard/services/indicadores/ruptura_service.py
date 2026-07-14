@@ -136,6 +136,7 @@ def buscar_ruptura_itens_detalhado(
     data_fim: str,
     cod_vendedores: Optional[Iterable[int]] = None,
     criterio: str = "valor",  # "valor" | "qtd"
+    cod_fabricante: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Detalha a ruptura por ITEM (Material), para o modal "Detalhar" do card Captado —
@@ -144,6 +145,11 @@ def buscar_ruptura_itens_detalhado(
     Filtro de vendedor: idêntico ao de buscar_ruptura (IN (...) parametrizado
     quando 2+ vendedores, '=' quando 1 único, sem filtro quando None/vazio).
 
+    cod_fabricante: opcional. Quando informado, filtra a query no banco por
+    Material.CodFabricante = ? (útil para reconsultas server-side; o front-end
+    também pode filtrar/recalcular localmente a partir do campo `CodFabricante`
+    que já vem em cada item).
+
     Retorno:
     {
         "itens": [
@@ -151,6 +157,8 @@ def buscar_ruptura_itens_detalhado(
                 "CodMaterial": int,
                 "Material": str,
                 "Grupo": str,
+                "CodFabricante": int | None,
+                "Fabricante": str,
                 "QtdItens": float,      # soma de Quantidade não atendida
                 "ValorTotal": float,    # soma do Valor não atendido
                 "PercQtd": float,       # % sobre o total de qtd em ruptura
@@ -177,37 +185,39 @@ def buscar_ruptura_itens_detalhado(
         vend_filter_sql = " AND PD.CodVendedor = ? "
         params.append(vend_list[0])
 
+    fab_filter_sql = ""
+    if cod_fabricante is not None:
+        fab_filter_sql = " AND M.CodFabricante = ? "
+        params.append(int(cod_fabricante))
+
     sql = f"""
         SELECT
           M.CodMaterial,
           M.Material,
           G.Grupo,
+          FAB.CodFabricante,
+          FAB.Fabricante,
           SUM(PDI.Qtd1)                       AS QtdItens,
           SUM(PDI.Qtd1 * PDI.ValorEmbalagem1) AS ValorTotal
-        FROM
-          Pocket P,
-          PocketDocumento PD,
-          PocketDocumentoItens PDI,
-          Material M,
-          Grupo G,
-          TipoDocumento,
-          NaturezaOperacao N
+        FROM Pocket P
+        INNER JOIN PocketDocumento       PD   ON P.CodPocket           = PD.CodPocket
+        INNER JOIN PocketDocumentoItens  PDI  ON PD.CodPocket          = PDI.CodPocket
+                                              AND PD.CodDoc             = PDI.CodDoc
+        INNER JOIN Material              M    ON PDI.CodMaterial1      = M.CodMaterial
+        INNER JOIN Grupo                 G    ON M.CodGrupo            = G.CodGrupo
+        LEFT  JOIN Fabricante            FAB  ON M.CodFabricante       = FAB.CodFabricante
+        INNER JOIN TipoDocumento         TD   ON PD.CodTipoDoc         = TD.CodTipoDoc
+        INNER JOIN NaturezaOperacao      N    ON TD.CodNaturezaOperacao = N.CodNaturezaOperacao
         WHERE
-          P.CodPocket = PD.CodPocket
-          AND PD.CodPocket = PDI.CodPocket
-          AND PD.CodDoc = PDI.CodDoc
-          AND PDI.CodMaterial1 = M.CodMaterial
-          AND M.CodGrupo = G.CodGrupo
-          AND PD.CodTipoDoc = TipoDocumento.CodTipoDoc
-          AND TipoDocumento.CodNaturezaOperacao = N.CodNaturezaOperacao
-          AND PDI.Status IN (20) -- Item não atendido
+          PDI.Status IN (20) -- Item não atendido
           AND PD.DataDoc >= ?
           AND PD.DataDoc <  ?
           {vend_filter_sql}
+          {fab_filter_sql}
           AND PD.UnidGestora IN (
             SELECT UnidGestora FROM UserUsuarioUnidade WHERE ID = 'ESIGMA'
           )
-        GROUP BY M.CodMaterial, M.Material, G.Grupo
+        GROUP BY M.CodMaterial, M.Material, G.Grupo, FAB.CodFabricante, FAB.Fabricante
         ORDER BY {"ValorTotal" if criterio == "valor" else "QtdItens"} DESC
     """
 
@@ -221,13 +231,15 @@ def buscar_ruptura_itens_detalhado(
         valor = round(float(r.get("ValorTotal") or 0), 2)
         qtd   = round(float(r.get("QtdItens") or 0), 2)
         itens.append({
-            "CodMaterial": int(r.get("CodMaterial") or 0),
-            "Material":    (r.get("Material") or "").strip(),
-            "Grupo":       (r.get("Grupo") or "").strip(),
-            "QtdItens":    qtd,
-            "ValorTotal":  valor,
-            "PercQtd":     round((qtd   / total_qtd)   * 100, 1) if total_qtd   else 0.0,
-            "PercValor":   round((valor / total_valor) * 100, 1) if total_valor else 0.0,
+            "CodMaterial":   int(r.get("CodMaterial") or 0),
+            "Material":      (r.get("Material") or "").strip(),
+            "Grupo":         (r.get("Grupo") or "").strip(),
+            "CodFabricante": int(r["CodFabricante"]) if r.get("CodFabricante") is not None else None,
+            "Fabricante":    (r.get("Fabricante") or "Sem fabricante").strip(),
+            "QtdItens":      qtd,
+            "ValorTotal":    valor,
+            "PercQtd":       round((qtd   / total_qtd)   * 100, 1) if total_qtd   else 0.0,
+            "PercValor":     round((valor / total_valor) * 100, 1) if total_valor else 0.0,
         })
 
     return {
