@@ -5,6 +5,7 @@ import re
 from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 from django.utils import timezone
 
 from dashboard.models import (
@@ -19,6 +20,7 @@ from dashboard.services.telegram_service import (
     formatar_moeda_brl,
 )
 from dashboard.services.indicadores.ruptura_service import buscar_ruptura
+from dashboard.services.indicadores.info_service import obter_cod_supervisor
 
 CODIGO_RE = re.compile(r"/vincular\s+(\d{6})")
 
@@ -27,7 +29,7 @@ MAX_TENTATIVAS = 96    # ~1 dia inteiro rodando a cada 15 min; depois disso, par
 
 
 class Command(BaseCommand):
-    help = "Verifica novas rupturas e notifica vendedores vinculados via Telegram. Rode a cada 15 min via cron."
+    help = "Verifica novas rupturas e notifica vendedor + supervisor vinculados via Telegram. Rode a cada 15 min via cron."
 
     def handle(self, *args, **options):
         self._processar_vinculacoes()
@@ -54,7 +56,6 @@ class Command(BaseCommand):
 
             m = CODIGO_RE.search(texto)
             if not m:
-                # Mensagem não reconhecida — ignora silenciosamente
                 continue
 
             codigo = m.group(1)
@@ -78,7 +79,8 @@ class Command(BaseCommand):
             enviar_mensagem(
                 chat_id,
                 "✅ <b>Telegram vinculado com sucesso!</b>\n"
-                "Você vai receber por aqui os alertas de ruptura dos seus clientes.",
+                "Você vai receber por aqui os alertas de ruptura dos seus clientes "
+                "(e, se for supervisor, também da sua equipe).",
             )
             self.stdout.write(f"Vinculado cod_funcionario={link.cod_funcionario} -> chat_id={chat_id}")
 
@@ -86,7 +88,7 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------
     # 2) Detecta ruptura nova (grava na tabela de controle) e envia/reenvia
-    #    tudo que ainda estiver pendente
+    #    tudo que ainda estiver pendente — para o VENDEDOR e para o SUPERVISOR
     # ------------------------------------------------------------------
     def _processar_rupturas(self):
         hoje = date.today()
@@ -96,6 +98,16 @@ class Command(BaseCommand):
         resultado = buscar_ruptura(data_inicio, data_fim)  # sem filtro = todos os vendedores
         detalhes = resultado.get("detalhes") or []
 
+        # cache local: cod_vendedor -> cod_supervisor (evita repetir a mesma query pro banco)
+        cache_supervisor: dict[int, int | None] = {}
+
+        def cod_supervisor_de(cod_vend: int | None) -> int | None:
+            if not cod_vend:
+                return None
+            if cod_vend not in cache_supervisor:
+                cache_supervisor[cod_vend] = obter_cod_supervisor(cod_vend)
+            return cache_supervisor[cod_vend]
+
         novos = 0
         for item in detalhes:
             cod_pocket = item.get("CodPocket")
@@ -104,11 +116,14 @@ class Command(BaseCommand):
             if cod_pocket is None or cod_doc is None or sequencia is None:
                 continue
 
+            cod_vend = item.get("CodVendedor")
+            cod_sup = cod_supervisor_de(cod_vend)
+
             _, criado = RupturaNotificada.objects.get_or_create(
                 cod_pocket=cod_pocket,
                 cod_doc=cod_doc,
                 sequencia=sequencia,
-                defaults={"cod_vendedor": item.get("CodVendedor")},
+                defaults={"cod_vendedor": cod_vend, "cod_supervisor": cod_sup},
             )
             if criado:
                 novos += 1
@@ -122,11 +137,15 @@ class Command(BaseCommand):
             for d in detalhes
         }
 
+        # Traz só quem ainda precisa de alguma notificação (vendedor OU supervisor pendente)
         pendentes = RupturaNotificada.objects.filter(
-            enviado=False, tentativas__lt=MAX_TENTATIVAS
+            Q(enviado_vendedor=False, tentativas_vendedor__lt=MAX_TENTATIVAS)
+            | Q(cod_supervisor__isnull=False, enviado_supervisor=False, tentativas_supervisor__lt=MAX_TENTATIVAS)
         )
 
-        enviados = 0
+        enviados_vend = 0
+        enviados_sup = 0
+
         for pend in pendentes:
             chave = (pend.cod_pocket, pend.cod_doc, pend.sequencia)
             item = mapa_detalhe.get(chave)
@@ -134,39 +153,69 @@ class Command(BaseCommand):
                 # Item saiu da janela de consulta (ex: mudou de status) — deixa pra próxima
                 continue
 
-            cod_vend = item.get("CodVendedor")
-            try:
-                vend_tel = VendedorTelegram.objects.get(cod_funcionario=cod_vend, ativo=True)
-            except VendedorTelegram.DoesNotExist:
-                # Vendedor ainda não vinculou o Telegram — conta a tentativa e tenta de novo depois
-                pend.tentativas += 1
+            algo_mudou = False
+
+            # ---------- Notifica o VENDEDOR ----------
+            if not pend.enviado_vendedor and pend.tentativas_vendedor < MAX_TENTATIVAS:
+                cod_vend = item.get("CodVendedor")
+                vend_tel = VendedorTelegram.objects.filter(cod_funcionario=cod_vend, ativo=True).first()
+
+                if vend_tel:
+                    texto = self._montar_mensagem(item, para_supervisor=False)
+                    ok = enviar_mensagem(vend_tel.chat_id, texto)
+                    pend.tentativas_vendedor += 1
+                    if ok:
+                        pend.enviado_vendedor = True
+                        enviados_vend += 1
+                    algo_mudou = True
+                else:
+                    pend.tentativas_vendedor += 1
+                    algo_mudou = True
+
+            # ---------- Notifica o SUPERVISOR ----------
+            if pend.cod_supervisor and not pend.enviado_supervisor and pend.tentativas_supervisor < MAX_TENTATIVAS:
+                sup_tel = VendedorTelegram.objects.filter(cod_funcionario=pend.cod_supervisor, ativo=True).first()
+
+                if sup_tel:
+                    texto_sup = self._montar_mensagem(item, para_supervisor=True)
+                    ok_sup = enviar_mensagem(sup_tel.chat_id, texto_sup)
+                    pend.tentativas_supervisor += 1
+                    if ok_sup:
+                        pend.enviado_supervisor = True
+                        enviados_sup += 1
+                    algo_mudou = True
+                else:
+                    pend.tentativas_supervisor += 1
+                    algo_mudou = True
+
+            if algo_mudou:
                 pend.ultima_tentativa = timezone.now()
-                pend.save(update_fields=["tentativas", "ultima_tentativa"])
-                continue
+                pend.save(update_fields=[
+                    "enviado_vendedor", "enviado_supervisor",
+                    "tentativas_vendedor", "tentativas_supervisor",
+                    "ultima_tentativa",
+                ])
 
-            texto = self._montar_mensagem(item)
-            ok = enviar_mensagem(vend_tel.chat_id, texto)
-
-            pend.tentativas += 1
-            pend.ultima_tentativa = timezone.now()
-            if ok:
-                pend.enviado = True
-                enviados += 1
-            pend.save(update_fields=["enviado", "tentativas", "ultima_tentativa"])
-
-        if enviados:
-            self.stdout.write(self.style.SUCCESS(f"{enviados} notificação(ões) de ruptura enviada(s)."))
+        if enviados_vend or enviados_sup:
+            self.stdout.write(self.style.SUCCESS(
+                f"{enviados_vend} notificação(ões) enviada(s) a vendedores, "
+                f"{enviados_sup} a supervisores."
+            ))
 
     @staticmethod
-    def _montar_mensagem(item: dict) -> str:
+    def _montar_mensagem(item: dict, para_supervisor: bool) -> str:
         cliente = item.get("Cliente") or item.get("ClienteFantasia") or "Cliente não identificado"
         material = item.get("Material") or f"Cod. {item.get('CodMaterial')}"
         valor = float(item.get("Valor") or 0)
         data_doc = item.get("DataDoc")
         funcionario = (item.get("Funcionario") or "").strip()
 
+        cabecalho = (
+            "👥 <b>Ruptura na equipe</b>" if para_supervisor else "🚫 <b>Nova ruptura registrada</b>"
+        )
+
         return (
-            "🚫 <b>Nova ruptura registrada</b>\n\n"
+            f"{cabecalho}\n\n"
             f"👤 Cliente: <b>{cliente}</b>\n"
             f"📦 Item: {material}\n"
             f"💰 Valor: {formatar_moeda_brl(valor)}\n"
