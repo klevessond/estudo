@@ -76,7 +76,40 @@ def buscar_rotas_usuario(ctx, db_alias: str = "dados_industria") -> Dict[str, An
         for g in grupos.values():
             g["rotas"] = sorted(g["rotas"])
             g["vendedores"] = sorted(g["vendedores"])
+
+        # ==== CORREÇÃO: mesma regra de "vendedores inativos" que o supervisor
+        # comum (2.3) aplica na própria visão — sem isso o admin/gerente vê
+        # MENOS vendedores do que a soma das visões individuais de cada supervisor.
+        # Feito em lote (1 query) em vez de 1 query por área, para não gerar N+1.
+        cods_supervisores = sorted({
+            int(g["cod_supervisor"]) for g in grupos.values() if g.get("cod_supervisor")
+        })
+        inativos_por_supervisor: Dict[int, set] = {}
+        if cods_supervisores:
+            placeholders = ",".join(["?"] * len(cods_supervisores))
+            sql_inativos = f"""
+                SELECT CodFuncionario, CodSupervisor
+                FROM dbo.Funcionario
+                WHERE Vendedor = 1 AND CodSupervisor IN ({placeholders})
+            """
+            dados_inativos = query_all(sql_inativos, cods_supervisores)
+            for d in dados_inativos:
+                cs = d.get("CodSupervisor")
+                cf = d.get("CodFuncionario")
+                if cs is None or cf is None:
+                    continue
+                inativos_por_supervisor.setdefault(int(cs), set()).add(int(cf))
+
+        vendedores_set = set(vendedores)
+        for g in grupos.values():
+            cod_sup_area = g.get("cod_supervisor")
+            extras = inativos_por_supervisor.get(int(cod_sup_area), set()) if cod_sup_area else set()
+            if extras:
+                g["vendedores"] = sorted(set(g["vendedores"]) | extras)
+                vendedores_set |= extras
             areas_supervisao.append(g)
+
+        vendedores = sorted(vendedores_set)
 
         return {
             "rotas": rotas,
@@ -190,6 +223,45 @@ def buscar_rotas_usuario(ctx, db_alias: str = "dados_industria") -> Dict[str, An
                 g["rotas"] = sorted(g["rotas"])
                 g["vendedores"] = sorted(g["vendedores"])
                 areas_supervisao.append(g)
+
+            # ==== CORREÇÃO: aplicar a MESMA regra de "vendedores inativos" que o
+            # supervisor comum (2.3) recebe quando vê o próprio painel sozinho.
+            # Sem isso, o escopo agregado do gerente fica MENOR que a soma dos
+            # escopos individuais de cada supervisor — mesmo cobrindo as mesmas áreas.
+            # Feito em lote (1 query) em vez de 1 query por área, para não gerar N+1.
+            cods_supervisores_2_2 = sorted({
+                int(g["cod_supervisor"]) for g in areas_supervisao if g.get("cod_supervisor")
+            })
+            inativos_por_supervisor_2_2: Dict[int, set] = {}
+            if cods_supervisores_2_2:
+                placeholders = ",".join(["?"] * len(cods_supervisores_2_2))
+                sql_inativos = f"""
+                    SELECT CodFuncionario, CodSupervisor
+                    FROM dbo.Funcionario
+                    WHERE Vendedor = 1 AND CodSupervisor IN ({placeholders})
+                """
+                dados_inativos = query_all(sql_inativos, cods_supervisores_2_2)
+                for d in dados_inativos:
+                    cs = d.get("CodSupervisor")
+                    cf = d.get("CodFuncionario")
+                    if cs is None or cf is None:
+                        continue
+                    inativos_por_supervisor_2_2.setdefault(int(cs), set()).add(int(cf))
+
+                logger.warning(
+                    f"🚨 [DEBUG ROTAS_SIMPLES 2.2] cod_gerente={cod_sup} "
+                    f"| inativos_por_supervisor={ {k: sorted(v) for k, v in inativos_por_supervisor_2_2.items()} }"
+                )
+
+            vendedores_set = set(vendedores)
+            for g in areas_supervisao:
+                cod_sup_area = g.get("cod_supervisor")
+                extras = inativos_por_supervisor_2_2.get(int(cod_sup_area), set()) if cod_sup_area else set()
+                if extras:
+                    g["vendedores"] = sorted(set(g["vendedores"]) | extras)
+                    vendedores_set |= extras
+
+            vendedores = sorted(vendedores_set)
 
             return {
                 "rotas": rotas,
