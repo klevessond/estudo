@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from .views import IndicadoresView, ObjetivoMensalView,ObjetivoMensalResumoView,IndicadoresPDV,VendasPorVendedorView,ObjetivoMensalVendedorView,ComissoesVendedorView
 from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionario_detail, me,TodosVendedoresView,RupturaView,RupturaItensView
-from .views import TelegramGerarCodigoView, TelegramStatusView, TelegramDesvincularView,VendaHojeView, PreVendaStatusView,CacheMesAdminView,ClientesPositivacaoAreaView,MixItensAreaView,ClientesPositivacaoView,MixItensPorVendedorView,ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
+from .views import PreVendaItensView,TelegramGerarCodigoView, TelegramStatusView, TelegramDesvincularView,VendaHojeView, PreVendaStatusView,CacheMesAdminView,ClientesPositivacaoAreaView,MixItensAreaView,ClientesPositivacaoView,MixItensPorVendedorView,ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
 from .views.pivot_views import PivotVendasView
 urlpatterns = [
     path('dados-sql/', views.get_dados_sql, name='get_dados_sql'),
@@ -39,5 +39,6 @@ urlpatterns = [
     path('telegram/gerar-codigo/', TelegramGerarCodigoView.as_view(), name='telegram-gerar-codigo'),
     path('telegram/status/', TelegramStatusView.as_view(), name='telegram-status'),
     path('telegram/desvincular/', TelegramDesvincularView.as_view(), name='telegram-desvincular'),
+    path('indicadores/pre-venda-itens/', PreVendaItensView.as_view(), name='pre-venda-itens'),
 
 ]

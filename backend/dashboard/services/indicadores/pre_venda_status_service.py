@@ -47,6 +47,7 @@ def buscar_status_pre_vendas(
         "CodPocketDocumento": int,
         "CodVendedor":     int,
         "Funcionario":     str,
+        "CodCliente":     int,
         "Cliente":         str,
         "DataDoc":         str (YYYY-MM-DD),
         "Valor":           float,
@@ -74,6 +75,7 @@ def buscar_status_pre_vendas(
             PD.Coddoc,
             PD.CodVendedor,
             F.Funcionario,
+            C.CodCliente,
             C.Cliente,
             C.ClienteFantasia,
             CONVERT(VARCHAR(10), PD.DataDoc, 120)   AS DataDoc,
@@ -125,7 +127,7 @@ def buscar_status_pre_vendas(
         # Pegamos a chave única do documento (CodPocket + CodDoc)
         # Usamos .get("CodDoc") por causa da alteração que fizemos no SQL
         cod_pocket = int(r.get("CodPocket") or 0)
-        cod_doc    = int(r.get("CodDoc") or r.get("CodPocketDocumento") or 0)
+        cod_doc = int(r.get("Coddoc") or 0)
         chave_unica = (cod_pocket, cod_doc)
 
         # Se esta pré-venda já estiver no nosso mapa, ignoramos a linha (evita os erros duplicados)
@@ -141,6 +143,7 @@ def buscar_status_pre_vendas(
             "CodPocketDocumento":  cod_doc,
             "CodVendedor":         int(r.get("CodVendedor")         or 0),
             "Funcionario":         (r.get("Funcionario")    or "").strip(),
+            "CodCliente":         int(r.get("CodCliente")         or 0),
             "Cliente":             (r.get("Cliente")        or "").strip(),
             "ClienteFantasia":     (r.get("ClienteFantasia") or "").strip(),
             "DataDoc":             (r.get("DataDoc")        or ""),
@@ -155,3 +158,47 @@ def buscar_status_pre_vendas(
     # ---> FIM DA CORREÇÃO <---
 
     return resultado
+
+
+def buscar_itens_pre_venda(cod_pocket: int, cod_doc: int) -> List[Dict[str, Any]]:
+    """
+    Retorna os itens de uma pré-venda específica (CodPocket + CodDoc),
+    para o modal "Pré-venda Detalhada".
+
+    Retorno por item:
+    {
+        "CodMaterial": int,
+        "Material":    str,
+        "Qtd1":        float,
+        "ValorUnitario": float,   # ValorEmbalagem1
+        "ValorTotal":    float,   # Qtd1 * ValorEmbalagem1
+    }
+    """
+    sql = """
+        SELECT
+            PocketDocumentoItens.CodDoc,
+            PocketDocumentoItens.CodPocket,
+            PocketDocumentoItens.CodMaterial1,
+            Material.Material,
+            PocketDocumentoItens.Qtd1,
+            PocketDocumentoItens.ValorEmbalagem1
+        FROM PocketDocumentoItens
+        INNER JOIN Material ON PocketDocumentoItens.CodMaterial1 = Material.CodMaterial
+        WHERE PocketDocumentoItens.CodDoc    = ?
+          AND PocketDocumentoItens.CodPocket = ?
+        ORDER BY Material.Material
+    """
+    rows = query_all(sql, [cod_doc, cod_pocket])
+
+    itens: List[Dict[str, Any]] = []
+    for r in rows:
+        qtd         = float(r.get("Qtd1") or 0)
+        valor_unit  = float(r.get("ValorEmbalagem1") or 0)
+        itens.append({
+            "CodMaterial":   int(r.get("CodMaterial1") or 0),
+            "Material":      (r.get("Material") or "").strip(),
+            "Qtd1":          qtd,
+            "ValorUnitario": round(valor_unit, 2),
+            "ValorTotal":    round(qtd * valor_unit, 2),   # 👈 Qtd1 * ValorEmbalagem1
+        })
+    return itens

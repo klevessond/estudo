@@ -45,7 +45,7 @@ from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, b
 from dashboard.services.indicadores.pdv_mix_service import buscar_itens_nao_vendidos_por_ug ,buscar_mix_pdv_por_perfil, buscar_itens_mix_por_ug
 from dashboard.services.indicadores.cache_aa import get_cache_aa, set_cache_aa
 from dashboard.services.indicadores.cache_mes import get_cache_mes, set_cache_mes, periodo_cacheavel,invalidar_cache_mes, invalidar_por_periodo, invalidar_por_tipo_e_periodo, listar_periodos_cacheados, stats_cache_mes # útil para logs/debug
-from dashboard.services.indicadores.pre_venda_status_service import buscar_status_pre_vendas
+from dashboard.services.indicadores.pre_venda_status_service import buscar_status_pre_vendas,buscar_itens_pre_venda
 from dashboard.services.indicadores.venda_hoje_service import buscar_venda_hoje
 from dashboard.mixins import RoleContextMixin   # mesmo padrão das outras views
 
@@ -3701,3 +3701,37 @@ class TelegramDesvincularView(APIView):
         cod_func = getattr(ctx, "cod_funcionario", None)
         VendedorTelegram.objects.filter(cod_funcionario=cod_func).update(ativo=False)
         return Response({"ok": True})
+
+class PreVendaItensView(APIView):
+    """
+    Retorna os itens de uma pré-venda específica (CodPocket + CodDoc),
+    usado no botão "Pré-venda Detalhada" do modal de pendências.
+
+    Query params:
+      cod_pocket  (obrigatório)
+      cod_doc     (obrigatório)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cod_pocket = request.GET.get("cod_pocket")
+        cod_doc    = request.GET.get("cod_doc")
+
+        if not cod_pocket or not cod_doc:
+            return Response({"error": "Parâmetros obrigatórios: cod_pocket, cod_doc"}, status=400)
+
+        try:
+            itens = buscar_itens_pre_venda(
+                cod_pocket=int(cod_pocket),
+                cod_doc=int(cod_doc),
+            )
+            valor_total = sum(i["ValorTotal"] for i in itens)
+
+            return Response({
+                "itens": itens,
+                "total_itens": len(itens),
+                "valor_total": round(valor_total, 2),
+            })
+        except Exception:
+            logger.exception("[PreVendaItensView] erro")
+            return Response({"error": "Erro interno"}, status=500)

@@ -172,6 +172,12 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   const [pendenciasPreVenda,   setPendenciasPreVenda]   = useState([]);
   const [loadingPreVenda,      setLoadingPreVenda]      = useState(false);
 
+  // === Modal Pré-Venda Detalhada (itens do documento) ===
+  const [modalItensPreVendaAberto, setModalItensPreVendaAberto] = useState(false);
+  const [itensPreVenda,            setItensPreVenda]            = useState([]);
+  const [loadingItensPreVenda,     setLoadingItensPreVenda]     = useState(false);
+  const [preVendaSelecionada,      setPreVendaSelecionada]      = useState(null);
+
   // === Modal Ruptura (Captado) ===
   const [modalRupturaAberto,   setModalRupturaAberto]   = useState(false);
   const [itensRuptura,         setItensRuptura]         = useState([]);
@@ -222,6 +228,22 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
       .catch(err => console.error('[PreVendaStatus] erro:', err))
       .finally(() => setLoadingPreVenda(false));
   }, [modalPreVendaAberto, codFuncionario, periodoSelecionado]);
+
+  // === Modal Pré-Venda Detalhada (itens do documento selecionado) ===
+  useEffect(() => {
+    if (!modalItensPreVendaAberto || !preVendaSelecionada) return;
+    setLoadingItensPreVenda(true);
+    setItensPreVenda([]);
+    api.get('/indicadores/pre-venda-itens/', {
+      params: {
+        cod_pocket: preVendaSelecionada.CodPocket,
+        cod_doc:    preVendaSelecionada.CodPocketDocumento,
+      },
+    })
+      .then(({ data }) => setItensPreVenda(data.itens || []))
+      .catch(err => console.error('[PreVendaItens] erro:', err))
+      .finally(() => setLoadingItensPreVenda(false));
+  }, [modalItensPreVendaAberto, preVendaSelecionada]);
 
   // Busca itens de ruptura ao abrir o modal ou trocar o critério — SEMPRE só este vendedor
   useEffect(() => {
@@ -455,6 +477,43 @@ const exportarPosicaoPDF = () => {
     });
 
     doc.save(`pre_venda_${nomeVendedor.replace(/\s+/g, '_')}_${periodoSelecionado?.de}.pdf`);
+  };
+
+  const exportarItensPreVendaPDF = () => {
+    const doc = new jsPDF();
+    const nomeVendedor = colaborador?.colaborador || 'Vendedor';
+    const cliente = preVendaSelecionada?.Cliente || '';
+
+    doc.setFontSize(14);
+    doc.text(`Pré-venda Detalhada — ${nomeVendedor}`, 14, 15);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Cliente: ${cliente}`, 14, 22);
+    doc.text(`Documento: ${preVendaSelecionada?.CodPocketDocumento} | Pocket: ${preVendaSelecionada?.CodPocket}`, 14, 28);
+    doc.text(`Data: ${preVendaSelecionada?.DataDoc || ''}`, 14, 34);
+
+    const valorTotalGeral = itensPreVenda.reduce((s, i) => s + Number(i.ValorTotal || 0), 0);
+
+    const linhas = itensPreVenda.map((item, i) => [
+      i + 1,
+      item.Material || `Cod: ${item.CodMaterial}`,
+      Number(item.Qtd1).toLocaleString('pt-BR'),
+      Number(item.ValorUnitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+    ]);
+
+    autoTable(doc, {
+      head: [['#', 'Produto', 'Qtd', 'Valor Unit.', 'Valor Total']],
+      body: linhas,
+      startY: 40,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [59, 130, 246] },
+      alternateRowStyles: { fillColor: [239, 246, 255] },
+      foot: [['', '', '', 'Total Geral:', valorTotalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })]],
+      footStyles: { fillColor: [219, 234, 254], fontStyle: 'bold', textColor: [0, 0, 0] },
+    });
+
+    doc.save(`pre_venda_itens_${nomeVendedor.replace(/\s+/g, '_')}_${preVendaSelecionada?.CodPocketDocumento}.pdf`);
   };
 
   const exportarRupturaPDF = () => {
@@ -1376,11 +1435,13 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
               <thead>
                 <tr style={{ background: '#f3f4f6', textAlign: 'left' }}>
                   <th style={{ padding: '8px' }}>#</th>
+                  <th style={{ padding: '8px' }}>CodCliente</th>
                   <th style={{ padding: '8px' }}>Cliente</th>
                   <th style={{ padding: '8px' }}>Data</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>Valor</th>
                   <th style={{ padding: '8px' }}>Situação</th>
                   <th style={{ padding: '8px' }}>Motivo</th>
+                  <th style={{ padding: '8px' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -1395,6 +1456,7 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
                           : (i % 2 === 0 ? '#fffbeb' : '#fef3c7'),
                       }}>
                       <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
+                      <td style={{ padding: '6px 8px' }}>{p.CodCliente}</td>
                       <td style={{ padding: '6px 8px' }}>
                         <div>{p.Cliente}</div>
                         {p.ClienteFantasia && p.ClienteFantasia !== p.Cliente && (
@@ -1414,10 +1476,119 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
                       <td style={{ padding: '6px 8px', color: '#555', fontSize: '0.78rem' }}>
                         {p.Motivo || (isProblema ? '—' : 'Aguardando processamento')}
                       </td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <button
+                          onClick={() => {
+                            setPreVendaSelecionada(p);
+                            setModalItensPreVendaAberto(true);
+                          }}
+                          style={{
+                            padding: '4px 10px', background: '#3b82f6', color: '#fff',
+                            border: 'none', borderRadius: '6px', cursor: 'pointer',
+                            fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap',
+                          }}
+                        >
+                          📦 Ver Itens
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* ===== Modal Pré-Venda Detalhada (itens) ===== */}
+  {modalItensPreVendaAberto && (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 1100,
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: '12px', padding: '1.5rem',
+        width: '90%', maxWidth: '700px', maxHeight: '85vh',
+        display: 'flex', flexDirection: 'column', gap: '1rem',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>
+              📦 Itens da Pré-venda — {preVendaSelecionada?.Cliente || ''}
+            </h3>
+            <span style={{ fontSize: '0.8rem', color: '#888' }}>
+              Doc: {preVendaSelecionada?.CodPocketDocumento} · Pocket: {preVendaSelecionada?.CodPocket} · {itensPreVenda.length} item(ns)
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {itensPreVenda.length > 0 && (
+              <button
+                onClick={exportarItensPreVendaPDF}
+                style={{
+                  padding: '6px 12px', background: '#3b82f6', color: '#fff',
+                  border: 'none', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '0.8rem', fontWeight: 600,
+                }}
+              >
+                📄 Exportar PDF
+              </button>
+            )}
+            <button onClick={() => setModalItensPreVendaAberto(false)}
+              style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {loadingItensPreVenda ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>Carregando...</div>
+          ) : itensPreVenda.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+              Nenhum item encontrado.
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ background: '#eff6ff', textAlign: 'left' }}>
+                  <th style={{ padding: '8px' }}>#</th>
+                  <th style={{ padding: '8px' }}>Produto</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>Qtd</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>Valor Unit.</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>Valor Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itensPreVenda.map((item, i) => (
+                  <tr key={item.CodMaterial}
+                    style={{ borderBottom: '1px solid #eee', background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                    <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
+                    <td style={{ padding: '6px 8px' }}>{item.Material}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                      {Number(item.Qtd1).toLocaleString('pt-BR')}
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                      {Number(item.ValorUnitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>
+                      {Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: '#dbeafe', fontWeight: 700 }}>
+                  <td colSpan={4} style={{ padding: '8px', textAlign: 'right' }}>Total Geral:</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>
+                    {itensPreVenda.reduce((s, i) => s + Number(i.ValorTotal || 0), 0)
+                      .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           )}
         </div>
