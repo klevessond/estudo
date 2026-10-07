@@ -1,0 +1,11 @@
+.*/
+graphify-out/
+**/graphify-out/
+node_modules/
+venv/
+.venv/
+build/
+dist/
+staticfiles/
+coverage/
+**/migrations/
