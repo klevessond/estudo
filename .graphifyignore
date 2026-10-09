@@ -10,3 +10,7 @@ staticfiles/
 coverage/
 **/migrations/
 estudo-main/
+frontend/README.md
+frontend/public/
+**/package.json
+**/package-lock.json

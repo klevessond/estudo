@@ -21,7 +21,7 @@ User = get_user_model()
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
-from rest_framework import status
+from rest_framework import status, viewsets
 from rest_framework.permissions import IsAdminUser
 from dashboard.models import Profile
 from dashboard.services.usuarios.funcionario_service import listar_funcionarios,get_funcionario_por_codigo,obter_unid_gestora,obter_unid_gestoras_por_vendedores
@@ -57,8 +57,18 @@ from django.conf import settings
 from django.utils import timezone
 from dashboard.models import TelegramLinkCode, VendedorTelegram
 
-# Create your views here.
 
+from typing import Dict, Any
+ 
+from dashboard.models import CampanhaVenda, CampanhaVendaObjetivo
+from dashboard.serializers import CampanhaVendaSerializer, CampanhaVendaObjetivoSerializer
+from dashboard.services.indicadores.campanhas_service import (
+    buscar_realizado_campanha,
+    buscar_fabricantes,
+    buscar_materiais,
+    buscar_grupos,
+)
+ 
 
 
 # Em dashboard/views.py
@@ -2839,19 +2849,46 @@ def me(request):
     return Response(user_data)
 
 class TodosVendedoresView(APIView):
-    # permission_classes = [IsAuthenticated]
-
+    permission_classes = [IsAuthenticated]
+ 
     def get(self, request):
-        # Verifica se o front pediu apenas ativos
         apenas_ativos_param = request.query_params.get('ativos')
-        
-        # Converte string 'true'/'1' para boolean
         somente_ativos = apenas_ativos_param in ['true', 'True', '1']
-
-        # Chama o serviço passando o flag
+ 
+        # Busca crua (todos, conforme filtro de ativo)
         vendedores = Todos_Vendedores(somente_ativos=somente_ativos)
-        
-        return Response(vendedores)
+        detalhamento = vendedores.get("detalhamento", [])
+ 
+        ctx = get_role_context(request.user)
+        is_gerente    = getattr(ctx, "is_gerente", False) or request.user.is_superuser
+        is_supervisor = getattr(ctx, "is_supervisor", False)
+        is_vendedor   = getattr(ctx, "is_vendedor", False)
+ 
+        if is_gerente:
+            # Gerente/admin vê todos -> sem filtro extra
+            pass
+ 
+        elif is_supervisor:
+            rotas_info = buscar_rotas_usuario(ctx)
+            vendedores_ids = set(rotas_info.get("vendedores") or []) if rotas_info else set()
+ 
+            detalhamento = [
+                v for v in detalhamento
+                if _to_int(v.get("CodFuncionario")) in vendedores_ids
+            ]
+ 
+        elif is_vendedor:
+            cod_func = getattr(ctx, "cod_funcionario", None)
+            detalhamento = [
+                v for v in detalhamento
+                if _to_int(v.get("CodFuncionario")) == _to_int(cod_func)
+            ]
+ 
+        else:
+            # Papel desconhecido -> por segurança, não retorna ninguém
+            detalhamento = []
+ 
+        return Response({"detalhamento": detalhamento})
 
 class RupturaView(APIView):
     # permission_classes = [IsAuthenticated]  # habilite se quiser proteger
@@ -3735,3 +3772,4 @@ class PreVendaItensView(APIView):
         except Exception:
             logger.exception("[PreVendaItensView] erro")
             return Response({"error": "Erro interno"}, status=500)
+

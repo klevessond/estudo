@@ -1,6 +1,7 @@
 from rest_framework import serializers
-from .models import ObjetivoMensal,Profile,ObjetivoMixNivel,Feriado
+from .models import ObjetivoMensal, Profile, ObjetivoMixNivel, Feriado, CampanhaVenda, CampanhaVendaObjetivo,CampanhaVendaItem
 from django.contrib.auth.models import User
+from django.db import transaction
 
 
 class ObjetivoMensalSerializer(serializers.ModelSerializer):
@@ -114,3 +115,92 @@ class FeriadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Feriado
         fields = ['id', 'data', 'descricao']
+
+
+
+class CampanhaVendaItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CampanhaVendaItem
+        fields = ['id', 'cod_referencia', 'nome_referencia']
+        read_only_fields = ['id']
+
+
+class CampanhaVendaObjetivoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CampanhaVendaObjetivo
+        fields = [
+            'id', 'campanha', 'cod_vendedor', 'nome_vendedor',
+            'objetivo_peso', 'objetivo_financeiro', 'objetivo_quantidade',
+        ]
+        # O ViewSet faz "upsert" por (campanha, cod_vendedor); sem isso o
+        # validador de unicidade barraria a atualização de quem já existe.
+        validators = []
+
+    def _nao_negativo(self, valor):
+        if valor is not None and valor < 0:
+            raise serializers.ValidationError('O objetivo não pode ser negativo.')
+        return valor
+
+    def validate_objetivo_peso(self, v):       return self._nao_negativo(v)
+    def validate_objetivo_financeiro(self, v): return self._nao_negativo(v)
+    def validate_objetivo_quantidade(self, v): return self._nao_negativo(v)
+
+
+class CampanhaVendaSerializer(serializers.ModelSerializer):
+    itens        = CampanhaVendaItemSerializer(many=True, required=False)
+    objetivos    = CampanhaVendaObjetivoSerializer(many=True, read_only=True)
+    tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
+
+    class Meta:
+        model = CampanhaVenda
+        fields = [
+            'id', 'nome', 'tipo', 'tipo_display',
+            'cod_fabricante', 'nome_fabricante',
+            'data_inicio', 'data_fim', 'ativa', 'descricao', 'criado_em',
+            'itens', 'objetivos',
+        ]
+        extra_kwargs = {'cod_fabricante': {'required': True, 'allow_null': False}}
+
+    def validate(self, attrs):
+        inst = self.instance
+        di = attrs.get('data_inicio', getattr(inst, 'data_inicio', None))
+        df = attrs.get('data_fim', getattr(inst, 'data_fim', None))
+        if di and df and df < di:
+            raise serializers.ValidationError({'data_fim': 'A data fim não pode ser anterior à data início.'})
+
+        # Na criação, ou quando o escopo for enviado, precisa ter ao menos 1 item
+        if inst is None or 'itens' in attrs:
+            if not attrs.get('itens'):
+                raise serializers.ValidationError({'itens': 'Informe ao menos um material/grupo para a campanha.'})
+        return attrs
+
+    @staticmethod
+    def _salvar_itens(campanha, itens):
+        vistos, novos = set(), []
+        for it in itens:
+            cod = int(it['cod_referencia'])
+            if cod in vistos:
+                continue
+            vistos.add(cod)
+            novos.append(CampanhaVendaItem(
+                campanha=campanha,
+                cod_referencia=cod,
+                nome_referencia=(it.get('nome_referencia') or '')[:150],
+            ))
+        CampanhaVendaItem.objects.bulk_create(novos)
+
+    def create(self, validated_data):
+        itens = validated_data.pop('itens', [])
+        with transaction.atomic():
+            campanha = CampanhaVenda.objects.create(**validated_data)
+            self._salvar_itens(campanha, itens)
+        return campanha
+
+    def update(self, instance, validated_data):
+        itens = validated_data.pop('itens', None)
+        with transaction.atomic():
+            instance = super().update(instance, validated_data)
+            if itens is not None:
+                instance.itens.all().delete()
+                self._salvar_itens(instance, itens)
+        return instance

@@ -5,6 +5,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
+
 User = get_user_model()
 
 
@@ -250,3 +251,92 @@ class TelegramPollState(models.Model):
 
     class Meta:
         db_table = "telegram_poll_state"
+
+
+
+class CampanhaVenda(models.Model):
+    """
+    Campanha de vendas de UM fabricante, restrita a:
+      - tipo MATERIAL: um ou mais materiais do fabricante
+      - tipo GRUPO:    um ou mais grupos de material do fabricante
+    O escopo (materiais/grupos) fica em CampanhaVendaItem.
+    Os objetivos ficam em CampanhaVendaObjetivo (um registro por vendedor).
+    Pode haver várias campanhas ativas ao mesmo tempo.
+    """
+    TIPO_CHOICES = [
+        ('MATERIAL', 'Fabricante x Material(is)'),
+        ('GRUPO',    'Fabricante x Grupo(s) de material'),
+    ]
+
+    nome            = models.CharField(max_length=150)
+    tipo            = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    # null=True só para não exigir default na migration; a API exige o campo.
+    cod_fabricante  = models.IntegerField(null=True, blank=True)
+    nome_fabricante = models.CharField(max_length=150, blank=True, default='')
+    data_inicio     = models.DateField()
+    data_fim        = models.DateField()
+    ativa           = models.BooleanField(default=True)
+    descricao       = models.TextField(blank=True, null=True)
+    criado_por      = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='campanhas_criadas'
+    )
+    criado_em       = models.DateTimeField(auto_now_add=True)
+    atualizado_em   = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "campanha_venda"
+        verbose_name = "Campanha de Venda"
+        verbose_name_plural = "Campanhas de Venda"
+        ordering = ['-data_inicio']
+
+    def __str__(self):
+        return f"{self.nome} ({self.get_tipo_display()}) — {self.data_inicio} a {self.data_fim}"
+
+
+class CampanhaVendaItem(models.Model):
+    """
+    Escopo da campanha: cada registro é um material (tipo MATERIAL)
+    ou um grupo de material (tipo GRUPO) que entra na campanha.
+    """
+    campanha        = models.ForeignKey(
+        CampanhaVenda, on_delete=models.CASCADE, related_name='itens'
+    )
+    cod_referencia  = models.IntegerField(help_text="CodMaterial ou CodGrupo, conforme campanha.tipo")
+    nome_referencia = models.CharField(max_length=150, blank=True, default='')
+
+    class Meta:
+        db_table = "campanha_venda_item"
+        unique_together = ('campanha', 'cod_referencia')
+        verbose_name = "Item da Campanha"
+        verbose_name_plural = "Itens da Campanha"
+
+    def __str__(self):
+        return f"{self.campanha_id} | {self.cod_referencia} {self.nome_referencia}"
+
+
+class CampanhaVendaObjetivo(models.Model):
+    """
+    Objetivo de UM vendedor na campanha (somando todos os itens do escopo).
+    Cada medida pode ser 0 => "sem objetivo" naquela medida.
+
+    O objetivo da EQUIPE não é gravado: é sempre a soma dos vendedores.
+    """
+    campanha            = models.ForeignKey(
+        CampanhaVenda, on_delete=models.CASCADE, related_name='objetivos'
+    )
+    cod_vendedor        = models.IntegerField()
+    nome_vendedor       = models.CharField(max_length=150, blank=True, null=True)
+    objetivo_peso       = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # kg
+    objetivo_financeiro = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # R$
+    objetivo_quantidade = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # unidades
+
+    class Meta:
+        db_table = "campanha_venda_objetivo"
+        unique_together = ('campanha', 'cod_vendedor')
+        verbose_name = "Objetivo de Campanha por Vendedor"
+        verbose_name_plural = "Objetivos de Campanha por Vendedor"
+
+    def __str__(self):
+        return (f"{self.campanha_id} | Vend {self.cod_vendedor}: "
+                f"{self.objetivo_peso}kg / R${self.objetivo_financeiro} / {self.objetivo_quantidade}un")
