@@ -14,3 +14,4 @@ frontend/README.md
 frontend/public/
 **/package.json
 **/package-lock.json
+database/script.sql
