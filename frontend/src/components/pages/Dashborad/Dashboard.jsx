@@ -10,6 +10,7 @@ import IndicativosTabelaVendedor from '../../metricard/IndicativosTabelaVendedor
 import CardsColaborador from '../../metricard/CardsColaborador';
 import CardsDetalhadosVendedor from '../../metricard/CardsDetalhadosVendedor';
 import BarChartsColaboradoresKPIs from '../../BarChart/BarChartsColaboradoresKPIs';
+import CardsCampanhas from '../../metricard/CardsCampanhas';
 
 // === Helpers HTTP (fetch) ===
 const API_BASE =
@@ -259,6 +260,9 @@ const Dashboard = () => {
             onProjecoesPorVendedorChange={setProjecoesPorVendedor}  
           />
         </div>
+
+        {/* Campanhas em andamento (o backend já restringe os números ao papel do usuário) */}
+        <CardsCampanhas />
 
         {/* Botões de modo */}
         {!isRestricted && (

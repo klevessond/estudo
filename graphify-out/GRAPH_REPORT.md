@@ -1,4 +1,4 @@
-# Graph Report - dash-dev  (2026-11-10)
+# Graph Report - dash-dev  (2026-11-12)
 
 ## Corpus Check
 - cluster-only mode — file stats not available

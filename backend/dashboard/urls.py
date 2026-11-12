@@ -48,6 +48,7 @@ from .views.campanhas_views import (
     CampanhaVendaViewSet,
     CampanhaVendaObjetivoViewSet,
     CampanhaVendaProgressoView,
+    CampanhasPainelView,
     MaterialSearchView,
     FabricanteSearchView,
     GrupoSearchView,
@@ -58,9 +59,10 @@ router.register(r'campanhas', CampanhaVendaViewSet, basename='campanhas')
 router.register(r'campanhas-objetivos', CampanhaVendaObjetivoViewSet, basename='campanhas-objetivos')
 
 # Rotas específicas PRIMEIRO, antes do router.urls: senão o DefaultRouter
-# interpreta "buscar-fabricante"/"buscar-material"/"buscar-grupo" como o <pk>
+# interpreta "painel"/"buscar-fabricante"/"buscar-material"/"buscar-grupo" como o <pk>
 # de uma campanha e responde 404.
 urlpatterns += [
+    path('campanhas/painel/', CampanhasPainelView.as_view(), name='campanhas-painel'),
     path('campanhas/<int:campanha_id>/progresso/', CampanhaVendaProgressoView.as_view(), name='campanha-progresso'),
     path('campanhas/buscar-material/', MaterialSearchView.as_view(), name='campanha-buscar-material'),
     path('campanhas/buscar-fabricante/', FabricanteSearchView.as_view(), name='campanha-buscar-fabricante'),

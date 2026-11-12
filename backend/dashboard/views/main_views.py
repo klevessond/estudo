@@ -2848,45 +2848,44 @@ def me(request):
 
     return Response(user_data)
 
+def _cod_vend_int(valor):
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return None
+ 
+ 
 class TodosVendedoresView(APIView):
+    """
+    Lista de vendedores para selects (ex.: tela de Campanhas).
+ 
+      - admin                         -> todos
+      - supervisor / vendedor / gerente -> só os de rotas_info["vendedores"]
+                                         (None = sem filtro, como nas outras telas)
+      - outros papéis                 -> lista vazia
+ 
+    Query param: ativos = 'true' | '1'  -> apenas vendedores ativos.
+    """
     permission_classes = [IsAuthenticated]
  
     def get(self, request):
         apenas_ativos_param = request.query_params.get('ativos')
         somente_ativos = apenas_ativos_param in ['true', 'True', '1']
  
-        # Busca crua (todos, conforme filtro de ativo)
-        vendedores = Todos_Vendedores(somente_ativos=somente_ativos)
-        detalhamento = vendedores.get("detalhamento", [])
- 
         ctx = get_role_context(request.user)
-        is_gerente    = getattr(ctx, "is_gerente", False) or request.user.is_superuser
-        is_supervisor = getattr(ctx, "is_supervisor", False)
-        is_vendedor   = getattr(ctx, "is_vendedor", False)
+        rotas_info = buscar_rotas_usuario(ctx) or {}
  
-        if is_gerente:
-            # Gerente/admin vê todos -> sem filtro extra
-            pass
- 
-        elif is_supervisor:
-            rotas_info = buscar_rotas_usuario(ctx)
-            vendedores_ids = set(rotas_info.get("vendedores") or []) if rotas_info else set()
- 
-            detalhamento = [
-                v for v in detalhamento
-                if _to_int(v.get("CodFuncionario")) in vendedores_ids
-            ]
- 
-        elif is_vendedor:
-            cod_func = getattr(ctx, "cod_funcionario", None)
-            detalhamento = [
-                v for v in detalhamento
-                if _to_int(v.get("CodFuncionario")) == _to_int(cod_func)
-            ]
- 
+        if ctx.is_admin:
+            permitidos = None
+        elif ctx.is_supervisor or ctx.is_vendedor or rotas_info.get('e_gerente'):
+            vend = rotas_info.get('vendedores')
+            permitidos = None if vend is None else {int(v) for v in vend if v is not None}
         else:
-            # Papel desconhecido -> por segurança, não retorna ninguém
-            detalhamento = []
+            return Response({"detalhamento": []})
+ 
+        detalhamento = Todos_Vendedores(somente_ativos=somente_ativos).get("detalhamento", [])
+        if permitidos is not None:
+            detalhamento = [v for v in detalhamento if _cod_vend_int(v.get("CodFuncionario")) in permitidos]
  
         return Response({"detalhamento": detalhamento})
 
