@@ -13,13 +13,6 @@ from .main_views import (
     VendasPorVendedorView,
     ObjetivoMensalVendedorView,
     get_objetivos_vendedores_por_mes,
-    UserRegisterSerializer,
-    RegisterView,
-    FuncionariosListView,
-    UsuarioDetailView,
-    funcionario_detail,
-    me,
-    TodosVendedoresView,
     RupturaView,
     RupturaItensView,
     ResumoSegmentoAreaVendaView,
@@ -36,4 +29,5 @@ from .feriados_views import FeriadoView
 from .telegram_views import TelegramGerarCodigoView, TelegramStatusView, TelegramDesvincularView
 from .cache_admin_views import CacheMesAdminView
 from .legacy_views import get_dados_sql, get_dados_sql_api
+from .usuarios_views import RegisterView, FuncionariosListView, UsuarioDetailView, funcionario_detail, me, TodosVendedoresView
 from .pivot_views import PivotVendasView

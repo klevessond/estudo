@@ -2,6 +2,8 @@ from rest_framework import serializers
 from .models import ObjetivoMensal, Profile, ObjetivoMixNivel, Feriado, CampanhaVenda, CampanhaVendaObjetivo,CampanhaVendaItem
 from django.contrib.auth.models import User
 from django.db import transaction
+from django.contrib.auth.password_validation import validate_password
+from rest_framework.validators import UniqueValidator
 
 
 class ObjetivoMensalSerializer(serializers.ModelSerializer):
@@ -204,3 +206,83 @@ class CampanhaVendaSerializer(serializers.ModelSerializer):
                 instance.itens.all().delete()
                 self._salvar_itens(instance, itens)
         return instance
+
+class UserRegisterSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(
+        required=True,
+        validators=[UniqueValidator(queryset=User.objects.all())]
+    )
+    password = serializers.CharField(
+        write_only=True, required=True, validators=[validate_password]
+    )
+    password2 = serializers.CharField(write_only=True, required=True)
+    phone = serializers.CharField(required=True, max_length=20)
+    # Campos do funcionário
+    cod_funcionario = serializers.IntegerField(required=True)
+    cod_unid_gestora = serializers.IntegerField(required=True)
+    entregador = serializers.BooleanField(required=True)
+    supervisor = serializers.BooleanField(required=True)
+    transportador = serializers.BooleanField(required=True)
+    transportador_aux = serializers.BooleanField(required=True)
+    vendedor = serializers.BooleanField(required=True)
+    cobrador = serializers.BooleanField(required=True)
+    
+    class Meta:
+        model = User
+        fields = (
+            'username', 'password', 'password2', 'email',
+            'first_name', 'last_name', 'phone',
+            'cod_funcionario', 'cod_unid_gestora',
+            'entregador', 'supervisor', 'transportador',
+            'transportador_aux', 'vendedor', 'cobrador'
+        )
+        extra_kwargs = {
+            'first_name': {'required': True},
+            'last_name': {'required': True},
+            'phone': {'required': True},
+            'cod_funcionario': {'required': True},
+            'cod_unid_gestora': {'required': True},
+            'entregador': {'required': True},
+            'supervisor': {'required': True},
+            'transportador': {'required': True},
+            'transportador_aux': {'required': True},
+            'vendedor': {'required': True},
+            'cobrador': {'required': True}
+        }
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password2']:
+            raise serializers.ValidationError({"password": "As senhas não coincidem."})
+        return attrs
+
+    def create(self, validated_data):
+        """print("dados de cadastro",validated_data)"""
+        phone = validated_data.pop('phone')
+        cod_funcionario = validated_data.pop('cod_funcionario')
+        cod_unid_gestora = validated_data.pop('cod_unid_gestora')
+        entregador = validated_data.pop('entregador')
+        supervisor = validated_data.pop('supervisor')
+        transportador = validated_data.pop('transportador')
+        transportador_aux = validated_data.pop('transportador_aux')
+        vendedor = validated_data.pop('vendedor')
+        cobrador = validated_data.pop('cobrador')
+        user = User.objects.create(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            first_name=validated_data['first_name'],
+            last_name=validated_data['last_name']
+        )
+        user.set_password(validated_data['password'])
+        user.save()
+        profile, created = Profile.objects.get_or_create(user=user)
+        profile.phone = phone
+        profile.cod_funcionario = cod_funcionario
+        profile.cod_unid_gestora = cod_unid_gestora
+        profile.entregador = entregador
+        profile.supervisor = supervisor
+        profile.transportador = transportador
+        profile.transportador_aux = transportador_aux
+        profile.vendedor = vendedor
+        profile.cobrador = cobrador
+        profile.save()
+        return user
