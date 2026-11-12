@@ -151,133 +151,20 @@ class IndicadoresView(APIView):
             vendedores,
             vendedores_set,
         ) = self._montar_contexto_escopo_objetivos(data_fim, data_inicio, num_meses, request)
-        # =========================
-        # VENDAS REALIZADAS (ÁREA)
-        # =========================
-        eh_gerente = getattr(ctx, "is_supervisor", False) and rotas_info.get("e_gerente")
-
-        _esc_vend = sorted(vendedores_set) if vendedores_set else []
- 
-        if is_filial:
-            vendido = buscar_vendas_por_vendedor(
-                data_inicio, data_fim, 
-                unid_gestora=ug_filial, 
-                agrupar_por_filial=True, 
-                cod_representante=ctx.cod_funcionario
-            )
-        elif eh_gerente and vendedores_set:
-            vendido = get_cache_mes("vendas_por_vendedor", data_inicio, data_fim, _esc_vend)
-            if vendido is None:
-                vendido = buscar_vendas_por_vendedor(
-                    data_inicio, data_fim, cod_vendedores=list(vendedores_set)
-                )
-                set_cache_mes("vendas_por_vendedor", data_inicio, data_fim, vendido, _esc_vend)
-        else:
-            vendido = get_cache_mes("vendas_por_vendedor", data_inicio, data_fim, _esc_vend)
-            if vendido is None:
-                vendido = buscar_vendas_por_vendedor(data_inicio, data_fim)
-                set_cache_mes("vendas_por_vendedor", data_inicio, data_fim, vendido, _esc_vend)
-
-        lista = vendido.get("vendas_por_vendedor", []) or []
-
-        # Só mantém o filtro em memória para quem NÃO é gerente
-        if not eh_gerente and vendedores_set:
-            lista = [it for it in lista if _to_int(it.get("codcampo")) in vendedores_set]
-
-            # =========================================================
-            existing_ids = set()
-            for it in lista:
-                cid = _to_int(it.get("codcampo"))
-                if cid is not None:
-                    existing_ids.add(cid)
-            
-            missing_ids = vendedores_set - existing_ids
-            
-            if missing_ids:
-                # Mapa de nomes para usar no fallback (tenta pegar dos objetivos)
-                name_map = {}
-                for o in (objetivos_vendedores or []):
-                     try:
-                         vid = int(str(o.get("vendedor_id")).strip())
-                         name_map[vid] = o.get("nome_vendedor")
-                     except: pass
-                
-                for mid in missing_ids:
-                    # Tenta achar o nome, senão usa o ID
-                    nome = name_map.get(mid, f"Vendedor {mid}")
-                    
-                    # Cria o objeto "zerado". 
-                    # NOTA: O Ano Anterior e as Projeções serão calculados/preenchidos
-                    # nos passos seguintes do código (linhas abaixo), pois inserimos isso NO INÍCIO.
-                    lista.append({
-                        "codcampo": str(mid),
-                        "Campo": nome,
-                        "ValorLiquido": 0.0,
-                        "PesoTotal": 0.0,
-                        "Mix": 0,
-                        "QtdClientes": 0,
-                        "PreVenda_Valor": 0.0,
-                        "Ruptura_TotalValor": 0.0,
-                        "Positivacao_Realizado": 0.0,
-                        # Inicializa AA com 0, mas o bloco "ANO ANTERIOR" logo abaixo vai atualizar isso
-                        "Ano_anterior_QtdClientes": 0,
-                        "Ano_anterior_ValorLiquido": 0,
-                        "Ano_anterior_PesoTotal": 0,
-                        "Ano_anterior_Mix": 0
-                    })
-
-
-        # somatórios
-        venda_realizada = sum(_to_float(it.get("ValorLiquido")) for it in lista)
-        peso_realizado  = sum(_to_float(it.get("PesoTotal"))    for it in lista)
-        venda_ano_anterior_rotas = None
-
-
-        # ==============================================================================
-        # 🔧 REGRA ESPECÍFICA: TIME DO SUPERVISOR 228 (Apenas para o Ano Anterior)
-        # ==============================================================================
-        vendedores_aa_set = vendedores_set.copy()
-        
-        cod_logado = getattr(ctx, "cod_funcionario", None)
-        eh_time_228 = False
-
-        if cod_logado:
-            # 1. É o próprio supervisor 228?
-            if str(cod_logado) == '228':
-                eh_time_228 = True
-            # 2. Se não, verifica se o supervisor dele é o 228
-            else:
-                cod_chefe = obter_cod_supervisor(int(cod_logado))
-                if cod_chefe and str(cod_chefe) == '228':
-                    eh_time_228 = True
-
-        if eh_time_228:
-            # Busca todos do banco para aplicar o filtro customizado
-            todos_dados = Todos_Vendedores().get("detalhamento", [])
-            
-            custom_aa = set()
-            for v in todos_dados:
-                try:
-                    c_func = int(v.get("CodFuncionario"))
-                    c_ug   = int(v.get("unidgestora") or 0)
-                    
-                    # Filtro: UnidGestora = 1 AND CodFuncionario NOT IN (1, 4)
-                    if c_ug == 1 and c_func not in (1, 4):
-                        custom_aa.add(c_func)
-                except (TypeError, ValueError):
-                    continue
-            
-            vendedores_aa_set = custom_aa
-            
-            logger.debug(
-                f"[IndicadoresView] Regra Time 228 (Logado: {cod_logado}) aplicada p/ Ano Anterior. "
-                f"Vendedores filtrados: {len(vendedores_aa_set)}"
-            )
-
-        venda_realizada = sum(_to_float(it.get("ValorLiquido")) for it in lista)
-        peso_realizado  = sum(_to_float(it.get("PesoTotal"))    for it in lista)
-
-      
+        (
+            c_func,
+            it,
+            lista,
+            nome,
+            o,
+            peso_realizado,
+            v,
+            venda_ano_anterior_rotas,
+            venda_realizada,
+            vendedores_aa_set,
+            vendido,
+            vid,
+        ) = self._realizado_area(ctx, data_fim, data_inicio, is_filial, objetivos_vendedores, rotas_info, ug_filial, v, vendedores_set)
         # ===========================================
         # VENDAS DO MESMO PERÍODO NO ANO ANTERIOR  
         # ===========================================
@@ -1337,6 +1224,150 @@ class IndicadoresView(APIView):
                 "ate":              data_fim,
             },
         })
+
+    def _realizado_area(self, ctx, data_fim, data_inicio, is_filial, objetivos_vendedores, rotas_info, ug_filial, v, vendedores_set):
+        # =========================
+        # VENDAS REALIZADAS (ÁREA)
+        # =========================
+        eh_gerente = getattr(ctx, "is_supervisor", False) and rotas_info.get("e_gerente")
+
+        _esc_vend = sorted(vendedores_set) if vendedores_set else []
+ 
+        if is_filial:
+            vendido = buscar_vendas_por_vendedor(
+                data_inicio, data_fim, 
+                unid_gestora=ug_filial, 
+                agrupar_por_filial=True, 
+                cod_representante=ctx.cod_funcionario
+            )
+        elif eh_gerente and vendedores_set:
+            vendido = get_cache_mes("vendas_por_vendedor", data_inicio, data_fim, _esc_vend)
+            if vendido is None:
+                vendido = buscar_vendas_por_vendedor(
+                    data_inicio, data_fim, cod_vendedores=list(vendedores_set)
+                )
+                set_cache_mes("vendas_por_vendedor", data_inicio, data_fim, vendido, _esc_vend)
+        else:
+            vendido = get_cache_mes("vendas_por_vendedor", data_inicio, data_fim, _esc_vend)
+            if vendido is None:
+                vendido = buscar_vendas_por_vendedor(data_inicio, data_fim)
+                set_cache_mes("vendas_por_vendedor", data_inicio, data_fim, vendido, _esc_vend)
+
+        lista = vendido.get("vendas_por_vendedor", []) or []
+
+        # Só mantém o filtro em memória para quem NÃO é gerente
+        if not eh_gerente and vendedores_set:
+            lista = [it for it in lista if _to_int(it.get("codcampo")) in vendedores_set]
+
+            # =========================================================
+            existing_ids = set()
+            for it in lista:
+                cid = _to_int(it.get("codcampo"))
+                if cid is not None:
+                    existing_ids.add(cid)
+            
+            missing_ids = vendedores_set - existing_ids
+            
+            if missing_ids:
+                # Mapa de nomes para usar no fallback (tenta pegar dos objetivos)
+                name_map = {}
+                for o in (objetivos_vendedores or []):
+                     try:
+                         vid = int(str(o.get("vendedor_id")).strip())
+                         name_map[vid] = o.get("nome_vendedor")
+                     except: pass
+                
+                for mid in missing_ids:
+                    # Tenta achar o nome, senão usa o ID
+                    nome = name_map.get(mid, f"Vendedor {mid}")
+                    
+                    # Cria o objeto "zerado". 
+                    # NOTA: O Ano Anterior e as Projeções serão calculados/preenchidos
+                    # nos passos seguintes do código (linhas abaixo), pois inserimos isso NO INÍCIO.
+                    lista.append({
+                        "codcampo": str(mid),
+                        "Campo": nome,
+                        "ValorLiquido": 0.0,
+                        "PesoTotal": 0.0,
+                        "Mix": 0,
+                        "QtdClientes": 0,
+                        "PreVenda_Valor": 0.0,
+                        "Ruptura_TotalValor": 0.0,
+                        "Positivacao_Realizado": 0.0,
+                        # Inicializa AA com 0, mas o bloco "ANO ANTERIOR" logo abaixo vai atualizar isso
+                        "Ano_anterior_QtdClientes": 0,
+                        "Ano_anterior_ValorLiquido": 0,
+                        "Ano_anterior_PesoTotal": 0,
+                        "Ano_anterior_Mix": 0
+                    })
+
+
+        # somatórios
+        venda_realizada = sum(_to_float(it.get("ValorLiquido")) for it in lista)
+        peso_realizado  = sum(_to_float(it.get("PesoTotal"))    for it in lista)
+        venda_ano_anterior_rotas = None
+
+
+        # ==============================================================================
+        # 🔧 REGRA ESPECÍFICA: TIME DO SUPERVISOR 228 (Apenas para o Ano Anterior)
+        # ==============================================================================
+        vendedores_aa_set = vendedores_set.copy()
+        
+        cod_logado = getattr(ctx, "cod_funcionario", None)
+        eh_time_228 = False
+
+        if cod_logado:
+            # 1. É o próprio supervisor 228?
+            if str(cod_logado) == '228':
+                eh_time_228 = True
+            # 2. Se não, verifica se o supervisor dele é o 228
+            else:
+                cod_chefe = obter_cod_supervisor(int(cod_logado))
+                if cod_chefe and str(cod_chefe) == '228':
+                    eh_time_228 = True
+
+        if eh_time_228:
+            # Busca todos do banco para aplicar o filtro customizado
+            todos_dados = Todos_Vendedores().get("detalhamento", [])
+            
+            custom_aa = set()
+            for v in todos_dados:
+                try:
+                    c_func = int(v.get("CodFuncionario"))
+                    c_ug   = int(v.get("unidgestora") or 0)
+                    
+                    # Filtro: UnidGestora = 1 AND CodFuncionario NOT IN (1, 4)
+                    if c_ug == 1 and c_func not in (1, 4):
+                        custom_aa.add(c_func)
+                except (TypeError, ValueError):
+                    continue
+            
+            vendedores_aa_set = custom_aa
+            
+            logger.debug(
+                f"[IndicadoresView] Regra Time 228 (Logado: {cod_logado}) aplicada p/ Ano Anterior. "
+                f"Vendedores filtrados: {len(vendedores_aa_set)}"
+            )
+
+        venda_realizada = sum(_to_float(it.get("ValorLiquido")) for it in lista)
+        peso_realizado  = sum(_to_float(it.get("PesoTotal"))    for it in lista)
+
+      
+        _vars = locals()  # fallback: variáveis só definidas em alguns ramos
+        return (
+            _vars.get("c_func"),
+            _vars.get("it"),
+            _vars.get("lista"),
+            _vars.get("nome"),
+            _vars.get("o"),
+            _vars.get("peso_realizado"),
+            _vars.get("v"),
+            _vars.get("venda_ano_anterior_rotas"),
+            _vars.get("venda_realizada"),
+            _vars.get("vendedores_aa_set"),
+            _vars.get("vendido"),
+            _vars.get("vid"),
+        )
 
     def _montar_contexto_escopo_objetivos(self, data_fim, data_inicio, num_meses, request):
 
