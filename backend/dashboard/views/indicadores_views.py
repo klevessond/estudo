@@ -153,7 +153,7 @@ class IndicadoresView(APIView):
         ug_filial = int(ctx.cod_unid_gestora) if is_filial else None
         # 1) Rotas / vendedores conforme papel
         rotas_info = buscar_rotas_usuario(ctx)  # -> {'rotas': None|[...], 'detalhado': [...], 'vendedores': [...]}
-        logger.info(
+        logger.debug(
             "[IndicadoresView] escopo rotas: eh_supervisor=%s eh_vendedor=%s eh_admin=%s "
             "rotas=%s vendedores=%s e_gerente=%s qtd_detalhado=%s amostra_detalhado=%s",
             getattr(ctx, "is_supervisor", False),
@@ -194,7 +194,7 @@ class IndicadoresView(APIView):
         grupos_supervisao = None
         if getattr(ctx, "is_supervisor", False) and rotas_info.get("e_gerente"):
             grupos_supervisao = rotas_info.get("areas_supervisao")
-            logger.info(
+            logger.debug(
                 "[IndicadoresView] supervisor-gerente detectado: cod_func=%s qtd_areas=%s grupos=%s",
                 ctx.cod_funcionario,
                 len(grupos_supervisao or []),
@@ -355,7 +355,7 @@ class IndicadoresView(APIView):
             if cod_logado_str in ['228', '4']:
                 if 4 not in vendedores_mix_list:
                     vendedores_mix_list.append(4)
-                    logger.info(f"[IndicadoresView] Regra 228/4 aplicada: Vendedor 4 incluído no cálculo do MIX.")
+                    logger.debug(f"[IndicadoresView] Regra 228/4 aplicada: Vendedor 4 incluído no cálculo do MIX.")
         except Exception:
             pass
 
@@ -477,7 +477,7 @@ class IndicadoresView(APIView):
             
             vendedores_aa_set = custom_aa
             
-            logger.info(
+            logger.debug(
                 f"[IndicadoresView] Regra Time 228 (Logado: {cod_logado}) aplicada p/ Ano Anterior. "
                 f"Vendedores filtrados: {len(vendedores_aa_set)}"
             )
@@ -589,7 +589,7 @@ class IndicadoresView(APIView):
                 log_lines.append(f"{'='*60}\n")
                 
                 # Exibe o log formatado
-                logger.info("\n".join(log_lines))
+                logger.debug("\n".join(log_lines))
 
             else:
                 logger.warning(
@@ -1266,13 +1266,13 @@ class IndicadoresView(APIView):
         variacao_positivacao   = round(positivacao_realizado_geral - objetivo_positivacao, 2)
 
         # [LOG EMPRESA DETALHADO]
-        logger.info("========================================")
-        logger.info(f"--- [PROJEÇÃO EMPRESA] ---")
-        logger.info(f"Calendário: {dias_info['decorridos']} decorridos / {dias_info['totais']} totais")
-        logger.info("FINANCEIRO (Rotas vs PDV):")
-        logger.info(f"   Rotas: Realizado R$ {venda_realizada:,.2f} -> Projeção R$ {proj_rotas_geral['projecao_final']:,.2f}")
-        logger.info(f"   TOTAL: Realizado R$ {venda_total_empresa:,.2f} -> Projeção R$ {projecao_financeira_geral['projecao_final']:,.2f}")
-        logger.info("========================================")
+        logger.debug("========================================")
+        logger.debug(f"--- [PROJEÇÃO EMPRESA] ---")
+        logger.debug(f"Calendário: {dias_info['decorridos']} decorridos / {dias_info['totais']} totais")
+        logger.debug("FINANCEIRO (Rotas vs PDV):")
+        logger.debug(f"   Rotas: Realizado R$ {venda_realizada:,.2f} -> Projeção R$ {proj_rotas_geral['projecao_final']:,.2f}")
+        logger.debug(f"   TOTAL: Realizado R$ {venda_total_empresa:,.2f} -> Projeção R$ {projecao_financeira_geral['projecao_final']:,.2f}")
+        logger.debug("========================================")
 
         # 6. Loop de Projeção INDIVIDUAL
         for vend in lista:
@@ -1322,12 +1322,12 @@ class IndicadoresView(APIView):
                 p_mix = calcular_matematica_projecao(val_mix, metas["mix"], dias_info) # <--- Projeção de Mix
 
                 # --- LOGS DETALHADOS (RESTAURADOS) ---
-                logger.info(f"--- [PROJEÇÃO VENDEDOR {vid}] {vend.get('Campo')} ---")
-                logger.info(f"   FINANCEIRO: Real R$ {total_fin:,.2f} | Meta R$ {metas['fin']:,.2f} | Proj R$ {p_fin_total['projecao_final']:,.2f} ({p_fin_total['atingimento_projetado']:.2f}%)")
-                logger.info(f"               Diário Atual: R$ {p_fin_total['velocidade_diaria']:,.2f} | Necessário: R$ {p_fin_total['meta_diaria_necessaria']:,.2f}")
-                logger.info(f"   PESO:       Real {total_peso:,.2f} | Meta {metas['peso']:,.2f} | Proj {p_peso['projecao_final']:,.2f}")
-                logger.info(f"   MIX:        Real {val_mix} | Meta {metas['mix']} | Proj {p_mix['projecao_final']:.2f}")
-                logger.info(f"   POSITIV.:   Real {val_pos} | Meta {metas['pos']} | Proj {p_pos['projecao_final']:.2f}")
+                logger.debug(f"--- [PROJEÇÃO VENDEDOR {vid}] {vend.get('Campo')} ---")
+                logger.debug(f"   FINANCEIRO: Real R$ {total_fin:,.2f} | Meta R$ {metas['fin']:,.2f} | Proj R$ {p_fin_total['projecao_final']:,.2f} ({p_fin_total['atingimento_projetado']:.2f}%)")
+                logger.debug(f"               Diário Atual: R$ {p_fin_total['velocidade_diaria']:,.2f} | Necessário: R$ {p_fin_total['meta_diaria_necessaria']:,.2f}")
+                logger.debug(f"   PESO:       Real {total_peso:,.2f} | Meta {metas['peso']:,.2f} | Proj {p_peso['projecao_final']:,.2f}")
+                logger.debug(f"   MIX:        Real {val_mix} | Meta {metas['mix']} | Proj {p_mix['projecao_final']:.2f}")
+                logger.debug(f"   POSITIV.:   Real {val_pos} | Meta {metas['pos']} | Proj {p_pos['projecao_final']:.2f}")
 
                 # --- INJEÇÃO NO JSON ---
                 vend["projecao"] = p_fin_total 
