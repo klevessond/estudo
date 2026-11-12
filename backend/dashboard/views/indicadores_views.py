@@ -189,248 +189,27 @@ class IndicadoresView(APIView):
             venda_ano_anterior,
             venda_ano_anterior_rotas,
         ) = self._ano_anterior(c_func, cod, ctx, data_fim, data_inicio, grupos_supervisao, is_filial, lista, meses_periodo, multiplos_meses, nome, objetivos_vendedores, rotas_codigos, rotas_info, ug_filial, v, valor, venda_ano_anterior_rotas, vendedores, vendedores_aa_set, vendedores_set)
-        # Pré-venda (área)
-        _esc_prev = sorted(vendedores) if vendedores else []
-        prevenda = get_cache_mes("pre_venda", data_inicio, data_fim, _esc_prev)
-        if prevenda is None:
-            prevenda = buscar_pre_venda(data_inicio, data_fim, cod_vendedores=vendedores)
-            set_cache_mes("pre_venda", data_inicio, data_fim, prevenda, _esc_prev)
-        valor_prevenda = prevenda.get("pre_venda_valor", 0)
-        valor_alocado = venda_realizada + valor_prevenda
-
-        logger.debug("%s %s", "[DEBUG][PREVENDA_RAW] keys=", list((prevenda or {}).keys()))
-        det = (prevenda.get("detalhado") or [])
-        logger.debug("%s %s %s %s", "[DEBUG][PREVENDA_RAW] detalhado_len=", len(det), "amostra=", det[:3])
-        
-
-       # ==========================
-        # PRÉ-VENDA: mapa por vendedor (ACUMULADO)
-        # ==========================
-        pre_by_cod = {}
-        try:
-            detalhado_pre = prevenda.get("detalhado") or []
-            for row in detalhado_pre:
-                cod_v = _to_int(row.get("CodVendedor"))
-                if cod_v is None:
-                    continue
-                valor = _num(row.get("Valor"))
-                pre_by_cod[cod_v] = pre_by_cod.get(cod_v, 0.0) + valor
-        except Exception as e:
-            logger.exception(f"[PREVENDA] erro ao montar pre_by_cod: {e}")
-            pre_by_cod = {}
-
-        logger.debug("[DEBUG] Iniciando cálculo de pré-venda…")
-        logger.debug(f"[DEBUG] Pré-venda calculada para {len(pre_by_cod)} vendedores")
-
-        # (opcional) log de alguns vendedores
-        for k in list(pre_by_cod.keys())[:15]:
-            logger.debug(f"[DEBUG] PRE vendedor {k}: {pre_by_cod[k]}")
-
-        # ==========================
-        # PRÉ-VENDA: soma por área (escopo_rotas -> areas_supervisao)
-        # ==========================
-        if grupos_supervisao:
-            logger.debug("\n[DEBUG][PREVENDA_POR_AREA] iniciando...")
-
-            pre_keys = set(pre_by_cod.keys())
-
-            for area in grupos_supervisao:
-                area_vendedores = [_to_int(v) for v in (area.get("vendedores") or [])]
-                area_vendedores = [v for v in area_vendedores if v is not None]
-
-                intersec = sorted(list(set(area_vendedores) & pre_keys))
-
-                logger.debug(f"[DEBUG][PREVENDA_MATCH] area={area.get('cod_area_supervisao')} "
-                    f"sup={area.get('cod_supervisor')} "
-                    f"qtd_area_vend={len(area_vendedores)} qtd_pre_keys={len(pre_keys)} "
-                    f"intersec={len(intersec)} amostra_inter={intersec[:15]}")
-
-                soma_pre_area = sum(pre_by_cod.get(v, 0.0) for v in area_vendedores)
-                area["pre_venda_area"] = round(soma_pre_area, 2)
-
-                logger.debug(f"[DEBUG][PREVENDA_POR_AREA_TOTAL] area={area.get('cod_area_supervisao')} "
-                    f"sup={area.get('cod_supervisor')} PRE_TOTAL={area['pre_venda_area']}")
-
-
-
-        # ========= PRÉ-VENDA POR ÁREA (para gerente) =========
-        if grupos_supervisao:
-            logger.debug("\n[DEBUG][PREVENDA_POR_AREA] iniciando...")
-
-            for area in grupos_supervisao:
-                area_vendedores = [_to_int(v) for v in (area.get("vendedores") or [])]
-                area_vendedores = [v for v in area_vendedores if v is not None]
-
-                inter = set(area_vendedores) & set(pre_by_cod.keys())
-                logger.debug(f"[DEBUG][PREVENDA_MATCH] area={area.get('cod_area_supervisao')} "
-                f"qtd_area_vend={len(area_vendedores)} qtd_pre_keys={len(pre_by_cod)} "
-                f"intersec={len(inter)} amostra_inter={list(inter)[:10]}")
-
-
-                soma_pre_area = sum(_num(pre_by_cod.get(v, 0.0)) for v in area_vendedores)
-
-                area["pre_venda_area"] = round(soma_pre_area, 2)
-
-                if "venda_realizada_area" in area:
-                    area["valor_alocado_area"] = round(_num(area.get("venda_realizada_area")) + soma_pre_area, 2)
-
-                logger.debug(f"[DEBUG][PREVENDA_POR_AREA_TOTAL] "
-                    f"area={area.get('cod_area_supervisao')} sup={area.get('cod_supervisor')} "
-                    f"PRE_TOTAL={area['pre_venda_area']}")
-
-
-
-        # KPIs (área)
-        variacao = peso_realizado - objetivo.get("objetivo_peso", 0)
-        percentual = safe_divide(peso_realizado, objetivo.get("objetivo_peso", 1)) * 100
-        percentual_cobertura = safe_divide(venda_realizada, objetivo_financeiro) * 100
-        variacao_financeira = venda_realizada - objetivo_financeiro
-        venda_realizada_float = float(venda_realizada)
-        venda_ano_anterior_float = float(venda_ano_anterior)
-        evolucao_percentual = safe_divide(venda_realizada_float - venda_ano_anterior_float, venda_ano_anterior_float) * 100
-        percentual_mix = safe_divide(mix_realizado, objetivo_mix) * 100
-        variacao_mix = mix_realizado - objetivo_mix
-        percentual_prevenda_alocado = safe_divide(valor_alocado, objetivo_financeiro) * 100
-        variacao_prevenda = valor_alocado - objetivo_financeiro
-
-        # === RUPTURA (Captado) (área) ===
-        vendedores_list_int = [_to_int(v) for v in (vendedores or []) if _to_int(v) is not None]
-        _esc_rupt = sorted(vendedores_list_int) if vendedores_list_int else []
-        ruptura_dados = get_cache_mes("ruptura", data_inicio, data_fim, _esc_rupt)
-        if ruptura_dados is None:
-            if not vendedores_list_int:
-                ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=None)
-            elif len(vendedores_list_int) == 1:
-                ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=vendedores_list_int[0], cod_vendedores=None)
-            else:
-                ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=vendedores_list_int)
-            set_cache_mes("ruptura", data_inicio, data_fim, ruptura_dados, _esc_rupt)
-
-        #print(f"[DEBUG]RUPTURA ] {ruptura_dados}")
-        ruptura_total = 0.0
-        for r in (ruptura_dados.get("resumo") or []):
-            ruptura_total += float(r.get("TotalValor") or 0)
-        ruptura_total = round(ruptura_total, 2)
-        percentual_captado = round(safe_divide(ruptura_total, venda_realizada) * 100, 2)
-
-        # ========= NOVO: MERGE por-vendedor (Pré-venda, Ruptura, Positivação) =========
-        # 1) Pré-venda detalhada (esperado: prevenda['detalhado'] = [{CodVendedor, Valor}, ...])
-        """pre_by_cod = {}
-        try:
-            for itp in (prevenda.get("detalhado") or []):
-                cod_v = _to_int(itp.get("CodVendedor"))
-                if cod_v is None:
-                    continue
-                pre_by_cod[cod_v] = _num(itp.get("Valor"))
-        except Exception:
-            pre_by_cod = {}"""
-
-        # 2) Ruptura detalhada (esperado: ruptura_dados['detalhado'] = [{CodVendedor, TotalValor}, ...])
-        rup_by_cod = {}
-        try:
-            for itr in (ruptura_dados.get("resumo") or []):
-                #print(f"[DEBUG] dado do for {itr}")
-                cod_v = _to_int(itr.get("CodVendedor"))
-                if cod_v is None:
-                    continue
-                rup_by_cod[cod_v] = _num(itr.get("TotalValor"))
-        except Exception:
-            rup_by_cod = {}
-
-        # 3) Positivação detalhada (esperado: positivacao['detalhado'] = [{CodVendedor, Realizado|QtdClientes}, ...])
-        pos_by_cod = {}
-        try:
-            if multiplos_meses:
-                pos_by_cod = {cod: v for cod, v in _pos_media_por_vend.items()}
-            else:
-                for itpos in (positivacao.get("detalhado") or []):
-                    cod_v = _to_int(itpos.get("CodFuncionario"))
-                    if cod_v is None:
-                        continue
-                    realizado = itpos.get("Realizado", itpos.get("QtdClientes", 0))
-                    pos_by_cod[cod_v] = _num(realizado)
-        except Exception:
-            pos_by_cod = {}
-
-        # 4) Aplica nos itens do array principal
-        for it in lista:
-            cod = _to_int(it.get("codcampo"))
-            it["PreVenda_Valor"]        = pre_by_cod.get(cod, 0.0)
-            it["Ruptura_TotalValor"]    = rup_by_cod.get(cod, 0.0)
-            it["Positivacao_Realizado"] = pos_by_cod.get(cod, 0.0)
-
-        # 5) Agregados úteis p/ modo "área"
-        pre_venda_agregado = sum(_num(it.get("PreVenda_Valor")) for it in lista)
-        ruptura_agregado   = sum(_num(it.get("Ruptura_TotalValor")) for it in lista)
-        positivacao_agregado = sum(_num(it.get("Positivacao_Realizado")) for it in lista)
-
-        # ========= NOVO: BLOCO "minha_visao" (vendedor logado) =========
-        minha_visao = None
-        try:
-            meu_cod = _to_int(ctx.cod_funcionario)
-            # linha de venda do meu vendedor
-            minha_linha = None
-            for it in lista:
-                if _to_int(it.get("codcampo")) == meu_cod:
-                    minha_linha = it
-                    break
-
-            # objetivos do meu vendedor
-            obj_meu = None
-            for o in objetivos_vendedores or []:
-                if str(o.get("vendedor_id")) == str(meu_cod):
-                    obj_meu = o
-                    break
-
-            if minha_linha or obj_meu:
-                my_venda = _to_float((minha_linha or {}).get("ValorLiquido"))
-                my_peso  = _to_float((minha_linha or {}).get("PesoTotal"))
-                my_mix = _mix_media_por_vend.get(meu_cod, _to_float((minha_linha or {}).get("Mix")))
-                # pos_by_cod já resolve corretamente 1 mês (valor direto) e N meses (média mensal)
-                my_pos = pos_by_cod.get(meu_cod, 0.0)
-
-                my_obj_fin  = _to_float((obj_meu or {}).get("objetivo_financeiro"))
-                my_obj_peso = _to_float((obj_meu or {}).get("objetivo_peso"))
-                my_obj_mix  = _to_float((obj_meu or {}).get("objetivo_mix"))
-                my_obj_pos  = _to_float((obj_meu or {}).get("objetivo_positivacao"))
-
-                minha_visao = {
-                    "cod_funcionario": meu_cod,
-                    "colaborador": (minha_linha or {}).get("Campo"),
-                    "realizado_financeiro": round(my_venda, 2),
-                    "realizado_peso": round(my_peso, 2),
-                    "mix_realizado": round(my_mix, 2),
-                    "realizado_positivacao": round(my_pos, 2),
-                    "objetivo_financeiro": round(my_obj_fin, 2),
-                    "objetivo_peso": round(my_obj_peso, 2),
-                    "objetivo_mix": round(my_obj_mix, 2),
-                    "objetivo_positivacao": round(my_obj_pos, 2),
-                    "percentual_cobertura": round(safe_divide(my_venda, my_obj_fin) * 100, 2) if my_obj_fin else 0.0,
-                    "variacao_financeira": round(my_venda - my_obj_fin, 2),
-                    "percentual_peso": round(safe_divide(my_peso, my_obj_peso) * 100, 2) if my_obj_peso else 0.0,
-                    "variacao_peso": round(my_peso - my_obj_peso, 2),
-                    "percentual_mix": round(safe_divide(my_mix, my_obj_mix) * 100, 2) if my_obj_mix else 0.0,
-                    "variacao_mix": round(my_mix - my_obj_mix, 2),
-                    "percentual_positivacao": round(safe_divide(my_pos, my_obj_pos) * 100, 2) if my_obj_pos else 0.0,
-                    "variacao_positivacao": round(my_pos - my_obj_pos, 2),
-                }
-        except Exception as e:
-            logger.exception(f"[IndicadoresView][minha_visao] erro ao montar: {e}")
-            minha_visao = None
-
-        # ====== Payload final de vendas / agregados ======
-        vendido["vendas_por_vendedor"]   = lista
-        vendido["ano_anterior_agregado"] = ano_anterior_agregado
-        vendido["ano_anterior_agregado_mes"] = ano_anterior_agregado_mes
-        vendido["agregados_area"] = {
-            "PreVenda_Valor": pre_venda_agregado,
-            "Ruptura_TotalValor": ruptura_agregado,
-            "Positivacao_Realizado": positivacao_agregado,
-        }
-        vendido["venda_ano_anterior_rotas"] = venda_ano_anterior_rotas
-
-
-        # =========================================================
+        (
+            area,
+            area_vendedores,
+            evolucao_percentual,
+            minha_visao,
+            o,
+            percentual,
+            percentual_captado,
+            percentual_cobertura,
+            percentual_mix,
+            percentual_prevenda_alocado,
+            r,
+            ruptura_total,
+            v,
+            valor_alocado,
+            valor_prevenda,
+            variacao,
+            variacao_financeira,
+            variacao_mix,
+            variacao_prevenda,
+        ) = self._pre_venda_kpis_merge(_mix_media_por_vend, _pos_media_por_vend, ano_anterior_agregado, ano_anterior_agregado_mes, area, area_vendedores, cod, cod_v, ctx, data_fim, data_inicio, grupos_supervisao, lista, mix_realizado, multiplos_meses, objetivo, objetivo_financeiro, objetivo_mix, objetivos_vendedores, peso_realizado, positivacao, row, v, valor, venda_ano_anterior, venda_ano_anterior_rotas, venda_realizada, vendedores, vendido)
         # 🟢 INICIO DO BLOCO: PROJEÇÃO INTEGRADA & PDV (FINAL - DETALHADO)
         # =========================================================
         
@@ -849,6 +628,272 @@ class IndicadoresView(APIView):
                 "ate":              data_fim,
             },
         })
+
+    def _pre_venda_kpis_merge(self, _mix_media_por_vend, _pos_media_por_vend, ano_anterior_agregado, ano_anterior_agregado_mes, area, area_vendedores, cod, cod_v, ctx, data_fim, data_inicio, grupos_supervisao, lista, mix_realizado, multiplos_meses, objetivo, objetivo_financeiro, objetivo_mix, objetivos_vendedores, peso_realizado, positivacao, row, v, valor, venda_ano_anterior, venda_ano_anterior_rotas, venda_realizada, vendedores, vendido):
+        # Pré-venda (área)
+        _esc_prev = sorted(vendedores) if vendedores else []
+        prevenda = get_cache_mes("pre_venda", data_inicio, data_fim, _esc_prev)
+        if prevenda is None:
+            prevenda = buscar_pre_venda(data_inicio, data_fim, cod_vendedores=vendedores)
+            set_cache_mes("pre_venda", data_inicio, data_fim, prevenda, _esc_prev)
+        valor_prevenda = prevenda.get("pre_venda_valor", 0)
+        valor_alocado = venda_realizada + valor_prevenda
+
+        logger.debug("%s %s", "[DEBUG][PREVENDA_RAW] keys=", list((prevenda or {}).keys()))
+        det = (prevenda.get("detalhado") or [])
+        logger.debug("%s %s %s %s", "[DEBUG][PREVENDA_RAW] detalhado_len=", len(det), "amostra=", det[:3])
+        
+
+       # ==========================
+        # PRÉ-VENDA: mapa por vendedor (ACUMULADO)
+        # ==========================
+        pre_by_cod = {}
+        try:
+            detalhado_pre = prevenda.get("detalhado") or []
+            for row in detalhado_pre:
+                cod_v = _to_int(row.get("CodVendedor"))
+                if cod_v is None:
+                    continue
+                valor = _num(row.get("Valor"))
+                pre_by_cod[cod_v] = pre_by_cod.get(cod_v, 0.0) + valor
+        except Exception as e:
+            logger.exception(f"[PREVENDA] erro ao montar pre_by_cod: {e}")
+            pre_by_cod = {}
+
+        logger.debug("[DEBUG] Iniciando cálculo de pré-venda…")
+        logger.debug(f"[DEBUG] Pré-venda calculada para {len(pre_by_cod)} vendedores")
+
+        # (opcional) log de alguns vendedores
+        for k in list(pre_by_cod.keys())[:15]:
+            logger.debug(f"[DEBUG] PRE vendedor {k}: {pre_by_cod[k]}")
+
+        # ==========================
+        # PRÉ-VENDA: soma por área (escopo_rotas -> areas_supervisao)
+        # ==========================
+        if grupos_supervisao:
+            logger.debug("\n[DEBUG][PREVENDA_POR_AREA] iniciando...")
+
+            pre_keys = set(pre_by_cod.keys())
+
+            for area in grupos_supervisao:
+                area_vendedores = [_to_int(v) for v in (area.get("vendedores") or [])]
+                area_vendedores = [v for v in area_vendedores if v is not None]
+
+                intersec = sorted(list(set(area_vendedores) & pre_keys))
+
+                logger.debug(f"[DEBUG][PREVENDA_MATCH] area={area.get('cod_area_supervisao')} "
+                    f"sup={area.get('cod_supervisor')} "
+                    f"qtd_area_vend={len(area_vendedores)} qtd_pre_keys={len(pre_keys)} "
+                    f"intersec={len(intersec)} amostra_inter={intersec[:15]}")
+
+                soma_pre_area = sum(pre_by_cod.get(v, 0.0) for v in area_vendedores)
+                area["pre_venda_area"] = round(soma_pre_area, 2)
+
+                logger.debug(f"[DEBUG][PREVENDA_POR_AREA_TOTAL] area={area.get('cod_area_supervisao')} "
+                    f"sup={area.get('cod_supervisor')} PRE_TOTAL={area['pre_venda_area']}")
+
+
+
+        # ========= PRÉ-VENDA POR ÁREA (para gerente) =========
+        if grupos_supervisao:
+            logger.debug("\n[DEBUG][PREVENDA_POR_AREA] iniciando...")
+
+            for area in grupos_supervisao:
+                area_vendedores = [_to_int(v) for v in (area.get("vendedores") or [])]
+                area_vendedores = [v for v in area_vendedores if v is not None]
+
+                inter = set(area_vendedores) & set(pre_by_cod.keys())
+                logger.debug(f"[DEBUG][PREVENDA_MATCH] area={area.get('cod_area_supervisao')} "
+                f"qtd_area_vend={len(area_vendedores)} qtd_pre_keys={len(pre_by_cod)} "
+                f"intersec={len(inter)} amostra_inter={list(inter)[:10]}")
+
+
+                soma_pre_area = sum(_num(pre_by_cod.get(v, 0.0)) for v in area_vendedores)
+
+                area["pre_venda_area"] = round(soma_pre_area, 2)
+
+                if "venda_realizada_area" in area:
+                    area["valor_alocado_area"] = round(_num(area.get("venda_realizada_area")) + soma_pre_area, 2)
+
+                logger.debug(f"[DEBUG][PREVENDA_POR_AREA_TOTAL] "
+                    f"area={area.get('cod_area_supervisao')} sup={area.get('cod_supervisor')} "
+                    f"PRE_TOTAL={area['pre_venda_area']}")
+
+
+
+        # KPIs (área)
+        variacao = peso_realizado - objetivo.get("objetivo_peso", 0)
+        percentual = safe_divide(peso_realizado, objetivo.get("objetivo_peso", 1)) * 100
+        percentual_cobertura = safe_divide(venda_realizada, objetivo_financeiro) * 100
+        variacao_financeira = venda_realizada - objetivo_financeiro
+        venda_realizada_float = float(venda_realizada)
+        venda_ano_anterior_float = float(venda_ano_anterior)
+        evolucao_percentual = safe_divide(venda_realizada_float - venda_ano_anterior_float, venda_ano_anterior_float) * 100
+        percentual_mix = safe_divide(mix_realizado, objetivo_mix) * 100
+        variacao_mix = mix_realizado - objetivo_mix
+        percentual_prevenda_alocado = safe_divide(valor_alocado, objetivo_financeiro) * 100
+        variacao_prevenda = valor_alocado - objetivo_financeiro
+
+        # === RUPTURA (Captado) (área) ===
+        vendedores_list_int = [_to_int(v) for v in (vendedores or []) if _to_int(v) is not None]
+        _esc_rupt = sorted(vendedores_list_int) if vendedores_list_int else []
+        ruptura_dados = get_cache_mes("ruptura", data_inicio, data_fim, _esc_rupt)
+        if ruptura_dados is None:
+            if not vendedores_list_int:
+                ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=None)
+            elif len(vendedores_list_int) == 1:
+                ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=vendedores_list_int[0], cod_vendedores=None)
+            else:
+                ruptura_dados = buscar_ruptura(data_inicio, data_fim, cod_vendedor=None, cod_vendedores=vendedores_list_int)
+            set_cache_mes("ruptura", data_inicio, data_fim, ruptura_dados, _esc_rupt)
+
+        #print(f"[DEBUG]RUPTURA ] {ruptura_dados}")
+        ruptura_total = 0.0
+        for r in (ruptura_dados.get("resumo") or []):
+            ruptura_total += float(r.get("TotalValor") or 0)
+        ruptura_total = round(ruptura_total, 2)
+        percentual_captado = round(safe_divide(ruptura_total, venda_realizada) * 100, 2)
+
+        # ========= NOVO: MERGE por-vendedor (Pré-venda, Ruptura, Positivação) =========
+        # 1) Pré-venda detalhada (esperado: prevenda['detalhado'] = [{CodVendedor, Valor}, ...])
+        """pre_by_cod = {}
+        try:
+            for itp in (prevenda.get("detalhado") or []):
+                cod_v = _to_int(itp.get("CodVendedor"))
+                if cod_v is None:
+                    continue
+                pre_by_cod[cod_v] = _num(itp.get("Valor"))
+        except Exception:
+            pre_by_cod = {}"""
+
+        # 2) Ruptura detalhada (esperado: ruptura_dados['detalhado'] = [{CodVendedor, TotalValor}, ...])
+        rup_by_cod = {}
+        try:
+            for itr in (ruptura_dados.get("resumo") or []):
+                #print(f"[DEBUG] dado do for {itr}")
+                cod_v = _to_int(itr.get("CodVendedor"))
+                if cod_v is None:
+                    continue
+                rup_by_cod[cod_v] = _num(itr.get("TotalValor"))
+        except Exception:
+            rup_by_cod = {}
+
+        # 3) Positivação detalhada (esperado: positivacao['detalhado'] = [{CodVendedor, Realizado|QtdClientes}, ...])
+        pos_by_cod = {}
+        try:
+            if multiplos_meses:
+                pos_by_cod = {cod: v for cod, v in _pos_media_por_vend.items()}
+            else:
+                for itpos in (positivacao.get("detalhado") or []):
+                    cod_v = _to_int(itpos.get("CodFuncionario"))
+                    if cod_v is None:
+                        continue
+                    realizado = itpos.get("Realizado", itpos.get("QtdClientes", 0))
+                    pos_by_cod[cod_v] = _num(realizado)
+        except Exception:
+            pos_by_cod = {}
+
+        # 4) Aplica nos itens do array principal
+        for it in lista:
+            cod = _to_int(it.get("codcampo"))
+            it["PreVenda_Valor"]        = pre_by_cod.get(cod, 0.0)
+            it["Ruptura_TotalValor"]    = rup_by_cod.get(cod, 0.0)
+            it["Positivacao_Realizado"] = pos_by_cod.get(cod, 0.0)
+
+        # 5) Agregados úteis p/ modo "área"
+        pre_venda_agregado = sum(_num(it.get("PreVenda_Valor")) for it in lista)
+        ruptura_agregado   = sum(_num(it.get("Ruptura_TotalValor")) for it in lista)
+        positivacao_agregado = sum(_num(it.get("Positivacao_Realizado")) for it in lista)
+
+        # ========= NOVO: BLOCO "minha_visao" (vendedor logado) =========
+        minha_visao = None
+        try:
+            meu_cod = _to_int(ctx.cod_funcionario)
+            # linha de venda do meu vendedor
+            minha_linha = None
+            for it in lista:
+                if _to_int(it.get("codcampo")) == meu_cod:
+                    minha_linha = it
+                    break
+
+            # objetivos do meu vendedor
+            obj_meu = None
+            for o in objetivos_vendedores or []:
+                if str(o.get("vendedor_id")) == str(meu_cod):
+                    obj_meu = o
+                    break
+
+            if minha_linha or obj_meu:
+                my_venda = _to_float((minha_linha or {}).get("ValorLiquido"))
+                my_peso  = _to_float((minha_linha or {}).get("PesoTotal"))
+                my_mix = _mix_media_por_vend.get(meu_cod, _to_float((minha_linha or {}).get("Mix")))
+                # pos_by_cod já resolve corretamente 1 mês (valor direto) e N meses (média mensal)
+                my_pos = pos_by_cod.get(meu_cod, 0.0)
+
+                my_obj_fin  = _to_float((obj_meu or {}).get("objetivo_financeiro"))
+                my_obj_peso = _to_float((obj_meu or {}).get("objetivo_peso"))
+                my_obj_mix  = _to_float((obj_meu or {}).get("objetivo_mix"))
+                my_obj_pos  = _to_float((obj_meu or {}).get("objetivo_positivacao"))
+
+                minha_visao = {
+                    "cod_funcionario": meu_cod,
+                    "colaborador": (minha_linha or {}).get("Campo"),
+                    "realizado_financeiro": round(my_venda, 2),
+                    "realizado_peso": round(my_peso, 2),
+                    "mix_realizado": round(my_mix, 2),
+                    "realizado_positivacao": round(my_pos, 2),
+                    "objetivo_financeiro": round(my_obj_fin, 2),
+                    "objetivo_peso": round(my_obj_peso, 2),
+                    "objetivo_mix": round(my_obj_mix, 2),
+                    "objetivo_positivacao": round(my_obj_pos, 2),
+                    "percentual_cobertura": round(safe_divide(my_venda, my_obj_fin) * 100, 2) if my_obj_fin else 0.0,
+                    "variacao_financeira": round(my_venda - my_obj_fin, 2),
+                    "percentual_peso": round(safe_divide(my_peso, my_obj_peso) * 100, 2) if my_obj_peso else 0.0,
+                    "variacao_peso": round(my_peso - my_obj_peso, 2),
+                    "percentual_mix": round(safe_divide(my_mix, my_obj_mix) * 100, 2) if my_obj_mix else 0.0,
+                    "variacao_mix": round(my_mix - my_obj_mix, 2),
+                    "percentual_positivacao": round(safe_divide(my_pos, my_obj_pos) * 100, 2) if my_obj_pos else 0.0,
+                    "variacao_positivacao": round(my_pos - my_obj_pos, 2),
+                }
+        except Exception as e:
+            logger.exception(f"[IndicadoresView][minha_visao] erro ao montar: {e}")
+            minha_visao = None
+
+        # ====== Payload final de vendas / agregados ======
+        vendido["vendas_por_vendedor"]   = lista
+        vendido["ano_anterior_agregado"] = ano_anterior_agregado
+        vendido["ano_anterior_agregado_mes"] = ano_anterior_agregado_mes
+        vendido["agregados_area"] = {
+            "PreVenda_Valor": pre_venda_agregado,
+            "Ruptura_TotalValor": ruptura_agregado,
+            "Positivacao_Realizado": positivacao_agregado,
+        }
+        vendido["venda_ano_anterior_rotas"] = venda_ano_anterior_rotas
+
+
+        # =========================================================
+        _vars = locals()  # fallback: variáveis só definidas em alguns ramos
+        return (
+            _vars.get("area"),
+            _vars.get("area_vendedores"),
+            _vars.get("evolucao_percentual"),
+            _vars.get("minha_visao"),
+            _vars.get("o"),
+            _vars.get("percentual"),
+            _vars.get("percentual_captado"),
+            _vars.get("percentual_cobertura"),
+            _vars.get("percentual_mix"),
+            _vars.get("percentual_prevenda_alocado"),
+            _vars.get("r"),
+            _vars.get("ruptura_total"),
+            _vars.get("v"),
+            _vars.get("valor_alocado"),
+            _vars.get("valor_prevenda"),
+            _vars.get("variacao"),
+            _vars.get("variacao_financeira"),
+            _vars.get("variacao_mix"),
+            _vars.get("variacao_prevenda"),
+        )
 
     def _ano_anterior(self, c_func, cod, ctx, data_fim, data_inicio, grupos_supervisao, is_filial, lista, meses_periodo, multiplos_meses, nome, objetivos_vendedores, rotas_codigos, rotas_info, ug_filial, v, valor, venda_ano_anterior_rotas, vendedores, vendedores_aa_set, vendedores_set):
         # ===========================================
