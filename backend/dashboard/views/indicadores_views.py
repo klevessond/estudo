@@ -130,235 +130,27 @@ class IndicadoresView(APIView):
         num_meses       = max(len(meses_periodo), 1)
         multiplos_meses = num_meses > 1
 
-
-        # ===== LOG DO PERFIL QUE ESTÁ FAZENDO A CHAMADA =====
-        ctx = get_role_context(request.user)
-        logger.info(
-            "[IndicadoresView] user=%s id=%s roles=%s cod_funcionario=%s cod_unid_gestora=%s de=%s ate=%s ip=%s",
-            getattr(request.user, "username", None),
-            getattr(request.user, "id", None),
-            ",".join(ctx.roles) if ctx.roles else "-",
-            ctx.cod_funcionario,
-            ctx.cod_unid_gestora,
-            data_inicio,
-            data_fim,
-            request.META.get("REMOTE_ADDR"),
-        )
-        # ====================================================
-        is_filial = (
-            bool(ctx.cod_unid_gestora and str(ctx.cod_unid_gestora) not in ('', '1', 'None'))
-            and not getattr(ctx, "is_supervisor", False)   # ← supervisor nunca é "filial"
-            and not getattr(ctx, "is_vendedor",   False)
-        )
-        ug_filial = int(ctx.cod_unid_gestora) if is_filial else None
-        # 1) Rotas / vendedores conforme papel
-        rotas_info = buscar_rotas_usuario(ctx)  # -> {'rotas': None|[...], 'detalhado': [...], 'vendedores': [...]}
-        logger.debug(
-            "[IndicadoresView] escopo rotas: eh_supervisor=%s eh_vendedor=%s eh_admin=%s "
-            "rotas=%s vendedores=%s e_gerente=%s qtd_detalhado=%s amostra_detalhado=%s",
-            getattr(ctx, "is_supervisor", False),
-            getattr(ctx, "is_vendedor", False),
-            getattr(ctx, "is_admin", False),
-            rotas_info.get("rotas"),
-            rotas_info.get("vendedores"),
-            rotas_info.get("e_gerente"),
-            len(rotas_info.get("detalhado") or []),
-            (rotas_info.get("detalhado") or [])[:3],  # só uma amostra pra não floodar o log
-            
-        )
-        if is_filial:
-            vendedores = [int(ctx.cod_funcionario)] # Força ser só ele
-        elif getattr(ctx, "is_supervisor", False):
-            vendedores = rotas_info.get("vendedores") if rotas_info else None
-
-        
-        rotas_codigos = rotas_info.get("rotas") if rotas_info else None
-        logger.debug("%s %s", ">>> ROTAS X VENDEDOR", rotas_info)
-
-        # 🔧 PRIORIDADE: supervisor/gerente > vendedor
-        if getattr(ctx, "is_supervisor", False):
-            # supervisor/gerente: usa o escopo calculado no serviço (NÃO pode cair no escopo "mesma supervisão")
-            vendedores = rotas_info.get("vendedores") if rotas_info else None
-        else:
-            # vendedor "puro": usa lista da mesma supervisão
-            if getattr(ctx, "is_vendedor", False):
-                try:
-                    vendedores = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario) or [int(ctx.cod_funcionario)]
-                except Exception:
-                    vendedores = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else None
-            else:
-                # admin/outros: usa o escopo calculado no serviço
-                vendedores = rotas_info.get("vendedores") if rotas_info else None
-
-        # 🔧 Se for SUPERVISOR-GERENTE, montamos também grupos por área de supervisão
-        grupos_supervisao = None
-        if getattr(ctx, "is_supervisor", False) and rotas_info.get("e_gerente"):
-            grupos_supervisao = rotas_info.get("areas_supervisao")
-            logger.debug(
-                "[IndicadoresView] supervisor-gerente detectado: cod_func=%s qtd_areas=%s grupos=%s",
-                ctx.cod_funcionario,
-                len(grupos_supervisao or []),
-                grupos_supervisao,
-            )
-            
-
-        logger.debug(
-            "[IndicadoresView] vendedores considerados para escopo: %s (e_gerente=%s)",
+        (
+            cod,
+            ctx,
+            grupos_supervisao,
+            is_filial,
+            mix_empresa_val,
+            mix_supervisores_map,
+            objetivo,
+            objetivo_financeiro,
+            objetivo_mix,
+            objetivo_peso,
+            objetivo_positivacao,
+            objetivos_vendedores,
+            rotas_codigos,
+            rotas_info,
+            ug_filial,
+            v,
+            valor,
             vendedores,
-            rotas_info.get("e_gerente"),
-        )
-        #  OBJETIVOS — tudo do SQLite agora
-        objetivo_mensal_data = get_objetivo_mensal_serializado(
-                request.user, data_inicio, data_fim=data_fim, cod_vendedores=vendedores
-            )
-
-        objetivo = {
-            "financeiro":           round(float(objetivo_mensal_data.get("objetivo_financeiro") or 0), 2),
-            "objetivo_mix":         round(float(objetivo_mensal_data.get("objetivo_mix") or 0), 2),
-            "objetivo_peso":        round(float(objetivo_mensal_data.get("objetivo_peso") or 0), 2),
-            "objetivo_positivacao": round(float(objetivo_mensal_data.get("objetivo_positivacao") or 0), 2),
-        }
-        
-        # ------------------------------------------------------------------
-        # 🆕 LÓGICA DE MIX HIERÁRQUICO (Empresa/Supervisor)
-        # ------------------------------------------------------------------
-        mix_empresa_val = 0
-        mix_supervisores_map = {} # { 'cod_supervisor_str': valor }
-
-        try:
-            meses_mix = _meses_no_periodo(data_inicio, data_fim)
-            mix_nivel_qs = ObjetivoMixNivel.objects.filter(mes_referencia__in=meses_mix)
-            
-            for m in mix_nivel_qs:
-                if m.nivel == 'EMPRESA':
-                    mix_empresa_val += m.objetivo_mix          # ← acumula (soma bruta dos meses)
-                elif m.nivel == 'SUPERVISOR':
-                    cod = str(m.codigo_alvo)
-                    mix_supervisores_map[cod] = mix_supervisores_map.get(cod, 0) + m.objetivo_mix  # ← acumula (soma bruta dos meses)
-
-            # 🔧 CORREÇÃO: Mix/Positivação são metas MENSAIS recorrentes — o restante
-            # do sistema (get_objetivo_mensal_serializado, get_objetivos_vendedores_por_mes,
-            # _calcular_media_mix_pos_por_mes) sempre trabalha com MÉDIA mensal.
-            # Aqui a soma dos meses precisa virar média também, senão o objetivo fica
-            # "num_meses vezes maior" que o realizado (que já vem em média) quando o
-            # período consultado abrange mais de um mês.
-            if num_meses > 1:
-                mix_empresa_val = round(mix_empresa_val / num_meses, 1)
-                mix_supervisores_map = {
-                    cod: round(valor / num_meses, 1)
-                    for cod, valor in mix_supervisores_map.items()
-                }
-
-            # --- AJUSTE DO OBJETIVO PRINCIPAL (Card de Mix) ---
-            # Se for Gerente/Admin, a meta geral padrão é a da EMPRESA
-            eh_gerente_rotas = rotas_info.get("e_gerente", False)
-
-            # Verifica se é Gerente pelo Profile (ctx) OU pelas Rotas (ERP)
-            if getattr(ctx, "is_gerente", False) or getattr(ctx, "is_admin", False) or eh_gerente_rotas:
-                # Se for Gerente/Admin, a meta geral padrão é a da EMPRESA
-                if mix_empresa_val > 0:
-                    objetivo["objetivo_mix"] = mix_empresa_val
-            
-            # Se for Supervisor, a meta geral dele é a SUA meta de nível
-            elif getattr(ctx, "is_supervisor", False):
-                cod_sup = str(ctx.cod_funcionario)
-                if cod_sup in mix_supervisores_map:
-                    objetivo["objetivo_mix"] = mix_supervisores_map[cod_sup]
-
-        except Exception as e:
-            logger.error(f"Erro ao buscar ObjetivoMixNivel: {e}")
-
-        # ------------------------------------------------------------------
-        
-        
-        objetivos_vendedores = get_objetivos_vendedores_por_mes(data_inicio, data_fim=data_fim)
-
-
-
-        # == agrega objetivos por área de supervisão (para gerente) ===
-        def _agregar_objetivos_por_area(areas_supervisao, objetivos_vendedores, mix_map):
-            """
-            Soma Financeiro/Peso/Positivação dos vendedores.
-            PARA MIX: Usa a meta do Supervisor (mix_map) se existir, senão soma (fallback).
-            """
-            if not areas_supervisao:
-                return areas_supervisao
-
-            # Mapa auxiliar de objetivos individuais
-            obj_by_vendedor = {}
-            for o in objetivos_vendedores or []:
-                try:
-                    vend_id = int(str(o.get("vendedor_id")).strip())
-                    obj_by_vendedor[vend_id] = {
-                        "financeiro": float(o.get("objetivo_financeiro") or 0),
-                        "peso":       float(o.get("objetivo_peso") or 0),
-                        "mix":        float(o.get("objetivo_mix") or 0),
-                        "pos":        float(o.get("objetivo_positivacao") or 0),
-                    }
-                except (ValueError, TypeError):
-                    continue
-
-            for area in areas_supervisao:
-                soma_fin  = 0.0
-                soma_peso = 0.0
-                soma_mix_vendedores = 0.0
-                soma_pos  = 0.0
-
-                for vend in area.get("vendedores") or []:
-                    try:
-                        vend_id = int(str(vend).strip())
-                        obj = obj_by_vendedor.get(vend_id)
-                        if obj:
-                            soma_fin  += obj["financeiro"]
-                            soma_peso += obj["peso"]
-                            soma_mix_vendedores += obj["mix"]
-                            soma_pos  += obj["pos"]
-                    except: pass
-
-                area["objetivo_financeiro_area"]  = round(soma_fin, 2)
-                area["objetivo_peso_area"]        = round(soma_peso, 2)
-                area["objetivo_positivacao_area"] = round(soma_pos, 2)
-                
-                # 🔥 AQUI: Se existe meta para este supervisor, usa ela. 
-                # Caso contrário, usa a soma dos vendedores.
-                cod_sup = str(area.get("cod_supervisor"))
-                if cod_sup in mix_map:
-                    area["objetivo_mix_area"] = mix_map[cod_sup]
-                else:
-                    area["objetivo_mix_area"] = round(soma_mix_vendedores, 2)
-
-            return areas_supervisao
-
-        # Se for supervisor-gerente, já devolve as áreas com os objetivos agregados
-        if grupos_supervisao:
-            grupos_supervisao = _agregar_objetivos_por_area(
-            grupos_supervisao, 
-            objetivos_vendedores, 
-            mix_supervisores_map  # <--- Adicione este argumento
-        )
-
-        # variáveis locais
-        objetivo_financeiro   = objetivo["financeiro"]
-        objetivo_mix          = objetivo["objetivo_mix"]
-        objetivo_peso         = objetivo["objetivo_peso"]
-        objetivo_positivacao  = objetivo["objetivo_positivacao"]
-        
-
-        vendedores_list = vendedores or []
-        vendedores_set = { _to_int(v) for v in vendedores_list if _to_int(v) is not None }
-        # 🔧 REGRA 228/4: LISTA ESPECÍFICA PARA O MIX
-        # Adiciona o vendedor 4 apenas para a consulta de quantidade de Mix
-        # =========================================================
-        vendedores_mix_list = list(vendedores_list)
-        try:
-            cod_logado_str = str(ctx.cod_funcionario)
-            if cod_logado_str in ['228', '4']:
-                if 4 not in vendedores_mix_list:
-                    vendedores_mix_list.append(4)
-                    logger.debug(f"[IndicadoresView] Regra 228/4 aplicada: Vendedor 4 incluído no cálculo do MIX.")
-        except Exception:
-            pass
-
+            vendedores_set,
+        ) = self._montar_contexto_escopo_objetivos(data_fim, data_inicio, num_meses, request)
         # =========================
         # VENDAS REALIZADAS (ÁREA)
         # =========================
@@ -1545,6 +1337,259 @@ class IndicadoresView(APIView):
                 "ate":              data_fim,
             },
         })
+
+    def _montar_contexto_escopo_objetivos(self, data_fim, data_inicio, num_meses, request):
+
+        # ===== LOG DO PERFIL QUE ESTÁ FAZENDO A CHAMADA =====
+        ctx = get_role_context(request.user)
+        logger.info(
+            "[IndicadoresView] user=%s id=%s roles=%s cod_funcionario=%s cod_unid_gestora=%s de=%s ate=%s ip=%s",
+            getattr(request.user, "username", None),
+            getattr(request.user, "id", None),
+            ",".join(ctx.roles) if ctx.roles else "-",
+            ctx.cod_funcionario,
+            ctx.cod_unid_gestora,
+            data_inicio,
+            data_fim,
+            request.META.get("REMOTE_ADDR"),
+        )
+        # ====================================================
+        is_filial = (
+            bool(ctx.cod_unid_gestora and str(ctx.cod_unid_gestora) not in ('', '1', 'None'))
+            and not getattr(ctx, "is_supervisor", False)   # ← supervisor nunca é "filial"
+            and not getattr(ctx, "is_vendedor",   False)
+        )
+        ug_filial = int(ctx.cod_unid_gestora) if is_filial else None
+        # 1) Rotas / vendedores conforme papel
+        rotas_info = buscar_rotas_usuario(ctx)  # -> {'rotas': None|[...], 'detalhado': [...], 'vendedores': [...]}
+        logger.debug(
+            "[IndicadoresView] escopo rotas: eh_supervisor=%s eh_vendedor=%s eh_admin=%s "
+            "rotas=%s vendedores=%s e_gerente=%s qtd_detalhado=%s amostra_detalhado=%s",
+            getattr(ctx, "is_supervisor", False),
+            getattr(ctx, "is_vendedor", False),
+            getattr(ctx, "is_admin", False),
+            rotas_info.get("rotas"),
+            rotas_info.get("vendedores"),
+            rotas_info.get("e_gerente"),
+            len(rotas_info.get("detalhado") or []),
+            (rotas_info.get("detalhado") or [])[:3],  # só uma amostra pra não floodar o log
+            
+        )
+        if is_filial:
+            vendedores = [int(ctx.cod_funcionario)] # Força ser só ele
+        elif getattr(ctx, "is_supervisor", False):
+            vendedores = rotas_info.get("vendedores") if rotas_info else None
+
+        
+        rotas_codigos = rotas_info.get("rotas") if rotas_info else None
+        logger.debug("%s %s", ">>> ROTAS X VENDEDOR", rotas_info)
+
+        # 🔧 PRIORIDADE: supervisor/gerente > vendedor
+        if getattr(ctx, "is_supervisor", False):
+            # supervisor/gerente: usa o escopo calculado no serviço (NÃO pode cair no escopo "mesma supervisão")
+            vendedores = rotas_info.get("vendedores") if rotas_info else None
+        else:
+            # vendedor "puro": usa lista da mesma supervisão
+            if getattr(ctx, "is_vendedor", False):
+                try:
+                    vendedores = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario) or [int(ctx.cod_funcionario)]
+                except Exception:
+                    vendedores = [int(ctx.cod_funcionario)] if ctx.cod_funcionario else None
+            else:
+                # admin/outros: usa o escopo calculado no serviço
+                vendedores = rotas_info.get("vendedores") if rotas_info else None
+
+        # 🔧 Se for SUPERVISOR-GERENTE, montamos também grupos por área de supervisão
+        grupos_supervisao = None
+        if getattr(ctx, "is_supervisor", False) and rotas_info.get("e_gerente"):
+            grupos_supervisao = rotas_info.get("areas_supervisao")
+            logger.debug(
+                "[IndicadoresView] supervisor-gerente detectado: cod_func=%s qtd_areas=%s grupos=%s",
+                ctx.cod_funcionario,
+                len(grupos_supervisao or []),
+                grupos_supervisao,
+            )
+            
+
+        logger.debug(
+            "[IndicadoresView] vendedores considerados para escopo: %s (e_gerente=%s)",
+            vendedores,
+            rotas_info.get("e_gerente"),
+        )
+        #  OBJETIVOS — tudo do SQLite agora
+        objetivo_mensal_data = get_objetivo_mensal_serializado(
+                request.user, data_inicio, data_fim=data_fim, cod_vendedores=vendedores
+            )
+
+        objetivo = {
+            "financeiro":           round(float(objetivo_mensal_data.get("objetivo_financeiro") or 0), 2),
+            "objetivo_mix":         round(float(objetivo_mensal_data.get("objetivo_mix") or 0), 2),
+            "objetivo_peso":        round(float(objetivo_mensal_data.get("objetivo_peso") or 0), 2),
+            "objetivo_positivacao": round(float(objetivo_mensal_data.get("objetivo_positivacao") or 0), 2),
+        }
+        
+        # ------------------------------------------------------------------
+        # 🆕 LÓGICA DE MIX HIERÁRQUICO (Empresa/Supervisor)
+        # ------------------------------------------------------------------
+        mix_empresa_val = 0
+        mix_supervisores_map = {} # { 'cod_supervisor_str': valor }
+
+        try:
+            meses_mix = _meses_no_periodo(data_inicio, data_fim)
+            mix_nivel_qs = ObjetivoMixNivel.objects.filter(mes_referencia__in=meses_mix)
+            
+            for m in mix_nivel_qs:
+                if m.nivel == 'EMPRESA':
+                    mix_empresa_val += m.objetivo_mix          # ← acumula (soma bruta dos meses)
+                elif m.nivel == 'SUPERVISOR':
+                    cod = str(m.codigo_alvo)
+                    mix_supervisores_map[cod] = mix_supervisores_map.get(cod, 0) + m.objetivo_mix  # ← acumula (soma bruta dos meses)
+
+            # 🔧 CORREÇÃO: Mix/Positivação são metas MENSAIS recorrentes — o restante
+            # do sistema (get_objetivo_mensal_serializado, get_objetivos_vendedores_por_mes,
+            # _calcular_media_mix_pos_por_mes) sempre trabalha com MÉDIA mensal.
+            # Aqui a soma dos meses precisa virar média também, senão o objetivo fica
+            # "num_meses vezes maior" que o realizado (que já vem em média) quando o
+            # período consultado abrange mais de um mês.
+            if num_meses > 1:
+                mix_empresa_val = round(mix_empresa_val / num_meses, 1)
+                mix_supervisores_map = {
+                    cod: round(valor / num_meses, 1)
+                    for cod, valor in mix_supervisores_map.items()
+                }
+
+            # --- AJUSTE DO OBJETIVO PRINCIPAL (Card de Mix) ---
+            # Se for Gerente/Admin, a meta geral padrão é a da EMPRESA
+            eh_gerente_rotas = rotas_info.get("e_gerente", False)
+
+            # Verifica se é Gerente pelo Profile (ctx) OU pelas Rotas (ERP)
+            if getattr(ctx, "is_gerente", False) or getattr(ctx, "is_admin", False) or eh_gerente_rotas:
+                # Se for Gerente/Admin, a meta geral padrão é a da EMPRESA
+                if mix_empresa_val > 0:
+                    objetivo["objetivo_mix"] = mix_empresa_val
+            
+            # Se for Supervisor, a meta geral dele é a SUA meta de nível
+            elif getattr(ctx, "is_supervisor", False):
+                cod_sup = str(ctx.cod_funcionario)
+                if cod_sup in mix_supervisores_map:
+                    objetivo["objetivo_mix"] = mix_supervisores_map[cod_sup]
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar ObjetivoMixNivel: {e}")
+
+        # ------------------------------------------------------------------
+        
+        
+        objetivos_vendedores = get_objetivos_vendedores_por_mes(data_inicio, data_fim=data_fim)
+
+
+
+        # == agrega objetivos por área de supervisão (para gerente) ===
+        def _agregar_objetivos_por_area(areas_supervisao, objetivos_vendedores, mix_map):
+            """
+            Soma Financeiro/Peso/Positivação dos vendedores.
+            PARA MIX: Usa a meta do Supervisor (mix_map) se existir, senão soma (fallback).
+            """
+            if not areas_supervisao:
+                return areas_supervisao
+
+            # Mapa auxiliar de objetivos individuais
+            obj_by_vendedor = {}
+            for o in objetivos_vendedores or []:
+                try:
+                    vend_id = int(str(o.get("vendedor_id")).strip())
+                    obj_by_vendedor[vend_id] = {
+                        "financeiro": float(o.get("objetivo_financeiro") or 0),
+                        "peso":       float(o.get("objetivo_peso") or 0),
+                        "mix":        float(o.get("objetivo_mix") or 0),
+                        "pos":        float(o.get("objetivo_positivacao") or 0),
+                    }
+                except (ValueError, TypeError):
+                    continue
+
+            for area in areas_supervisao:
+                soma_fin  = 0.0
+                soma_peso = 0.0
+                soma_mix_vendedores = 0.0
+                soma_pos  = 0.0
+
+                for vend in area.get("vendedores") or []:
+                    try:
+                        vend_id = int(str(vend).strip())
+                        obj = obj_by_vendedor.get(vend_id)
+                        if obj:
+                            soma_fin  += obj["financeiro"]
+                            soma_peso += obj["peso"]
+                            soma_mix_vendedores += obj["mix"]
+                            soma_pos  += obj["pos"]
+                    except: pass
+
+                area["objetivo_financeiro_area"]  = round(soma_fin, 2)
+                area["objetivo_peso_area"]        = round(soma_peso, 2)
+                area["objetivo_positivacao_area"] = round(soma_pos, 2)
+                
+                # 🔥 AQUI: Se existe meta para este supervisor, usa ela. 
+                # Caso contrário, usa a soma dos vendedores.
+                cod_sup = str(area.get("cod_supervisor"))
+                if cod_sup in mix_map:
+                    area["objetivo_mix_area"] = mix_map[cod_sup]
+                else:
+                    area["objetivo_mix_area"] = round(soma_mix_vendedores, 2)
+
+            return areas_supervisao
+
+        # Se for supervisor-gerente, já devolve as áreas com os objetivos agregados
+        if grupos_supervisao:
+            grupos_supervisao = _agregar_objetivos_por_area(
+            grupos_supervisao, 
+            objetivos_vendedores, 
+            mix_supervisores_map  # <--- Adicione este argumento
+        )
+
+        # variáveis locais
+        objetivo_financeiro   = objetivo["financeiro"]
+        objetivo_mix          = objetivo["objetivo_mix"]
+        objetivo_peso         = objetivo["objetivo_peso"]
+        objetivo_positivacao  = objetivo["objetivo_positivacao"]
+        
+
+        vendedores_list = vendedores or []
+        vendedores_set = { _to_int(v) for v in vendedores_list if _to_int(v) is not None }
+        # 🔧 REGRA 228/4: LISTA ESPECÍFICA PARA O MIX
+        # Adiciona o vendedor 4 apenas para a consulta de quantidade de Mix
+        # =========================================================
+        vendedores_mix_list = list(vendedores_list)
+        try:
+            cod_logado_str = str(ctx.cod_funcionario)
+            if cod_logado_str in ['228', '4']:
+                if 4 not in vendedores_mix_list:
+                    vendedores_mix_list.append(4)
+                    logger.debug(f"[IndicadoresView] Regra 228/4 aplicada: Vendedor 4 incluído no cálculo do MIX.")
+        except Exception:
+            pass
+
+        _vars = locals()  # fallback: variáveis só definidas em alguns ramos
+        return (
+            _vars.get("cod"),
+            _vars.get("ctx"),
+            _vars.get("grupos_supervisao"),
+            _vars.get("is_filial"),
+            _vars.get("mix_empresa_val"),
+            _vars.get("mix_supervisores_map"),
+            _vars.get("objetivo"),
+            _vars.get("objetivo_financeiro"),
+            _vars.get("objetivo_mix"),
+            _vars.get("objetivo_peso"),
+            _vars.get("objetivo_positivacao"),
+            _vars.get("objetivos_vendedores"),
+            _vars.get("rotas_codigos"),
+            _vars.get("rotas_info"),
+            _vars.get("ug_filial"),
+            _vars.get("v"),
+            _vars.get("valor"),
+            _vars.get("vendedores"),
+            _vars.get("vendedores_set"),
+        )
         
 
 
