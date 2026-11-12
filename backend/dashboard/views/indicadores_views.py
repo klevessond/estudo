@@ -210,6 +210,114 @@ class IndicadoresView(APIView):
             variacao_mix,
             variacao_prevenda,
         ) = self._pre_venda_kpis_merge(_mix_media_por_vend, _pos_media_por_vend, ano_anterior_agregado, ano_anterior_agregado_mes, area, area_vendedores, cod, cod_v, ctx, data_fim, data_inicio, grupos_supervisao, lista, mix_realizado, multiplos_meses, objetivo, objetivo_financeiro, objetivo_mix, objetivos_vendedores, peso_realizado, positivacao, row, v, valor, venda_ano_anterior, venda_ano_anterior_rotas, venda_realizada, vendedores, vendido)
+        (
+            _mix_pdv_empresa,
+            cupons_pdv_total,
+            dias_info,
+            mix_pdv_supervisor,
+            percentual_positivacao,
+            proj_pdv_geral,
+            proj_peso_rotas_geral,
+            proj_rotas_geral,
+            projecao_financeira_geral,
+            projecao_mix_geral,
+            projecao_peso_geral,
+            projecao_positivacao_geral,
+            tem_pdv,
+            variacao_positivacao,
+            venda_pdv_total,
+            venda_total_empresa,
+        ) = self._projecoes(_mix_media_por_vend, _pos_media_por_vend, area, area_vendedores, c_func, ctx, data_fim, data_inicio, grupos_supervisao, lista, mix_realizado, multiplos_meses, num_meses, objetivo_financeiro, objetivo_mix, objetivo_peso, objetivo_positivacao, objetivos_vendedores, peso_realizado, positivacao_realizado_geral, rotas_codigos, rotas_info, v, venda_realizada, vendedores, vid)
+        return Response({
+            "objetivo": objetivo,
+            "objetivos_vendedores": objetivos_vendedores,
+            "evolucao": {
+                "valor_ano_anterior": round(venda_ano_anterior, 2),
+                "percentual": round(evolucao_percentual)  # positivo/negativo
+            },
+            "objetivos_mix_hierarquico": {
+                "empresa": mix_empresa_val,
+                "supervisores": mix_supervisores_map
+            },
+            "pre-venda": {
+                "valor_prevenda": round(valor_prevenda, 2),
+                "valor_alocado": round(valor_alocado, 2),
+                "percentual_prevenda_alocado": round(percentual_prevenda_alocado, 2),
+                "variacao_prevenda": round(variacao_prevenda, 2)
+            },
+            "vendas": vendido,  # já com 'vendas_por_vendedor' + merges + agregados
+            "realizado_peso": {
+                "realizado": round(peso_realizado, 2),  
+                "percentual": round(percentual, 2),
+                "variacao": round(variacao, 2),
+            },
+            "realizado_financeiro": {
+                "valor": round(venda_realizada, 2),
+                "percentual_cobertura": round(percentual_cobertura, 2),
+                "variacao": round(variacao_financeira, 2),
+                 
+            },
+            "positivacao": {
+                "realizado": positivacao_realizado_geral,
+                "realizado_rotas": positivacao_realizado_geral,
+                "cupons_pdv": cupons_pdv_total,
+                "realizado_total": positivacao_realizado_geral + cupons_pdv_total,
+                "percentual": percentual_positivacao,
+                "variacao": variacao_positivacao
+            },
+            "realizado_mix": {
+                "realizado": mix_realizado,
+                "percentual": percentual_mix,
+                "variacao": variacao_mix,
+                "mix_pdv_grupo": mix_pdv_supervisor if not rotas_info.get("e_gerente") else _mix_pdv_empresa,
+            },
+            "positivacao_detalhada": positivacao,
+            "ruptura": {
+                "total_valor": ruptura_total,
+                "percentual_captado": percentual_captado
+            },
+            #  KPIs do vendedor logado =====
+            "minha_visao": minha_visao,
+            #: escopo por área de supervisão (para gerente) =====
+            "escopo_rotas": {
+                "e_gerente"         : rotas_info.get("e_gerente", False),
+                "e_supervisor"      : getattr(ctx, "is_supervisor", False) and not rotas_info.get("e_gerente", False),  # ← NOVO
+                "areas_supervisao"  : grupos_supervisao,   # populado só para gerente
+                "vendedores_escopo" : vendedores or [],    # ← NOVO: lista dos vendedores do supervisor
+            },
+           "projecao_empresa": {
+                "dias_uteis": dias_info,
+                "tem_pdv": tem_pdv, 
+                "financeiro": projecao_financeira_geral, 
+                "financeiro_rotas": proj_rotas_geral, 
+                "financeiro_pdv": proj_pdv_geral,
+                "peso": projecao_peso_geral,
+                "peso_rotas": proj_peso_rotas_geral,
+                "positivacao": projecao_positivacao_geral,
+                "mix": {
+                    "realizado": mix_realizado,
+                    "objetivo": objetivo_mix,
+                    "percentual": percentual_mix,
+                    "projecao": projecao_mix_geral
+                },
+                "detalhes_valores": {
+                    "rotas": venda_realizada, # Certifique-se que esta variável existe (ou venda_realizada_rotas)
+                    "pdv": venda_pdv_total,
+                    "total": venda_total_empresa
+                },
+                 "mix_pdv_empresa": _mix_pdv_empresa,
+                 "num_meses":       num_meses,         
+                 "multiplos_meses": multiplos_meses,   
+            },
+            "periodo_info": {
+                "num_meses":        num_meses,
+                "multiplos_meses":  multiplos_meses,
+                "de":               data_inicio,
+                "ate":              data_fim,
+            },
+        })
+
+    def _projecoes(self, _mix_media_por_vend, _pos_media_por_vend, area, area_vendedores, c_func, ctx, data_fim, data_inicio, grupos_supervisao, lista, mix_realizado, multiplos_meses, num_meses, objetivo_financeiro, objetivo_mix, objetivo_peso, objetivo_positivacao, objetivos_vendedores, peso_realizado, positivacao_realizado_geral, rotas_codigos, rotas_info, v, venda_realizada, vendedores, vid):
         # 🟢 INICIO DO BLOCO: PROJEÇÃO INTEGRADA & PDV (FINAL - DETALHADO)
         # =========================================================
         
@@ -540,94 +648,25 @@ class IndicadoresView(APIView):
                 grupos_supervisao  : {[a.get('cod_area_supervisao') for a in (grupos_supervisao or [])]}
                 """)
         
-        return Response({
-            "objetivo": objetivo,
-            "objetivos_vendedores": objetivos_vendedores,
-            "evolucao": {
-                "valor_ano_anterior": round(venda_ano_anterior, 2),
-                "percentual": round(evolucao_percentual)  # positivo/negativo
-            },
-            "objetivos_mix_hierarquico": {
-                "empresa": mix_empresa_val,
-                "supervisores": mix_supervisores_map
-            },
-            "pre-venda": {
-                "valor_prevenda": round(valor_prevenda, 2),
-                "valor_alocado": round(valor_alocado, 2),
-                "percentual_prevenda_alocado": round(percentual_prevenda_alocado, 2),
-                "variacao_prevenda": round(variacao_prevenda, 2)
-            },
-            "vendas": vendido,  # já com 'vendas_por_vendedor' + merges + agregados
-            "realizado_peso": {
-                "realizado": round(peso_realizado, 2),  
-                "percentual": round(percentual, 2),
-                "variacao": round(variacao, 2),
-            },
-            "realizado_financeiro": {
-                "valor": round(venda_realizada, 2),
-                "percentual_cobertura": round(percentual_cobertura, 2),
-                "variacao": round(variacao_financeira, 2),
-                 
-            },
-            "positivacao": {
-                "realizado": positivacao_realizado_geral,
-                "realizado_rotas": positivacao_realizado_geral,
-                "cupons_pdv": cupons_pdv_total,
-                "realizado_total": positivacao_realizado_geral + cupons_pdv_total,
-                "percentual": percentual_positivacao,
-                "variacao": variacao_positivacao
-            },
-            "realizado_mix": {
-                "realizado": mix_realizado,
-                "percentual": percentual_mix,
-                "variacao": variacao_mix,
-                "mix_pdv_grupo": mix_pdv_supervisor if not rotas_info.get("e_gerente") else _mix_pdv_empresa,
-            },
-            "positivacao_detalhada": positivacao,
-            "ruptura": {
-                "total_valor": ruptura_total,
-                "percentual_captado": percentual_captado
-            },
-            #  KPIs do vendedor logado =====
-            "minha_visao": minha_visao,
-            #: escopo por área de supervisão (para gerente) =====
-            "escopo_rotas": {
-                "e_gerente"         : rotas_info.get("e_gerente", False),
-                "e_supervisor"      : getattr(ctx, "is_supervisor", False) and not rotas_info.get("e_gerente", False),  # ← NOVO
-                "areas_supervisao"  : grupos_supervisao,   # populado só para gerente
-                "vendedores_escopo" : vendedores or [],    # ← NOVO: lista dos vendedores do supervisor
-            },
-           "projecao_empresa": {
-                "dias_uteis": dias_info,
-                "tem_pdv": tem_pdv, 
-                "financeiro": projecao_financeira_geral, 
-                "financeiro_rotas": proj_rotas_geral, 
-                "financeiro_pdv": proj_pdv_geral,
-                "peso": projecao_peso_geral,
-                "peso_rotas": proj_peso_rotas_geral,
-                "positivacao": projecao_positivacao_geral,
-                "mix": {
-                    "realizado": mix_realizado,
-                    "objetivo": objetivo_mix,
-                    "percentual": percentual_mix,
-                    "projecao": projecao_mix_geral
-                },
-                "detalhes_valores": {
-                    "rotas": venda_realizada, # Certifique-se que esta variável existe (ou venda_realizada_rotas)
-                    "pdv": venda_pdv_total,
-                    "total": venda_total_empresa
-                },
-                 "mix_pdv_empresa": _mix_pdv_empresa,
-                 "num_meses":       num_meses,         
-                 "multiplos_meses": multiplos_meses,   
-            },
-            "periodo_info": {
-                "num_meses":        num_meses,
-                "multiplos_meses":  multiplos_meses,
-                "de":               data_inicio,
-                "ate":              data_fim,
-            },
-        })
+        _vars = locals()  # fallback: variáveis só definidas em alguns ramos
+        return (
+            _vars.get("_mix_pdv_empresa"),
+            _vars.get("cupons_pdv_total"),
+            _vars.get("dias_info"),
+            _vars.get("mix_pdv_supervisor"),
+            _vars.get("percentual_positivacao"),
+            _vars.get("proj_pdv_geral"),
+            _vars.get("proj_peso_rotas_geral"),
+            _vars.get("proj_rotas_geral"),
+            _vars.get("projecao_financeira_geral"),
+            _vars.get("projecao_mix_geral"),
+            _vars.get("projecao_peso_geral"),
+            _vars.get("projecao_positivacao_geral"),
+            _vars.get("tem_pdv"),
+            _vars.get("variacao_positivacao"),
+            _vars.get("venda_pdv_total"),
+            _vars.get("venda_total_empresa"),
+        )
 
     def _pre_venda_kpis_merge(self, _mix_media_por_vend, _pos_media_por_vend, ano_anterior_agregado, ano_anterior_agregado_mes, area, area_vendedores, cod, cod_v, ctx, data_fim, data_inicio, grupos_supervisao, lista, mix_realizado, multiplos_meses, objetivo, objetivo_financeiro, objetivo_mix, objetivos_vendedores, peso_realizado, positivacao, row, v, valor, venda_ano_anterior, venda_ano_anterior_rotas, venda_realizada, vendedores, vendido):
         # Pré-venda (área)
