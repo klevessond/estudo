@@ -165,405 +165,30 @@ class IndicadoresView(APIView):
             vendido,
             vid,
         ) = self._realizado_area(ctx, data_fim, data_inicio, is_filial, objetivos_vendedores, rotas_info, ug_filial, v, vendedores_set)
-        # ===========================================
-        # VENDAS DO MESMO PERÍODO NO ANO ANTERIOR  
-        # ===========================================
-        # Regras:
-        # - Se o mês consultado == mês atual, comparar de data_inicio até "hoje" (mesmo dia no ano anterior).
-        # - Caso contrário (mês passado), comparar mês completo como antes (de/ate - 1 ano).
-
-        def last_day_of_month(y, m):
-            # sem imports: calcula último dia do mês (considera bissexto)
-            if m in (1,3,5,7,8,10,12):
-                return 31
-            if m in (4,6,9,11):
-                return 30
-            # fevereiro
-            is_leap = (y % 4 == 0) and (y % 100 != 0 or y % 400 == 0)
-            return 29 if is_leap else 28
-
-        def _ajusta_data_aa(d: date) -> date:
-            """Troca o ano pra (ano-1), se 29/02 ajusta p/ 28/02 quando necessário."""
-            try:
-                return d.replace(year=d.year - 1)
-            except ValueError:
-                # 29/02 em ano não-bissexto
-                return d.replace(year=d.year - 1, day=28)
-
-        # parse datas
-        de_dt = datetime.strptime(data_inicio, "%Y-%m-%d").date()
-        ate_dt = datetime.strptime(data_fim, "%Y-%m-%d").date()
-        hoje = date.today()
-
-        if de_dt.year == hoje.year and de_dt.month == hoje.month:
-            # mês atual: vai até o "hoje" do ano anterior (limitado ao fim do mês)
-            aa_ini = _ajusta_data_aa(de_dt)
-            aa_last_day = last_day_of_month(aa_ini.year, aa_ini.month)
-            # mesmo dia de "hoje" no ano anterior, mas não pode passar do fim do mês
-            end_day = min(hoje.day, aa_last_day)
-            aa_fim = date(aa_ini.year, aa_ini.month, end_day)
-        else:
-            # mês passado ou outro: usa o mês completo (como antes)
-            aa_ini = _ajusta_data_aa(de_dt)
-            aa_fim = _ajusta_data_aa(ate_dt)
-        
-        # ===========================================
-        # ANO ANTERIOR POR ROTAS (buscar_vendido)
-        # ===========================================
-        
-        try:
-            # 1) mapa rota -> vendedor (regra gerência)
-            rota_to_vendedor = {}
-            for row in (rotas_info.get("detalhado") or []):
-                try:
-                    cod_rota = int(str(row.get("CodRota")).strip())
-                    cod_vend = int(str(row.get("CodVendedor")).strip())
-                    rota_to_vendedor[cod_rota] = cod_vend
-                except (TypeError, ValueError):
-                    pass
-
-            aa_ini_str = aa_ini.strftime("%Y-%m-%d")
-            aa_fim_str = aa_fim.strftime("%Y-%m-%d")
-
-            _cache_key_rotas = sorted(rotas_codigos or [])
-            ret_vendido_aa_rotas = get_cache_aa("vendido_rotas", aa_ini_str, aa_fim_str, _cache_key_rotas)
-            if ret_vendido_aa_rotas is None:
-                ret_vendido_aa_rotas = buscar_vendido(aa_ini_str, aa_fim_str, rotas=rotas_codigos)
-                set_cache_aa("vendido_rotas", aa_ini_str, aa_fim_str, ret_vendido_aa_rotas, _cache_key_rotas)
-
-            if isinstance(ret_vendido_aa_rotas, dict):
-                calc = _calc_liquido_por_vendedor_por_rotas(ret_vendido_aa_rotas, rota_to_vendedor)
-
-                venda_ano_anterior_rotas = {
-                    "de": aa_ini_str,
-                    "ate": aa_fim_str,
-                    "valor_total": calc["valor_total"],
-                    "por_vendedor": calc["por_vendedor"],
-                }
-
-                # --- MONTAGEM DO LOG FORMATADO ---
-                log_lines = []
-                log_lines.append(f"\n{'='*60}")
-                log_lines.append(f"[AA_ROTAS][buscar_vendido] RESUMO")
-                log_lines.append(f"Periodo: {aa_ini_str} ate {aa_fim_str}")
-                log_lines.append(f"Total Geral: R$ {calc['valor_total']:,.2f}")
-                log_lines.append(f"{'-'*60}")
-
-                # Itera sobre cada vendedor para mostrar suas rotas
-                # (Se a lista for muito grande, você pode usar um slice, ex: calc['por_vendedor'][:5])
-                for v in calc["por_vendedor"]: 
-                    cod_v = v.get('CodVendedor')
-                    total_v = v.get('Valor_liquido_total', 0)
-                    log_lines.append(f"👤 Vendedor {cod_v} | Total: R$ {total_v:,.2f}")
-                    
-                    rotas_v = v.get('Rotas', [])
-                    for r in rotas_v:
-                        cod_r = r.get('CodRota')
-                        campo_r = r.get('Campo')
-                        val_r = r.get('Valor_liquido', 0)
-                        log_lines.append(f"   └── Rota {cod_r} ({campo_r}): R$ {val_r:,.2f}")
-                    
-                    log_lines.append(f"{'.'*60}") # Separador entre vendedores
-
-                log_lines.append(f"{'='*60}\n")
-                
-                # Exibe o log formatado
-                logger.debug("\n".join(log_lines))
-
-            else:
-                logger.warning(
-                    "[AA_ROTAS][buscar_vendido] retorno inesperado tipo=%s amostra=%s",
-                    type(ret_vendido_aa_rotas).__name__,
-                    str(ret_vendido_aa_rotas)[:600],
-                )
-
-        except Exception:
-            logger.exception("[AA_ROTAS][buscar_vendido] erro ao calcular ano anterior por rotas")
-            venda_ano_anterior_rotas = None
-
-
-        _aa_ini_s = aa_ini.strftime("%Y-%m-%d")
-        _aa_fim_s = aa_fim.strftime("%Y-%m-%d")
-        res_aa = get_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s)
-        if is_filial:
-            res_aa = buscar_vendas_por_vendedor(
-                _aa_ini_s, _aa_fim_s, 
-                unid_gestora=ug_filial, 
-                agrupar_por_filial=True, 
-                cod_representante=ctx.cod_funcionario)
-        else:
-            res_aa = get_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s)
-            if res_aa is None:
-                res_aa = buscar_vendas_por_vendedor(_aa_ini_s, _aa_fim_s)
-                set_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s, res_aa)
-        logger.debug("[DEBUG][VENDA ANO ANTERIOR]\n"
-            f"  Total registros retornados: {len(res_aa.get('vendas_por_vendedor', []) or [])}\n"
-            f"  Payload bruto: {res_aa}")
-        lista_aa = res_aa.get("vendas_por_vendedor", []) or []
-        logger.debug("[DEBUG][VENDA ANO ANTERIOR]\n"
-            f"  Registros totais: {len(lista_aa)}\n"
-            f"  Vendedores filtrados: {len(vendedores_set) if vendedores_set else 'TODOS'}\n"
-            f"  IDs filtrados: {sorted(vendedores_set) if vendedores_set else 'N/A'}")
-
-        if vendedores_aa_set: 
-            lista_aa = [it for it in lista_aa if _to_int(it.get("codcampo")) in vendedores_aa_set]
-            codigos_considerados = sorted(
-                                                {_to_int(it.get("codcampo")) for it in lista_aa if _to_int(it.get("codcampo")) is not None}
-                                            )
-            
-            logger.debug("[DEBUG][VENDA ANO ANTERIOR][APÓS FILTRO]\n"
-                    f"  Registros considerados: {len(lista_aa)}"
-                    f"  Códigos vendedores: {codigos_considerados}")
-            # === ADICIONE ESTE BLOCO PARA LOGAR ===
-        logger.debug("\n=== DEBUG: VENDAS ANO ANTERIOR POR VENDEDOR ===")
-        for item in lista_aa:
-            cod = item.get("codcampo")
-            nome = item.get("Campo")
-            valor = item.get("ValorLiquido")
-            logger.debug(f"Vendedor: {cod} - {nome} | Valor AA: R$ {valor}")
-        logger.debug("===============================================\n")
-        # ======================================
-
-        venda_ano_anterior = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa) or 1.0  # evita div/0
-        logger.debug(f"[DEBUG][VENDA ANO ANTERIOR] {venda_ano_anterior}")
-
-        # índice por vendedor do ANO ANTERIOR (para merge no payload de vendas)
-        aa_by_cod = {}
-        for it in lista_aa:
-            cod = _to_int(it.get("codcampo"))
-            if cod is None:
-                continue
-            aa_by_cod[cod] = {
-                "Ano_anterior_QtdClientes": _num(it.get("QtdClientes")),
-                "Ano_anterior_ValorLiquido": _num(it.get("ValorLiquido")),
-                "Ano_anterior_PesoTotal": _num(it.get("PesoTotal")),
-                "Ano_anterior_Mix": _num(it.get("Mix")),
-            }
-
-        # injeta campos *Ano_anterior_* em cada item de lista (ano atual)
-        for it in lista:
-            cod = _to_int(it.get("codcampo"))
-            aa = aa_by_cod.get(cod, {})
-            it.update(aa)
-
-        # agregado do ano anterior (da mesma amostra de vendedores)
-        ano_anterior_agregado = {
-            "QtdClientes": sum(_num(x.get("Ano_anterior_QtdClientes")) for x in lista),
-            "ValorLiquido": sum(_num(x.get("Ano_anterior_ValorLiquido")) for x in lista),
-            "PesoTotal": sum(_num(x.get("Ano_anterior_PesoTotal")) for x in lista),
-            "Mix": sum(_num(x.get("Ano_anterior_Mix")) for x in lista),
-        }
-        
-        #print(f"DEBUG VENDA DO ANO ANTERIOR ATE HOJE {ano_anterior_agregado}")
-
-        # === NOVO: VENDAS DO MÊS COMPLETO DO ANO ANTERIOR ===
-        aa_mes_ano = de_dt.year - 1
-        aa_mes_mes = de_dt.month
-        aa_mes_ini = date(aa_mes_ano, aa_mes_mes, 1)
-        aa_mes_last_day = last_day_of_month(aa_mes_ano, aa_mes_mes)
-        aa_mes_fim = date(aa_mes_ano, aa_mes_mes, aa_mes_last_day)
-
-        _aa_mes_ini_s = aa_mes_ini.strftime("%Y-%m-%d")
-        _aa_mes_fim_s = aa_mes_fim.strftime("%Y-%m-%d")
-        res_aa_mes = get_cache_aa("vendas_vendedor_mes", _aa_mes_ini_s, _aa_mes_fim_s)
-        if is_filial:
-            res_aa_mes = buscar_vendas_por_vendedor(
-                _aa_mes_ini_s, _aa_mes_fim_s, 
-                unid_gestora=ug_filial, 
-                agrupar_por_filial=True, 
-                cod_representante=ctx.cod_funcionario
-            )
-        else:
-            res_aa_mes = get_cache_aa("vendas_vendedor_mes", _aa_mes_ini_s, _aa_mes_fim_s)
-            if res_aa_mes is None:
-                res_aa_mes = buscar_vendas_por_vendedor(_aa_mes_ini_s, _aa_mes_fim_s)
-                set_cache_aa("vendas_vendedor_mes", _aa_mes_ini_s, _aa_mes_fim_s, res_aa_mes)
-        lista_aa_mes = res_aa_mes.get("vendas_por_vendedor", []) or []
-
-        # aplica o MESMO filtro de escopo de vendedores
-        if vendedores_aa_set:
-            lista_aa_mes = [
-                it for it in lista_aa_mes
-                if _to_int(it.get("codcampo")) in vendedores_aa_set
-            ]
-
-        # índice por vendedor do MÊS COMPLETO do ANO ANTERIOR
-        aa_mes_by_cod = {}
-        for it in lista_aa_mes:
-            cod = _to_int(it.get("codcampo"))
-            if cod is None:
-                continue
-            aa_mes_by_cod[cod] = {
-                "Ano_anterior_mes_QtdClientes": _num(it.get("QtdClientes")),
-                "Ano_anterior_mes_ValorLiquido": _num(it.get("ValorLiquido")),
-                "Ano_anterior_mes_PesoTotal": _num(it.get("PesoTotal")),
-                "Ano_anterior_mes_Mix": _num(it.get("Mix")),
-            }
-
-        # injeta também os campos do MÊS CHEIO em cada item de lista (ano atual)
-        for it in lista:
-            cod = _to_int(it.get("codcampo"))
-            if cod is None:
-                continue
-            aa_mes = aa_mes_by_cod.get(cod, {})
-            it.update(aa_mes)
-
-        # agregado do MÊS CHEIO do ano anterior (sobre a MESMA amostra de vendedores da lista)
-        ano_anterior_agregado_mes = {
-            "QtdClientes":   sum(_num(x.get("Ano_anterior_mes_QtdClientes"))   for x in lista),
-            "ValorLiquido":  sum(_num(x.get("Ano_anterior_mes_ValorLiquido"))  for x in lista),
-            "PesoTotal":     sum(_num(x.get("Ano_anterior_mes_PesoTotal"))     for x in lista),
-            "Mix":           sum(_num(x.get("Ano_anterior_mes_Mix"))           for x in lista),
-        }
-        #print(f"DEBUG VENDA DO ANO ANTERIOR MES COMPLETO {ano_anterior_agregado_mes}")
-
-        #  POSITIVAÇÃO (área)
-        _esc_pos = sorted(vendedores) if vendedores else []
-        _rotas_key = sorted(rotas_codigos) if rotas_codigos else []
- 
-        if not multiplos_meses:
-            # ── 1 mês: comportamento atual (uma query cada) ──────────────────
-            _esc_mix = sorted(vendedores) if vendedores else []
-            dados_mix = get_cache_mes("venda_mix", data_inicio, data_fim, _esc_mix)
-            if dados_mix is None:
-                dados_mix = buscar_venda_mix(data_inicio, data_fim, cod_vendedores=vendedores)
-                set_cache_mes("venda_mix", data_inicio, data_fim, dados_mix, _esc_mix)
-            mix_realizado = float(dados_mix.get("mix_realizado") or 0)
- 
-            _esc_pos = (sorted(vendedores) if vendedores else []) + (sorted(rotas_codigos) if rotas_codigos else [])
-            positivacao = get_cache_mes("positivacao", data_inicio, data_fim, _esc_pos)
-            if positivacao is None:
-                positivacao = buscar_positivacao_por_rota(
-                    data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores
-                )
-                set_cache_mes("positivacao", data_inicio, data_fim, positivacao, _esc_pos)
-            positivacao_realizado_geral = float(positivacao.get("positivacao_realizado_geral") or 0)
- 
-            # Mapa simples por vendedor para 1 mês
-            _mix_media_por_vend = {}   # populado mais adiante no loop existente
-            _pos_media_por_vend = {}   # populado mais adiante no loop existente
- 
-        else:
-            # ── n meses: consultas mensais + médias ──────────────────────────
-            _med = _calcular_media_mix_pos_por_mes(
-                meses_periodo, rotas_codigos, vendedores
-            )
-            mix_realizado               = _med["mix_global"]
-            positivacao_realizado_geral = _med["pos_global"]
-            _mix_media_por_vend         = _med["mix_por_vend"]
-            _pos_media_por_vend         = _med["pos_por_vend"]
- 
-            # Reconstrói 'positivacao' como dict compatível com o restante do código
-            positivacao = {
-                "positivacao_realizado_geral": positivacao_realizado_geral,
-                "detalhado": _med["positivacao_detalhado_ultimo_mes"],
-            }
-
-        if grupos_supervisao:
-            logger.debug("\n[DEBUG][AREAS] iniciando soma ATUAL + AA por área...")
-
-            for area in grupos_supervisao:
-                area_vendedores = [_to_int(v) for v in (area.get("vendedores") or [])]
-                area_vendedores = [v for v in area_vendedores if v is not None]
-
-                logger.debug(f"\n[DEBUG][AREA] area={area.get('cod_area_supervisao')} "
-                    f"sup={area.get('cod_supervisor')} "
-                    f"qtd_vendedores={len(area_vendedores)} "
-                    f"vendedores(amostra)={area_vendedores[:10]}")
-
-                if not area_vendedores:
-                    area["venda_ano_anterior_area"] = 0.0
-                    area["venda_realizada_area"] = 0.0
-                    continue
-                
-                # MIX AGREGADO DA ÁREA (Distinto)
-                # =========
-                area_vendedores_mix = list(area_vendedores)
-                # Aplica a regra do 228/4 também aqui
-                try:
-                    if str(ctx.cod_funcionario) in ['228', '4']:
-                        if 4 not in area_vendedores_mix:
-                            area_vendedores_mix.append(4)
-                except: pass
-                area_vendedores     = [_to_int(v) for v in (area.get("vendedores") or []) if _to_int(v)]
-                area_vendedores_mix = list(area_vendedores)  # inclui vendedor 4 se regra 228 se aplicar
- 
-                if multiplos_meses:
-                    # Média ponderada pelo objetivo de cada vendedor desta área
-                    mix_vend_area = {
-                        cod: _mix_media_por_vend[cod]
-                        for cod in area_vendedores if cod in _mix_media_por_vend
-                    }
-                    mix_area = _media_ponderada_supervisor(
-                        mix_vend_area, objetivos_vendedores, "objetivo_mix"
-                    )
-                    pos_vend_area = {
-                        cod: _pos_media_por_vend[cod]
-                        for cod in area_vendedores if cod in _pos_media_por_vend
-                    }
-                    pos_area = _media_ponderada_supervisor(
-                        pos_vend_area, objetivos_vendedores, "objetivo_positivacao"
-                    )
-                else:
-                     mix_area = buscar_mix_agregado(data_inicio, data_fim, cod_vendedores=area_vendedores_mix)
-                     pos_area = 0.0
-                     for item_pos in (positivacao.get("detalhado") or []):
-                         c_func = _to_int(item_pos.get("CodFuncionario"))
-                         if c_func in area_vendedores:
-                             pos_area += float(item_pos.get("ClientesPositivadosRota") or item_pos.get("Realizado") or 0)
-
-                
-                area["mix_realizado_area"] = mix_area
-                area["pos_realizado_area"] = round(pos_area, 1)
-                
-                # =========
-                # ATUAL (período consultado)
-                # =========
-                res_atual_area = buscar_vendas_por_vendedor(
-                    data_inicio,
-                    data_fim,
-                    cod_vendedores=area_vendedores,
-                )
-                lista_atual_area = res_atual_area.get("vendas_por_vendedor", []) or []
-                soma_atual_area = sum(_to_float(it.get("ValorLiquido")) for it in lista_atual_area)
-                area["venda_realizada_area"] = round(soma_atual_area, 2)
-
-                logger.debug(f"[DEBUG][ATUAL_POR_AREA_TOTAL] "
-                    f"area={area.get('cod_area_supervisao')} sup={area.get('cod_supervisor')} "
-                    f"ATUAL_TOTAL={area['venda_realizada_area']}")
-
-                # =========
-                # AA (mês completo do ano anterior) — mantém sua regra
-                # =========
-                res_aa_area = res_aa
-                lista_aa_area = res_aa_area.get("vendas_por_vendedor", []) or []
-                soma_aa_area = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa_area)
-                area["venda_ano_anterior_area"] = round(soma_aa_area, 2)
-
-                logger.debug(f"[DEBUG][AA_POR_AREA_TOTAL] "
-                    f"area={area.get('cod_area_supervisao')} sup={area.get('cod_supervisor')} "
-                    f"AA_TOTAL={area['venda_ano_anterior_area']}")
-
-        if multiplos_meses and grupos_supervisao:
-            # Média ponderada entre supervisões (peso = n vendedores)
-            _mix_por_area_gerente = {
-                str(area.get("cod_area_supervisao")): {
-                    "media":         area.get("mix_realizado_area", 0.0),
-                    "n_vendedores":  len([v for v in (area.get("vendedores") or []) if _to_int(v)]),
-                }
-                for area in grupos_supervisao
-            }
-            _pos_por_area_gerente = {
-                str(area.get("cod_area_supervisao")): {
-                    "media":         area.get("pos_realizado_area", 0.0),
-                    "n_vendedores":  len([v for v in (area.get("vendedores") or []) if _to_int(v)]),
-                }
-                for area in grupos_supervisao
-            }
-            mix_realizado               = _media_ponderada_gerente(_mix_por_area_gerente)
-            positivacao_realizado_geral = _media_ponderada_gerente(_pos_por_area_gerente)
- 
-
+        (
+            _esc_pos,
+            _mix_media_por_vend,
+            _pos_media_por_vend,
+            _rotas_key,
+            ano_anterior_agregado,
+            ano_anterior_agregado_mes,
+            area,
+            area_vendedores,
+            c_func,
+            cod,
+            cod_v,
+            it,
+            item,
+            mix_realizado,
+            positivacao,
+            positivacao_realizado_geral,
+            r,
+            row,
+            v,
+            valor,
+            venda_ano_anterior,
+            venda_ano_anterior_rotas,
+        ) = self._ano_anterior(c_func, cod, ctx, data_fim, data_inicio, grupos_supervisao, is_filial, lista, meses_periodo, multiplos_meses, nome, objetivos_vendedores, rotas_codigos, rotas_info, ug_filial, v, valor, venda_ano_anterior_rotas, vendedores, vendedores_aa_set, vendedores_set)
         # Pré-venda (área)
         _esc_prev = sorted(vendedores) if vendedores else []
         prevenda = get_cache_mes("pre_venda", data_inicio, data_fim, _esc_prev)
@@ -1224,6 +849,432 @@ class IndicadoresView(APIView):
                 "ate":              data_fim,
             },
         })
+
+    def _ano_anterior(self, c_func, cod, ctx, data_fim, data_inicio, grupos_supervisao, is_filial, lista, meses_periodo, multiplos_meses, nome, objetivos_vendedores, rotas_codigos, rotas_info, ug_filial, v, valor, venda_ano_anterior_rotas, vendedores, vendedores_aa_set, vendedores_set):
+        # ===========================================
+        # VENDAS DO MESMO PERÍODO NO ANO ANTERIOR  
+        # ===========================================
+        # Regras:
+        # - Se o mês consultado == mês atual, comparar de data_inicio até "hoje" (mesmo dia no ano anterior).
+        # - Caso contrário (mês passado), comparar mês completo como antes (de/ate - 1 ano).
+
+        def last_day_of_month(y, m):
+            # sem imports: calcula último dia do mês (considera bissexto)
+            if m in (1,3,5,7,8,10,12):
+                return 31
+            if m in (4,6,9,11):
+                return 30
+            # fevereiro
+            is_leap = (y % 4 == 0) and (y % 100 != 0 or y % 400 == 0)
+            return 29 if is_leap else 28
+
+        def _ajusta_data_aa(d: date) -> date:
+            """Troca o ano pra (ano-1), se 29/02 ajusta p/ 28/02 quando necessário."""
+            try:
+                return d.replace(year=d.year - 1)
+            except ValueError:
+                # 29/02 em ano não-bissexto
+                return d.replace(year=d.year - 1, day=28)
+
+        # parse datas
+        de_dt = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+        ate_dt = datetime.strptime(data_fim, "%Y-%m-%d").date()
+        hoje = date.today()
+
+        if de_dt.year == hoje.year and de_dt.month == hoje.month:
+            # mês atual: vai até o "hoje" do ano anterior (limitado ao fim do mês)
+            aa_ini = _ajusta_data_aa(de_dt)
+            aa_last_day = last_day_of_month(aa_ini.year, aa_ini.month)
+            # mesmo dia de "hoje" no ano anterior, mas não pode passar do fim do mês
+            end_day = min(hoje.day, aa_last_day)
+            aa_fim = date(aa_ini.year, aa_ini.month, end_day)
+        else:
+            # mês passado ou outro: usa o mês completo (como antes)
+            aa_ini = _ajusta_data_aa(de_dt)
+            aa_fim = _ajusta_data_aa(ate_dt)
+        
+        # ===========================================
+        # ANO ANTERIOR POR ROTAS (buscar_vendido)
+        # ===========================================
+        
+        try:
+            # 1) mapa rota -> vendedor (regra gerência)
+            rota_to_vendedor = {}
+            for row in (rotas_info.get("detalhado") or []):
+                try:
+                    cod_rota = int(str(row.get("CodRota")).strip())
+                    cod_vend = int(str(row.get("CodVendedor")).strip())
+                    rota_to_vendedor[cod_rota] = cod_vend
+                except (TypeError, ValueError):
+                    pass
+
+            aa_ini_str = aa_ini.strftime("%Y-%m-%d")
+            aa_fim_str = aa_fim.strftime("%Y-%m-%d")
+
+            _cache_key_rotas = sorted(rotas_codigos or [])
+            ret_vendido_aa_rotas = get_cache_aa("vendido_rotas", aa_ini_str, aa_fim_str, _cache_key_rotas)
+            if ret_vendido_aa_rotas is None:
+                ret_vendido_aa_rotas = buscar_vendido(aa_ini_str, aa_fim_str, rotas=rotas_codigos)
+                set_cache_aa("vendido_rotas", aa_ini_str, aa_fim_str, ret_vendido_aa_rotas, _cache_key_rotas)
+
+            if isinstance(ret_vendido_aa_rotas, dict):
+                calc = _calc_liquido_por_vendedor_por_rotas(ret_vendido_aa_rotas, rota_to_vendedor)
+
+                venda_ano_anterior_rotas = {
+                    "de": aa_ini_str,
+                    "ate": aa_fim_str,
+                    "valor_total": calc["valor_total"],
+                    "por_vendedor": calc["por_vendedor"],
+                }
+
+                # --- MONTAGEM DO LOG FORMATADO ---
+                log_lines = []
+                log_lines.append(f"\n{'='*60}")
+                log_lines.append(f"[AA_ROTAS][buscar_vendido] RESUMO")
+                log_lines.append(f"Periodo: {aa_ini_str} ate {aa_fim_str}")
+                log_lines.append(f"Total Geral: R$ {calc['valor_total']:,.2f}")
+                log_lines.append(f"{'-'*60}")
+
+                # Itera sobre cada vendedor para mostrar suas rotas
+                # (Se a lista for muito grande, você pode usar um slice, ex: calc['por_vendedor'][:5])
+                for v in calc["por_vendedor"]: 
+                    cod_v = v.get('CodVendedor')
+                    total_v = v.get('Valor_liquido_total', 0)
+                    log_lines.append(f"👤 Vendedor {cod_v} | Total: R$ {total_v:,.2f}")
+                    
+                    rotas_v = v.get('Rotas', [])
+                    for r in rotas_v:
+                        cod_r = r.get('CodRota')
+                        campo_r = r.get('Campo')
+                        val_r = r.get('Valor_liquido', 0)
+                        log_lines.append(f"   └── Rota {cod_r} ({campo_r}): R$ {val_r:,.2f}")
+                    
+                    log_lines.append(f"{'.'*60}") # Separador entre vendedores
+
+                log_lines.append(f"{'='*60}\n")
+                
+                # Exibe o log formatado
+                logger.debug("\n".join(log_lines))
+
+            else:
+                logger.warning(
+                    "[AA_ROTAS][buscar_vendido] retorno inesperado tipo=%s amostra=%s",
+                    type(ret_vendido_aa_rotas).__name__,
+                    str(ret_vendido_aa_rotas)[:600],
+                )
+
+        except Exception:
+            logger.exception("[AA_ROTAS][buscar_vendido] erro ao calcular ano anterior por rotas")
+            venda_ano_anterior_rotas = None
+
+
+        _aa_ini_s = aa_ini.strftime("%Y-%m-%d")
+        _aa_fim_s = aa_fim.strftime("%Y-%m-%d")
+        res_aa = get_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s)
+        if is_filial:
+            res_aa = buscar_vendas_por_vendedor(
+                _aa_ini_s, _aa_fim_s, 
+                unid_gestora=ug_filial, 
+                agrupar_por_filial=True, 
+                cod_representante=ctx.cod_funcionario)
+        else:
+            res_aa = get_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s)
+            if res_aa is None:
+                res_aa = buscar_vendas_por_vendedor(_aa_ini_s, _aa_fim_s)
+                set_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s, res_aa)
+        logger.debug("[DEBUG][VENDA ANO ANTERIOR]\n"
+            f"  Total registros retornados: {len(res_aa.get('vendas_por_vendedor', []) or [])}\n"
+            f"  Payload bruto: {res_aa}")
+        lista_aa = res_aa.get("vendas_por_vendedor", []) or []
+        logger.debug("[DEBUG][VENDA ANO ANTERIOR]\n"
+            f"  Registros totais: {len(lista_aa)}\n"
+            f"  Vendedores filtrados: {len(vendedores_set) if vendedores_set else 'TODOS'}\n"
+            f"  IDs filtrados: {sorted(vendedores_set) if vendedores_set else 'N/A'}")
+
+        if vendedores_aa_set: 
+            lista_aa = [it for it in lista_aa if _to_int(it.get("codcampo")) in vendedores_aa_set]
+            codigos_considerados = sorted(
+                                                {_to_int(it.get("codcampo")) for it in lista_aa if _to_int(it.get("codcampo")) is not None}
+                                            )
+            
+            logger.debug("[DEBUG][VENDA ANO ANTERIOR][APÓS FILTRO]\n"
+                    f"  Registros considerados: {len(lista_aa)}"
+                    f"  Códigos vendedores: {codigos_considerados}")
+            # === ADICIONE ESTE BLOCO PARA LOGAR ===
+        logger.debug("\n=== DEBUG: VENDAS ANO ANTERIOR POR VENDEDOR ===")
+        for item in lista_aa:
+            cod = item.get("codcampo")
+            nome = item.get("Campo")
+            valor = item.get("ValorLiquido")
+            logger.debug(f"Vendedor: {cod} - {nome} | Valor AA: R$ {valor}")
+        logger.debug("===============================================\n")
+        # ======================================
+
+        venda_ano_anterior = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa) or 1.0  # evita div/0
+        logger.debug(f"[DEBUG][VENDA ANO ANTERIOR] {venda_ano_anterior}")
+
+        # índice por vendedor do ANO ANTERIOR (para merge no payload de vendas)
+        aa_by_cod = {}
+        for it in lista_aa:
+            cod = _to_int(it.get("codcampo"))
+            if cod is None:
+                continue
+            aa_by_cod[cod] = {
+                "Ano_anterior_QtdClientes": _num(it.get("QtdClientes")),
+                "Ano_anterior_ValorLiquido": _num(it.get("ValorLiquido")),
+                "Ano_anterior_PesoTotal": _num(it.get("PesoTotal")),
+                "Ano_anterior_Mix": _num(it.get("Mix")),
+            }
+
+        # injeta campos *Ano_anterior_* em cada item de lista (ano atual)
+        for it in lista:
+            cod = _to_int(it.get("codcampo"))
+            aa = aa_by_cod.get(cod, {})
+            it.update(aa)
+
+        # agregado do ano anterior (da mesma amostra de vendedores)
+        ano_anterior_agregado = {
+            "QtdClientes": sum(_num(x.get("Ano_anterior_QtdClientes")) for x in lista),
+            "ValorLiquido": sum(_num(x.get("Ano_anterior_ValorLiquido")) for x in lista),
+            "PesoTotal": sum(_num(x.get("Ano_anterior_PesoTotal")) for x in lista),
+            "Mix": sum(_num(x.get("Ano_anterior_Mix")) for x in lista),
+        }
+        
+        #print(f"DEBUG VENDA DO ANO ANTERIOR ATE HOJE {ano_anterior_agregado}")
+
+        # === NOVO: VENDAS DO MÊS COMPLETO DO ANO ANTERIOR ===
+        aa_mes_ano = de_dt.year - 1
+        aa_mes_mes = de_dt.month
+        aa_mes_ini = date(aa_mes_ano, aa_mes_mes, 1)
+        aa_mes_last_day = last_day_of_month(aa_mes_ano, aa_mes_mes)
+        aa_mes_fim = date(aa_mes_ano, aa_mes_mes, aa_mes_last_day)
+
+        _aa_mes_ini_s = aa_mes_ini.strftime("%Y-%m-%d")
+        _aa_mes_fim_s = aa_mes_fim.strftime("%Y-%m-%d")
+        res_aa_mes = get_cache_aa("vendas_vendedor_mes", _aa_mes_ini_s, _aa_mes_fim_s)
+        if is_filial:
+            res_aa_mes = buscar_vendas_por_vendedor(
+                _aa_mes_ini_s, _aa_mes_fim_s, 
+                unid_gestora=ug_filial, 
+                agrupar_por_filial=True, 
+                cod_representante=ctx.cod_funcionario
+            )
+        else:
+            res_aa_mes = get_cache_aa("vendas_vendedor_mes", _aa_mes_ini_s, _aa_mes_fim_s)
+            if res_aa_mes is None:
+                res_aa_mes = buscar_vendas_por_vendedor(_aa_mes_ini_s, _aa_mes_fim_s)
+                set_cache_aa("vendas_vendedor_mes", _aa_mes_ini_s, _aa_mes_fim_s, res_aa_mes)
+        lista_aa_mes = res_aa_mes.get("vendas_por_vendedor", []) or []
+
+        # aplica o MESMO filtro de escopo de vendedores
+        if vendedores_aa_set:
+            lista_aa_mes = [
+                it for it in lista_aa_mes
+                if _to_int(it.get("codcampo")) in vendedores_aa_set
+            ]
+
+        # índice por vendedor do MÊS COMPLETO do ANO ANTERIOR
+        aa_mes_by_cod = {}
+        for it in lista_aa_mes:
+            cod = _to_int(it.get("codcampo"))
+            if cod is None:
+                continue
+            aa_mes_by_cod[cod] = {
+                "Ano_anterior_mes_QtdClientes": _num(it.get("QtdClientes")),
+                "Ano_anterior_mes_ValorLiquido": _num(it.get("ValorLiquido")),
+                "Ano_anterior_mes_PesoTotal": _num(it.get("PesoTotal")),
+                "Ano_anterior_mes_Mix": _num(it.get("Mix")),
+            }
+
+        # injeta também os campos do MÊS CHEIO em cada item de lista (ano atual)
+        for it in lista:
+            cod = _to_int(it.get("codcampo"))
+            if cod is None:
+                continue
+            aa_mes = aa_mes_by_cod.get(cod, {})
+            it.update(aa_mes)
+
+        # agregado do MÊS CHEIO do ano anterior (sobre a MESMA amostra de vendedores da lista)
+        ano_anterior_agregado_mes = {
+            "QtdClientes":   sum(_num(x.get("Ano_anterior_mes_QtdClientes"))   for x in lista),
+            "ValorLiquido":  sum(_num(x.get("Ano_anterior_mes_ValorLiquido"))  for x in lista),
+            "PesoTotal":     sum(_num(x.get("Ano_anterior_mes_PesoTotal"))     for x in lista),
+            "Mix":           sum(_num(x.get("Ano_anterior_mes_Mix"))           for x in lista),
+        }
+        #print(f"DEBUG VENDA DO ANO ANTERIOR MES COMPLETO {ano_anterior_agregado_mes}")
+
+        #  POSITIVAÇÃO (área)
+        _esc_pos = sorted(vendedores) if vendedores else []
+        _rotas_key = sorted(rotas_codigos) if rotas_codigos else []
+ 
+        if not multiplos_meses:
+            # ── 1 mês: comportamento atual (uma query cada) ──────────────────
+            _esc_mix = sorted(vendedores) if vendedores else []
+            dados_mix = get_cache_mes("venda_mix", data_inicio, data_fim, _esc_mix)
+            if dados_mix is None:
+                dados_mix = buscar_venda_mix(data_inicio, data_fim, cod_vendedores=vendedores)
+                set_cache_mes("venda_mix", data_inicio, data_fim, dados_mix, _esc_mix)
+            mix_realizado = float(dados_mix.get("mix_realizado") or 0)
+ 
+            _esc_pos = (sorted(vendedores) if vendedores else []) + (sorted(rotas_codigos) if rotas_codigos else [])
+            positivacao = get_cache_mes("positivacao", data_inicio, data_fim, _esc_pos)
+            if positivacao is None:
+                positivacao = buscar_positivacao_por_rota(
+                    data_inicio, data_fim, rotas=rotas_codigos, cod_vendedores=vendedores
+                )
+                set_cache_mes("positivacao", data_inicio, data_fim, positivacao, _esc_pos)
+            positivacao_realizado_geral = float(positivacao.get("positivacao_realizado_geral") or 0)
+ 
+            # Mapa simples por vendedor para 1 mês
+            _mix_media_por_vend = {}   # populado mais adiante no loop existente
+            _pos_media_por_vend = {}   # populado mais adiante no loop existente
+ 
+        else:
+            # ── n meses: consultas mensais + médias ──────────────────────────
+            _med = _calcular_media_mix_pos_por_mes(
+                meses_periodo, rotas_codigos, vendedores
+            )
+            mix_realizado               = _med["mix_global"]
+            positivacao_realizado_geral = _med["pos_global"]
+            _mix_media_por_vend         = _med["mix_por_vend"]
+            _pos_media_por_vend         = _med["pos_por_vend"]
+ 
+            # Reconstrói 'positivacao' como dict compatível com o restante do código
+            positivacao = {
+                "positivacao_realizado_geral": positivacao_realizado_geral,
+                "detalhado": _med["positivacao_detalhado_ultimo_mes"],
+            }
+
+        if grupos_supervisao:
+            logger.debug("\n[DEBUG][AREAS] iniciando soma ATUAL + AA por área...")
+
+            for area in grupos_supervisao:
+                area_vendedores = [_to_int(v) for v in (area.get("vendedores") or [])]
+                area_vendedores = [v for v in area_vendedores if v is not None]
+
+                logger.debug(f"\n[DEBUG][AREA] area={area.get('cod_area_supervisao')} "
+                    f"sup={area.get('cod_supervisor')} "
+                    f"qtd_vendedores={len(area_vendedores)} "
+                    f"vendedores(amostra)={area_vendedores[:10]}")
+
+                if not area_vendedores:
+                    area["venda_ano_anterior_area"] = 0.0
+                    area["venda_realizada_area"] = 0.0
+                    continue
+                
+                # MIX AGREGADO DA ÁREA (Distinto)
+                # =========
+                area_vendedores_mix = list(area_vendedores)
+                # Aplica a regra do 228/4 também aqui
+                try:
+                    if str(ctx.cod_funcionario) in ['228', '4']:
+                        if 4 not in area_vendedores_mix:
+                            area_vendedores_mix.append(4)
+                except: pass
+                area_vendedores     = [_to_int(v) for v in (area.get("vendedores") or []) if _to_int(v)]
+                area_vendedores_mix = list(area_vendedores)  # inclui vendedor 4 se regra 228 se aplicar
+ 
+                if multiplos_meses:
+                    # Média ponderada pelo objetivo de cada vendedor desta área
+                    mix_vend_area = {
+                        cod: _mix_media_por_vend[cod]
+                        for cod in area_vendedores if cod in _mix_media_por_vend
+                    }
+                    mix_area = _media_ponderada_supervisor(
+                        mix_vend_area, objetivos_vendedores, "objetivo_mix"
+                    )
+                    pos_vend_area = {
+                        cod: _pos_media_por_vend[cod]
+                        for cod in area_vendedores if cod in _pos_media_por_vend
+                    }
+                    pos_area = _media_ponderada_supervisor(
+                        pos_vend_area, objetivos_vendedores, "objetivo_positivacao"
+                    )
+                else:
+                     mix_area = buscar_mix_agregado(data_inicio, data_fim, cod_vendedores=area_vendedores_mix)
+                     pos_area = 0.0
+                     for item_pos in (positivacao.get("detalhado") or []):
+                         c_func = _to_int(item_pos.get("CodFuncionario"))
+                         if c_func in area_vendedores:
+                             pos_area += float(item_pos.get("ClientesPositivadosRota") or item_pos.get("Realizado") or 0)
+
+                
+                area["mix_realizado_area"] = mix_area
+                area["pos_realizado_area"] = round(pos_area, 1)
+                
+                # =========
+                # ATUAL (período consultado)
+                # =========
+                res_atual_area = buscar_vendas_por_vendedor(
+                    data_inicio,
+                    data_fim,
+                    cod_vendedores=area_vendedores,
+                )
+                lista_atual_area = res_atual_area.get("vendas_por_vendedor", []) or []
+                soma_atual_area = sum(_to_float(it.get("ValorLiquido")) for it in lista_atual_area)
+                area["venda_realizada_area"] = round(soma_atual_area, 2)
+
+                logger.debug(f"[DEBUG][ATUAL_POR_AREA_TOTAL] "
+                    f"area={area.get('cod_area_supervisao')} sup={area.get('cod_supervisor')} "
+                    f"ATUAL_TOTAL={area['venda_realizada_area']}")
+
+                # =========
+                # AA (mês completo do ano anterior) — mantém sua regra
+                # =========
+                res_aa_area = res_aa
+                lista_aa_area = res_aa_area.get("vendas_por_vendedor", []) or []
+                soma_aa_area = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa_area)
+                area["venda_ano_anterior_area"] = round(soma_aa_area, 2)
+
+                logger.debug(f"[DEBUG][AA_POR_AREA_TOTAL] "
+                    f"area={area.get('cod_area_supervisao')} sup={area.get('cod_supervisor')} "
+                    f"AA_TOTAL={area['venda_ano_anterior_area']}")
+
+        if multiplos_meses and grupos_supervisao:
+            # Média ponderada entre supervisões (peso = n vendedores)
+            _mix_por_area_gerente = {
+                str(area.get("cod_area_supervisao")): {
+                    "media":         area.get("mix_realizado_area", 0.0),
+                    "n_vendedores":  len([v for v in (area.get("vendedores") or []) if _to_int(v)]),
+                }
+                for area in grupos_supervisao
+            }
+            _pos_por_area_gerente = {
+                str(area.get("cod_area_supervisao")): {
+                    "media":         area.get("pos_realizado_area", 0.0),
+                    "n_vendedores":  len([v for v in (area.get("vendedores") or []) if _to_int(v)]),
+                }
+                for area in grupos_supervisao
+            }
+            mix_realizado               = _media_ponderada_gerente(_mix_por_area_gerente)
+            positivacao_realizado_geral = _media_ponderada_gerente(_pos_por_area_gerente)
+ 
+
+        _vars = locals()  # fallback: variáveis só definidas em alguns ramos
+        return (
+            _vars.get("_esc_pos"),
+            _vars.get("_mix_media_por_vend"),
+            _vars.get("_pos_media_por_vend"),
+            _vars.get("_rotas_key"),
+            _vars.get("ano_anterior_agregado"),
+            _vars.get("ano_anterior_agregado_mes"),
+            _vars.get("area"),
+            _vars.get("area_vendedores"),
+            _vars.get("c_func"),
+            _vars.get("cod"),
+            _vars.get("cod_v"),
+            _vars.get("it"),
+            _vars.get("item"),
+            _vars.get("mix_realizado"),
+            _vars.get("positivacao"),
+            _vars.get("positivacao_realizado_geral"),
+            _vars.get("r"),
+            _vars.get("row"),
+            _vars.get("v"),
+            _vars.get("valor"),
+            _vars.get("venda_ano_anterior"),
+            _vars.get("venda_ano_anterior_rotas"),
+        )
 
     def _realizado_area(self, ctx, data_fim, data_inicio, is_filial, objetivos_vendedores, rotas_info, ug_filial, v, vendedores_set):
         # =========================
