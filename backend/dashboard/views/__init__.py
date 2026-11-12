@@ -1,7 +1,6 @@
 # Reexporta as views para o urls.py (from .views import ...).
 # Ao mover uma view para outro arquivo, troque só a linha de import dela aqui.
-from .main_views import (
-    MinhasRotasSupervisorView,
+from .indicadores_views import (
     IndicadoresView,
 )
 from .feriados_views import FeriadoView

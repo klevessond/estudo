@@ -10,7 +10,6 @@ from rest_framework.views import APIView
 from dashboard.roles import get_role_context
 from dashboard.services.indicadores.cache_mes import (
     get_cache_mes,
-    periodo_cacheavel,
     set_cache_mes,
 )
 from dashboard.services.indicadores.info_service import Todos_Vendedores

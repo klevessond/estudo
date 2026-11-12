@@ -1,150 +1,56 @@
-from django.shortcuts import render
-from django.db import connections
-from django.http import JsonResponse
-from django.db import transaction
-import pandas as pd
-from django.db.models import Sum
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from dashboard.models import ObjetivoMensal,ObjetivoMensalVendedor,ObjetivoMixNivel,Feriado
-from dashboard.serializers import ObjetivoMensalSerializer, CustomUserSerializer,MeSerializer,ObjetivoMixNivelSerializer,FeriadoSerializer
-from datetime import datetime,date
-from decimal import Decimal
-from collections import defaultdict
-from dashboard.services.indicadores.cache_utils import get_cached_data
-from django.utils.dateparse import parse_date
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import User
-from rest_framework.decorators import api_view, permission_classes
-User = get_user_model()
-from rest_framework import serializers
-from django.contrib.auth.password_validation import validate_password
-from rest_framework.validators import UniqueValidator
-from rest_framework import status, viewsets
-from rest_framework.permissions import IsAdminUser
-from dashboard.models import Profile
-from dashboard.services.usuarios.funcionario_service import listar_funcionarios,get_funcionario_por_codigo,obter_unid_gestora,obter_unid_gestoras_por_vendedores
+"""Indicadores consolidados do dashboard (IndicadoresView).
+
+Este arquivo era o antigo main_views.py; após a divisão por domínio,
+restou aqui a IndicadoresView e seus helpers de cálculo. A quebra do
+get() em partes menores é o próximo passo da refatoração (etapa 3).
+"""
 import logging
-from decimal import Decimal
-from dashboard.roles import get_role_context  
+from collections import defaultdict
+from datetime import date, datetime
+
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from dashboard.models import ObjetivoMixNivel
+from dashboard.roles import get_role_context
+from dashboard.services.indicadores.cache_aa import get_cache_aa, set_cache_aa
+from dashboard.services.indicadores.cache_mes import get_cache_mes, set_cache_mes
+from dashboard.services.indicadores.calculos_projecao import (
+    calcular_matematica_projecao,
+    get_dias_uteis_info,
+)
 from dashboard.services.indicadores.info_service import Todos_Vendedores, obter_cod_supervisor
-from dashboard.services.indicadores.calculos_projecao import get_dias_uteis_info, calcular_matematica_projecao
-from dashboard.services.indicadores.ruptura_service import buscar_ruptura, buscar_ruptura_itens_detalhado
-from dashboard.db_conn import query_all
+from dashboard.services.indicadores.pdv_mix_service import buscar_mix_pdv_por_perfil
+from dashboard.services.indicadores.pdv_service import buscar_cupons_por_vendedor, buscar_vendas_pdv
+from dashboard.services.indicadores.rotas_simples import (
+    buscar_rotas_usuario,
+    buscar_vendedores_mesma_supervisao,
+)
+from dashboard.services.indicadores.ruptura_service import buscar_ruptura
+from dashboard.services.indicadores.vendas_service import (
+    buscar_mix_agregado,
+    buscar_positivacao_por_rota,
+    buscar_pre_venda,
+    buscar_venda_mix,
+    buscar_vendas_por_vendedor,
+    buscar_vendido,
+)
+from dashboard.services.usuarios.funcionario_service import obter_unid_gestoras_por_vendedores
 
 from ._helpers import (
-    _to_int,
-    _to_float,
-    _num,
-    _to_float_safe,
-    _to_int_list,
-    safe_divide,
     _meses_no_periodo,
-    ajustar_data_para_ano_anterior,
+    _num,
+    _to_float,
+    _to_float_safe,
+    _to_int,
+    safe_divide,
 )
-
 from .objetivos_views import (
     get_objetivo_mensal_serializado,
     get_objetivos_vendedores_por_mes,
 )
 
 logger = logging.getLogger(__name__)
-
-
-
-from dashboard.services.indicadores.objetivos_service import buscar_objetivo_peso_positivacao
-from dashboard.services.indicadores.vendas_service import buscar_itens_nao_vendidos_por_vendedor,buscar_vendido,buscar_positivacao_por_rota,buscar_mix_agregado,buscar_venda_mix,buscar_pre_venda,buscar_vendas_por_vendedor,buscar_resumo_segmento_area_venda
-from dashboard.services.indicadores.vendas_service import buscar_clientes_positivacao_lista,buscar_comissoes_vendedor,buscar_itens_mix_por_vendedor, buscar_clientes_positivacao_por_vendedor
-from dashboard.services.indicadores.pdv_service import buscar_vendas_pdv,buscar_pdv_por_unid_gestora,buscar_cupons_por_vendedor
-from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario, buscar_vendedores_mesma_supervisao
-from dashboard.services.indicadores.pdv_mix_service import buscar_itens_nao_vendidos_por_ug ,buscar_mix_pdv_por_perfil, buscar_itens_mix_por_ug
-from dashboard.services.indicadores.cache_aa import get_cache_aa, set_cache_aa
-from dashboard.services.indicadores.cache_mes import get_cache_mes, set_cache_mes, periodo_cacheavel,invalidar_cache_mes, invalidar_por_periodo, invalidar_por_tipo_e_periodo, listar_periodos_cacheados, stats_cache_mes # útil para logs/debug
-from dashboard.services.indicadores.pre_venda_status_service import buscar_status_pre_vendas,buscar_itens_pre_venda
-from dashboard.services.indicadores.venda_hoje_service import buscar_venda_hoje
-from dashboard.mixins import RoleContextMixin   # mesmo padrão das outras views
-
-# --- imports necessários para as views do Telegram ---
-import random
-import string
-from datetime import timedelta as _timedelta
-from django.conf import settings
-from django.utils import timezone
-from dashboard.models import TelegramLinkCode, VendedorTelegram
-
-
-from typing import Dict, Any
- 
-from dashboard.models import CampanhaVenda, CampanhaVendaObjetivo
-from dashboard.serializers import CampanhaVendaSerializer, CampanhaVendaObjetivoSerializer
-from dashboard.services.indicadores.campanhas_service import (
-    buscar_realizado_campanha,
-    buscar_fabricantes,
-    buscar_materiais,
-    buscar_grupos,
-)
- 
-
-
-# Em dashboard/views.py
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def _resumo_detalhamento(det):
-    """
-    det: lista de dicts do service (ret_vendido['detalhamento'])
-    devolve: lista com apenas Campo e ValorProdutos
-    """
-    out = []
-    for row in (det or []):
-        cod=row.get("CodCampo")
-        codvendedor = row.get("CodVendedor")
-        campo = (row.get("Campo") or "").strip()
-        valor = _to_float_safe(row.get("ValorProdutos"))
-        desconto = _to_float_safe(row.get("Desconto"))
-        valor_liquido = valor-desconto
-        out.append({
-            "Codrota" :cod,
-            "Campo": campo,
-            "CodVendedor": codvendedor,
-            "ValorProdutos": _to_float_safe(valor),
-            "Desconto": _to_float_safe(desconto),
-            "Valor_liquido": _to_float_safe(valor_liquido),
-        })
-    return out
-
-    
-
-
-
-class MinhasRotasSupervisorView(APIView):
-    #permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        ctx = get_role_context(request.user)
-        info = buscar_rotas_usuario(ctx)  # <- CORRETO
-        rotas = info.get("rotas") if info else None
-        return Response({
-            "papel": "supervisor" if ctx.is_supervisor else ("admin" if ctx.is_admin else "outro"),
-            "cod_funcionario": ctx.cod_funcionario,
-            "rotas": rotas if rotas is not None else "sem_filtro"
-        })
-
-
-
 
 def _calc_liquido_por_vendedor_por_rotas(ret_vendido: dict, rota_to_vendedor: dict):
     """

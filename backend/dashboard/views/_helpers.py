@@ -60,7 +60,6 @@ def safe_divide(numerator, denominator, default=0):
 
 def _meses_no_periodo(data_inicio: str, data_fim: str):
     """Retorna lista de date(YYYY, MM, 1) para cada mês dentro do período."""
-    from datetime import date
     ini = datetime.strptime(data_inicio, "%Y-%m-%d").date().replace(day=1)
     fim = datetime.strptime(data_fim,    "%Y-%m-%d").date().replace(day=1)
     meses = []

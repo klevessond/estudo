@@ -18,8 +18,6 @@ from dashboard.services.usuarios.funcionario_service import (
     listar_funcionarios,
 )
 
-from ._helpers import _to_int
-
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
