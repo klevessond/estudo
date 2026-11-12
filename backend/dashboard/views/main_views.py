@@ -33,6 +33,17 @@ from dashboard.services.indicadores.calculos_projecao import get_dias_uteis_info
 from dashboard.services.indicadores.ruptura_service import buscar_ruptura, buscar_ruptura_itens_detalhado
 from dashboard.db_conn import query_all
 
+from ._helpers import (
+    _to_int,
+    _to_float,
+    _num,
+    _to_float_safe,
+    _to_int_list,
+    safe_divide,
+    _meses_no_periodo,
+    ajustar_data_para_ano_anterior,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -191,32 +202,9 @@ def get_dados_excel(request):
         return JsonResponse({'erro': str(e)}, status=500)
 
 
-def _to_int(v):
-    try:
-        return int(str(v).strip())
-    except (TypeError, ValueError):
-        return None
 
-def _to_float(v):
-    try:
-        return float(v or 0)
-    except (TypeError, ValueError):
-        return 0.0
 
-def _num(v):
-    try:
-        return float(v or 0)
-    except (TypeError, ValueError):
-        return 0.0
 
-def _to_float_safe(v):
-    # Decimal -> float, string número -> float, None -> 0.0
-    try:
-        if isinstance(v, Decimal):
-            return float(v)
-        return float(v or 0)
-    except Exception:
-        return 0.0
 
 def _resumo_detalhamento(det):
     """
@@ -290,14 +278,6 @@ class MinhasRotasSupervisorView(APIView):
 
 
 
-def _to_int_list(seq):
-    out = []
-    for v in (seq or []):
-        try:
-            out.append(int(str(v).strip()))
-        except (TypeError, ValueError):
-            pass
-    return out
 
 def _calc_liquido_por_vendedor_por_rotas(ret_vendido: dict, rota_to_vendedor: dict):
     """
@@ -1867,15 +1847,6 @@ class ObjetivoMensalView(APIView):
 
 
 
-def safe_divide(numerator, denominator, default=0):
-    try:
-        numerator = float(numerator)
-        denominator = float(denominator)
-        if denominator == 0:
-            return default
-        return numerator / denominator
-    except (TypeError, ValueError):
-        return default
     
 
 
@@ -1902,21 +1873,6 @@ class ObjetivoMensalResumoView(APIView):
         except ObjetivoMensal.DoesNotExist:
             return Response({"detail": "Objetivo mensal não encontrado."}, status=404)
 
-def _meses_no_periodo(data_inicio: str, data_fim: str):
-    """Retorna lista de date(YYYY, MM, 1) para cada mês dentro do período."""
-    from datetime import date
-    ini = datetime.strptime(data_inicio, "%Y-%m-%d").date().replace(day=1)
-    fim = datetime.strptime(data_fim,    "%Y-%m-%d").date().replace(day=1)
-    meses = []
-    cur = ini
-    while cur <= fim:
-        meses.append(cur)
-        # avança para o próximo mês
-        if cur.month == 12:
-            cur = cur.replace(year=cur.year + 1, month=1)
-        else:
-            cur = cur.replace(month=cur.month + 1)
-    return meses
 
 
 
@@ -1962,13 +1918,6 @@ def get_objetivo_mensal_serializado(user, data_inicio, data_fim=None, cod_vended
         return {"objetivo_financeiro": 0, "objetivo_mix": 0,
                 "objetivo_peso": 0,       "objetivo_positivacao": 0}
 
-def ajustar_data_para_ano_anterior(data_str):
-    data_atual = datetime.strptime(data_str, "%Y-%m-%d")
-    try:
-        return data_atual.replace(year=data_atual.year - 1).strftime("%Y-%m-%d")
-    except ValueError:
-        # Se o dia não existir (ex: 29/02 em ano não bissexto), ajusta para 28/02
-        return data_atual.replace(year=data_atual.year - 1, day=28).strftime("%Y-%m-%d")
     
 
 class MinhaUnidGestoraView(APIView):
