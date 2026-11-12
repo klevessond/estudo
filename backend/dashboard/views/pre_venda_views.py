@@ -60,7 +60,7 @@ class PreVendaStatusView(APIView):
                     cod_vendedores = list(permitidos) if permitidos else None
 
             elif is_vendedor:
-                cod_vendedores = [int(cod_funcionario)]  # ← inalterado
+                cod_vendedores = [int(ctx.cod_funcionario)]
 
             else:
                 cod_vendedores = solicitados if solicitados else None
