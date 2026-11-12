@@ -1,10 +1,6 @@
 # Reexporta as views para o urls.py (from .views import ...).
 # Ao mover uma view para outro arquivo, troque só a linha de import dela aqui.
 from .main_views import (
-    clientes_top10,
-    get_dados_sql,
-    get_dados_sql_api,
-    get_dados_excel,
     ComissoesVendedorView,
     MinhasRotasSupervisorView,
     IndicadoresView,
@@ -39,4 +35,5 @@ from .main_views import (
 from .feriados_views import FeriadoView
 from .telegram_views import TelegramGerarCodigoView, TelegramStatusView, TelegramDesvincularView
 from .cache_admin_views import CacheMesAdminView
+from .legacy_views import get_dados_sql, get_dados_sql_api
 from .pivot_views import PivotVendasView
