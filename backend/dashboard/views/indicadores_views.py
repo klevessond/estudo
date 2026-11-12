@@ -173,7 +173,7 @@ class IndicadoresView(APIView):
 
         
         rotas_codigos = rotas_info.get("rotas") if rotas_info else None
-        print(">>> ROTAS X VENDEDOR", rotas_info)
+        logger.debug("%s %s", ">>> ROTAS X VENDEDOR", rotas_info)
 
         # 🔧 PRIORIDADE: supervisor/gerente > vendedor
         if getattr(ctx, "is_supervisor", False):
@@ -617,18 +617,14 @@ class IndicadoresView(APIView):
             if res_aa is None:
                 res_aa = buscar_vendas_por_vendedor(_aa_ini_s, _aa_fim_s)
                 set_cache_aa("vendas_vendedor", _aa_ini_s, _aa_fim_s, res_aa)
-        print(
-            "[DEBUG][VENDA ANO ANTERIOR]\n"
+        logger.debug("[DEBUG][VENDA ANO ANTERIOR]\n"
             f"  Total registros retornados: {len(res_aa.get('vendas_por_vendedor', []) or [])}\n"
-            f"  Payload bruto: {res_aa}"
-        )
+            f"  Payload bruto: {res_aa}")
         lista_aa = res_aa.get("vendas_por_vendedor", []) or []
-        print(
-            "[DEBUG][VENDA ANO ANTERIOR]\n"
+        logger.debug("[DEBUG][VENDA ANO ANTERIOR]\n"
             f"  Registros totais: {len(lista_aa)}\n"
             f"  Vendedores filtrados: {len(vendedores_set) if vendedores_set else 'TODOS'}\n"
-            f"  IDs filtrados: {sorted(vendedores_set) if vendedores_set else 'N/A'}"
-            )
+            f"  IDs filtrados: {sorted(vendedores_set) if vendedores_set else 'N/A'}")
 
         if vendedores_aa_set: 
             lista_aa = [it for it in lista_aa if _to_int(it.get("codcampo")) in vendedores_aa_set]
@@ -636,23 +632,21 @@ class IndicadoresView(APIView):
                                                 {_to_int(it.get("codcampo")) for it in lista_aa if _to_int(it.get("codcampo")) is not None}
                                             )
             
-            print(
-                    "[DEBUG][VENDA ANO ANTERIOR][APÓS FILTRO]\n"
+            logger.debug("[DEBUG][VENDA ANO ANTERIOR][APÓS FILTRO]\n"
                     f"  Registros considerados: {len(lista_aa)}"
-                    f"  Códigos vendedores: {codigos_considerados}"
-                )
+                    f"  Códigos vendedores: {codigos_considerados}")
             # === ADICIONE ESTE BLOCO PARA LOGAR ===
-        print("\n=== DEBUG: VENDAS ANO ANTERIOR POR VENDEDOR ===")
+        logger.debug("\n=== DEBUG: VENDAS ANO ANTERIOR POR VENDEDOR ===")
         for item in lista_aa:
             cod = item.get("codcampo")
             nome = item.get("Campo")
             valor = item.get("ValorLiquido")
-            print(f"Vendedor: {cod} - {nome} | Valor AA: R$ {valor}")
-        print("===============================================\n")
+            logger.debug(f"Vendedor: {cod} - {nome} | Valor AA: R$ {valor}")
+        logger.debug("===============================================\n")
         # ======================================
 
         venda_ano_anterior = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa) or 1.0  # evita div/0
-        print(f"[DEBUG][VENDA ANO ANTERIOR] {venda_ano_anterior}")
+        logger.debug(f"[DEBUG][VENDA ANO ANTERIOR] {venda_ano_anterior}")
 
         # índice por vendedor do ANO ANTERIOR (para merge no payload de vendas)
         aa_by_cod = {}
@@ -787,18 +781,16 @@ class IndicadoresView(APIView):
             }
 
         if grupos_supervisao:
-            print("\n[DEBUG][AREAS] iniciando soma ATUAL + AA por área...")
+            logger.debug("\n[DEBUG][AREAS] iniciando soma ATUAL + AA por área...")
 
             for area in grupos_supervisao:
                 area_vendedores = [_to_int(v) for v in (area.get("vendedores") or [])]
                 area_vendedores = [v for v in area_vendedores if v is not None]
 
-                print(
-                    f"\n[DEBUG][AREA] area={area.get('cod_area_supervisao')} "
+                logger.debug(f"\n[DEBUG][AREA] area={area.get('cod_area_supervisao')} "
                     f"sup={area.get('cod_supervisor')} "
                     f"qtd_vendedores={len(area_vendedores)} "
-                    f"vendedores(amostra)={area_vendedores[:10]}"
-                )
+                    f"vendedores(amostra)={area_vendedores[:10]}")
 
                 if not area_vendedores:
                     area["venda_ano_anterior_area"] = 0.0
@@ -857,11 +849,9 @@ class IndicadoresView(APIView):
                 soma_atual_area = sum(_to_float(it.get("ValorLiquido")) for it in lista_atual_area)
                 area["venda_realizada_area"] = round(soma_atual_area, 2)
 
-                print(
-                    f"[DEBUG][ATUAL_POR_AREA_TOTAL] "
+                logger.debug(f"[DEBUG][ATUAL_POR_AREA_TOTAL] "
                     f"area={area.get('cod_area_supervisao')} sup={area.get('cod_supervisor')} "
-                    f"ATUAL_TOTAL={area['venda_realizada_area']}"
-                )
+                    f"ATUAL_TOTAL={area['venda_realizada_area']}")
 
                 # =========
                 # AA (mês completo do ano anterior) — mantém sua regra
@@ -871,11 +861,9 @@ class IndicadoresView(APIView):
                 soma_aa_area = sum(_to_float(it.get("ValorLiquido")) for it in lista_aa_area)
                 area["venda_ano_anterior_area"] = round(soma_aa_area, 2)
 
-                print(
-                    f"[DEBUG][AA_POR_AREA_TOTAL] "
+                logger.debug(f"[DEBUG][AA_POR_AREA_TOTAL] "
                     f"area={area.get('cod_area_supervisao')} sup={area.get('cod_supervisor')} "
-                    f"AA_TOTAL={area['venda_ano_anterior_area']}"
-                )
+                    f"AA_TOTAL={area['venda_ano_anterior_area']}")
 
         if multiplos_meses and grupos_supervisao:
             # Média ponderada entre supervisões (peso = n vendedores)
@@ -906,9 +894,9 @@ class IndicadoresView(APIView):
         valor_prevenda = prevenda.get("pre_venda_valor", 0)
         valor_alocado = venda_realizada + valor_prevenda
 
-        print("[DEBUG][PREVENDA_RAW] keys=", list((prevenda or {}).keys()))
+        logger.debug("%s %s", "[DEBUG][PREVENDA_RAW] keys=", list((prevenda or {}).keys()))
         det = (prevenda.get("detalhado") or [])
-        print("[DEBUG][PREVENDA_RAW] detalhado_len=", len(det), "amostra=", det[:3])
+        logger.debug("%s %s %s %s", "[DEBUG][PREVENDA_RAW] detalhado_len=", len(det), "amostra=", det[:3])
         
 
        # ==========================
@@ -927,18 +915,18 @@ class IndicadoresView(APIView):
             logger.exception(f"[PREVENDA] erro ao montar pre_by_cod: {e}")
             pre_by_cod = {}
 
-        print("[DEBUG] Iniciando cálculo de pré-venda…")
-        print(f"[DEBUG] Pré-venda calculada para {len(pre_by_cod)} vendedores")
+        logger.debug("[DEBUG] Iniciando cálculo de pré-venda…")
+        logger.debug(f"[DEBUG] Pré-venda calculada para {len(pre_by_cod)} vendedores")
 
         # (opcional) log de alguns vendedores
         for k in list(pre_by_cod.keys())[:15]:
-            print(f"[DEBUG] PRE vendedor {k}: {pre_by_cod[k]}")
+            logger.debug(f"[DEBUG] PRE vendedor {k}: {pre_by_cod[k]}")
 
         # ==========================
         # PRÉ-VENDA: soma por área (escopo_rotas -> areas_supervisao)
         # ==========================
         if grupos_supervisao:
-            print("\n[DEBUG][PREVENDA_POR_AREA] iniciando...")
+            logger.debug("\n[DEBUG][PREVENDA_POR_AREA] iniciando...")
 
             pre_keys = set(pre_by_cod.keys())
 
@@ -948,37 +936,31 @@ class IndicadoresView(APIView):
 
                 intersec = sorted(list(set(area_vendedores) & pre_keys))
 
-                print(
-                    f"[DEBUG][PREVENDA_MATCH] area={area.get('cod_area_supervisao')} "
+                logger.debug(f"[DEBUG][PREVENDA_MATCH] area={area.get('cod_area_supervisao')} "
                     f"sup={area.get('cod_supervisor')} "
                     f"qtd_area_vend={len(area_vendedores)} qtd_pre_keys={len(pre_keys)} "
-                    f"intersec={len(intersec)} amostra_inter={intersec[:15]}"
-                )
+                    f"intersec={len(intersec)} amostra_inter={intersec[:15]}")
 
                 soma_pre_area = sum(pre_by_cod.get(v, 0.0) for v in area_vendedores)
                 area["pre_venda_area"] = round(soma_pre_area, 2)
 
-                print(
-                    f"[DEBUG][PREVENDA_POR_AREA_TOTAL] area={area.get('cod_area_supervisao')} "
-                    f"sup={area.get('cod_supervisor')} PRE_TOTAL={area['pre_venda_area']}"
-                )
+                logger.debug(f"[DEBUG][PREVENDA_POR_AREA_TOTAL] area={area.get('cod_area_supervisao')} "
+                    f"sup={area.get('cod_supervisor')} PRE_TOTAL={area['pre_venda_area']}")
 
 
 
         # ========= PRÉ-VENDA POR ÁREA (para gerente) =========
         if grupos_supervisao:
-            print("\n[DEBUG][PREVENDA_POR_AREA] iniciando...")
+            logger.debug("\n[DEBUG][PREVENDA_POR_AREA] iniciando...")
 
             for area in grupos_supervisao:
                 area_vendedores = [_to_int(v) for v in (area.get("vendedores") or [])]
                 area_vendedores = [v for v in area_vendedores if v is not None]
 
                 inter = set(area_vendedores) & set(pre_by_cod.keys())
-                print(
-                f"[DEBUG][PREVENDA_MATCH] area={area.get('cod_area_supervisao')} "
+                logger.debug(f"[DEBUG][PREVENDA_MATCH] area={area.get('cod_area_supervisao')} "
                 f"qtd_area_vend={len(area_vendedores)} qtd_pre_keys={len(pre_by_cod)} "
-                f"intersec={len(inter)} amostra_inter={list(inter)[:10]}"
-                )
+                f"intersec={len(inter)} amostra_inter={list(inter)[:10]}")
 
 
                 soma_pre_area = sum(_num(pre_by_cod.get(v, 0.0)) for v in area_vendedores)
@@ -988,11 +970,9 @@ class IndicadoresView(APIView):
                 if "venda_realizada_area" in area:
                     area["valor_alocado_area"] = round(_num(area.get("venda_realizada_area")) + soma_pre_area, 2)
 
-                print(
-                    f"[DEBUG][PREVENDA_POR_AREA_TOTAL] "
+                logger.debug(f"[DEBUG][PREVENDA_POR_AREA_TOTAL] "
                     f"area={area.get('cod_area_supervisao')} sup={area.get('cod_supervisor')} "
-                    f"PRE_TOTAL={area['pre_venda_area']}"
-                )
+                    f"PRE_TOTAL={area['pre_venda_area']}")
 
 
 
@@ -1467,7 +1447,7 @@ class IndicadoresView(APIView):
                     logger.exception("[mix_pdv] erro ao calcular mix supervisor")
         # ────────────────────────────────────────────────────────────────
 
-        print(f"""
+        logger.debug(f"""
                 [DEBUG][mix_pdv_grupo]
                 perfil        : {'gerente' if rotas_info.get('e_gerente') else 'supervisor' if getattr(ctx, 'is_supervisor', False) else 'vendedor'}
                 e_gerente     : {rotas_info.get('e_gerente')}

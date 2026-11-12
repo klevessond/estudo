@@ -101,13 +101,11 @@ class PDVPorVendedorAPIView(APIView):
                 "pdv": {"valor": round(valor, 2), "peso": round(peso, 3)},
                 "detalhado": detalhado,  # [{UnidGestora, Qtd, QtdEmbalagem, ValorProdutos, Peso}, ...]
             }
-            print(
-                f"[PDV-por-vendedor] vid={vid} | "
+            logger.debug(f"[PDV-por-vendedor] vid={vid} | "
                 f"ugs={ugs} | "
                 f"valor={round(valor, 2)} | "
                 f"peso={round(peso, 3)} | "
-                f"detalhado_len={len(detalhado)}"
-            )
+                f"detalhado_len={len(detalhado)}")
 
 
         return Response({"resultado": resultado})

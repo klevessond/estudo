@@ -215,7 +215,8 @@ LOGGING = {
     },
     "loggers": {
         # log para todos os módulos do seu app
-        "dashboard": {"handlers": ["console"], "level": "INFO"},
+        # DASHBOARD_LOG_LEVEL=DEBUG no ambiente reativa os logs de depuração
+        "dashboard": {"handlers": ["console"], "level": os.getenv("DASHBOARD_LOG_LEVEL", "INFO"), "propagate": False},
         # ou, genericamente:
         "": {"handlers": ["console"], "level": "INFO"},
     },

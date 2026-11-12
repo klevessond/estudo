@@ -36,10 +36,10 @@ class VendasPorVendedorView(APIView):
         data_inicio = request.GET.get("de")
         data_fim = request.GET.get("ate")
 
-        print("\n============================")
-        print("🔥 [VENDAS POR VENDEDOR] INÍCIO")
-        print(f"Período solicitado: de={data_inicio} até={data_fim}")
-        print("============================")
+        logger.debug("\n============================")
+        logger.debug("🔥 [VENDAS POR VENDEDOR] INÍCIO")
+        logger.debug(f"Período solicitado: de={data_inicio} até={data_fim}")
+        logger.debug("============================")
 
         if not data_inicio or not data_fim:
             return Response(
@@ -61,13 +61,11 @@ class VendasPorVendedorView(APIView):
         )
         ug_filial = int(ctx.cod_unid_gestora) if is_filial else None
 
-        print(f"[DEBUG] Usuário: {request.user}")
-        print(
-            f"[DEBUG] Papel detectado -> "
-            f"vendedor={is_vendedor}, supervisor={is_supervisor}, gerente={is_gerente}"
-        )
-        print(f"[DEBUG] Cod funcionário: {getattr(ctx, 'cod_funcionario', None)}")
-        print("----------------------------")
+        logger.debug(f"[DEBUG] Usuário: {request.user}")
+        logger.debug(f"[DEBUG] Papel detectado -> "
+            f"vendedor={is_vendedor}, supervisor={is_supervisor}, gerente={is_gerente}")
+        logger.debug(f"[DEBUG] Cod funcionário: {getattr(ctx, 'cod_funcionario', None)}")
+        logger.debug("----------------------------")
 
         rotas_info = buscar_rotas_usuario(ctx)
         vendedores = None
@@ -76,22 +74,22 @@ class VendasPorVendedorView(APIView):
         if is_gerente:
             # gerente: não aplica filtro → vê todos
             vendedores = None
-            print("[DEBUG] Usuário é GERENTE → NÃO será aplicado filtro de vendedores (acesso a todos).")
+            logger.debug("[DEBUG] Usuário é GERENTE → NÃO será aplicado filtro de vendedores (acesso a todos).")
 
         elif is_supervisor:
             # supervisor: usa o escopo já calculado em buscar_rotas_usuario
             vendedores = rotas_info.get("vendedores") if rotas_info else None
-            print(f"[DEBUG] Usuário é SUPERVISOR → vendedores do escopo: {vendedores}")
+            logger.debug(f"[DEBUG] Usuário é SUPERVISOR → vendedores do escopo: {vendedores}")
 
         elif is_vendedor:
             # vendedor: lista apenas ele + colegas da mesma supervisão
             vendedores = buscar_vendedores_mesma_supervisao(ctx.cod_funcionario)
-            print(f"[DEBUG] Usuário é VENDEDOR → vendedores da mesma supervisão: {vendedores}")
+            logger.debug(f"[DEBUG] Usuário é VENDEDOR → vendedores da mesma supervisão: {vendedores}")
 
         else:
             # outros perfis “acima” ou diferentes → também não filtra
             vendedores = None
-            print("[DEBUG] Usuário NÃO é vendedor/supervisor/gerente → sem filtro de vendedores (acesso a todos).")
+            logger.debug("[DEBUG] Usuário NÃO é vendedor/supervisor/gerente → sem filtro de vendedores (acesso a todos).")
 
         # helper robusto para int
         def to_int(v):
@@ -104,9 +102,9 @@ class VendasPorVendedorView(APIView):
         vendedores_set = set()
         if vendedores:
             vendedores_set = {to_int(v) for v in vendedores if to_int(v) is not None}
-            print(f"[DEBUG] vendedores_set gerado para filtro: {vendedores_set}")
+            logger.debug(f"[DEBUG] vendedores_set gerado para filtro: {vendedores_set}")
 
-        print("----------------------------")
+        logger.debug("----------------------------")
 
         # --- 2. BUSCA DADOS NO BANCO (Restaurado - AQUI estava o erro) ---
         if is_filial:
@@ -125,7 +123,7 @@ class VendasPorVendedorView(APIView):
         
         lista = resultado.get("vendas_por_vendedor", []) or []
 
-        print(f"[DEBUG] Total bruto retornado por buscar_vendas_por_vendedor: {len(lista)} vendedores")
+        logger.debug(f"[DEBUG] Total bruto retornado por buscar_vendas_por_vendedor: {len(lista)} vendedores")
 
         # === 3. APLICA FILTRO + PREENCHIMENTO (Gap Filling) ===
         if vendedores_set:
@@ -139,7 +137,7 @@ class VendasPorVendedorView(APIView):
             missing_ids = vendedores_set - existing_ids
             
             if missing_ids:
-                print(f"[DEBUG] Gap Filling Tabela: Adicionando {len(missing_ids)} vendedores sem venda: {missing_ids}")
+                logger.debug(f"[DEBUG] Gap Filling Tabela: Adicionando {len(missing_ids)} vendedores sem venda: {missing_ids}")
                 
                 # --- BUSCA ROBUSTA DE NOMES ---
                 name_map = {}
@@ -158,7 +156,7 @@ class VendasPorVendedorView(APIView):
                                 name_map[str(c).strip()] = n.strip()
                             except: pass
                 except Exception as e:
-                    print(f"[DEBUG] Erro ao carregar Todos_Vendedores: {e}")
+                    logger.debug(f"[DEBUG] Erro ao carregar Todos_Vendedores: {e}")
 
                 # Tentativa 2: listar_funcionarios (Dados de Cadastro - Fallback)
                 if len(name_map) < len(missing_ids):
@@ -174,7 +172,7 @@ class VendasPorVendedorView(APIView):
                                     name_map[str(c).strip()] = n.strip()
                                 except: pass
                     except Exception as e:
-                        print(f"[DEBUG] Erro ao carregar listar_funcionarios: {e}")
+                        logger.debug(f"[DEBUG] Erro ao carregar listar_funcionarios: {e}")
 
                 # Preenchimento
                 for mid in missing_ids:
@@ -197,15 +195,13 @@ class VendasPorVendedorView(APIView):
                         "Ano_anterior_Mix": 0
                     })
 
-            print(
-                f"[DEBUG] Filtro APLICADO → de {len(lista)} foram mantidos "
-                f"{len(lista_filtrada)} vendedores (com gap filling)."
-            )
+            logger.debug(f"[DEBUG] Filtro APLICADO → de {len(lista)} foram mantidos "
+                f"{len(lista_filtrada)} vendedores (com gap filling).")
             resultado["vendas_por_vendedor"] = lista_filtrada
             
         # Atualiza a lista final
         lista = resultado.get("vendas_por_vendedor", [])
-        print(f"[DEBUG] Total bruto retornado por buscar_vendas_por_vendedor: {len(lista)} vendedores")
+        logger.debug(f"[DEBUG] Total bruto retornado por buscar_vendas_por_vendedor: {len(lista)} vendedores")
 
         # === APLICA FILTRO (somente se houver lista de vendedores) ===
         if vendedores_set:
@@ -213,16 +209,14 @@ class VendasPorVendedorView(APIView):
                 item for item in lista
                 if to_int(item.get("codcampo")) in vendedores_set
             ]
-            print(
-                f"[DEBUG] Filtro APLICADO → de {len(lista)} foram mantidos "
-                f"{len(lista_filtrada)} vendedores."
-            )
+            logger.debug(f"[DEBUG] Filtro APLICADO → de {len(lista)} foram mantidos "
+                f"{len(lista_filtrada)} vendedores.")
             resultado["vendas_por_vendedor"] = lista_filtrada
         else:
-            print("[DEBUG] Nenhum filtro aplicado → mantendo TODOS os vendedores retornados.")
+            logger.debug("[DEBUG] Nenhum filtro aplicado → mantendo TODOS os vendedores retornados.")
 
-        print("----------------------------")
-        print("[DEBUG] Iniciando cálculo de pré-venda…")
+        logger.debug("----------------------------")
+        logger.debug("[DEBUG] Iniciando cálculo de pré-venda…")
 
         chave = f"prevenda_{data_inicio}_{data_fim}"
         prevenda = get_cache_mes("pre_venda", data_inicio, data_fim, [])
@@ -237,7 +231,7 @@ class VendasPorVendedorView(APIView):
             valor = float(item.get("Valor", 0) or 0)
             prevenda_por_vendedor[cod_vend] += valor
         
-        print("[DEBUG] Iniciando cálculo de cupons PDV...")
+        logger.debug("[DEBUG] Iniciando cálculo de cupons PDV...")
         lista_cupons = buscar_cupons_por_vendedor(data_inicio, data_fim)
         
         # Cria um dicionário para facilitar a busca por código do vendedor
@@ -272,7 +266,7 @@ class VendasPorVendedorView(APIView):
                         )
                         _mix_pdv_por_vendedor[vid] = _r.get("Mix", 0)
             except Exception as e:
-                print(f"[DEBUG] Erro ao calcular mix_pdv por vendedor: {e}")
+                logger.debug(f"[DEBUG] Erro ao calcular mix_pdv por vendedor: {e}")
         # ────────────────────────────────────────────────────────────────
         # ── Linha 2168 — ADICIONAR após o bloco de mix_pdv (────────────) ──
 
@@ -321,12 +315,12 @@ class VendasPorVendedorView(APIView):
                     if _cod:
                         _aa_mes_by_cod[_cod] = float(_it.get("ValorLiquido") or 0)
             except Exception as _e:
-                print(f"[DEBUG] Erro ao calcular AA para tabela: {_e}")
+                logger.debug(f"[DEBUG] Erro ao calcular AA para tabela: {_e}")
             # ────────────────────────────────────────────────────────────────
 
-        print(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
+        logger.debug(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
 
-        print(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
+        logger.debug(f"[DEBUG] Pré-venda calculada para {len(prevenda_por_vendedor)} vendedores")
 
         _rup_by_cod = {}
         try:
@@ -344,9 +338,9 @@ class VendasPorVendedorView(APIView):
                     _cod_v = to_int(_r.get("CodVendedor"))
                     if _cod_v is not None:
                         _rup_by_cod[_cod_v] = float(_r.get("TotalValor") or 0)
-            print(f"[DEBUG] Ruptura por vendedor carregada: {len(_rup_by_cod)} registros")
+            logger.debug(f"[DEBUG] Ruptura por vendedor carregada: {len(_rup_by_cod)} registros")
         except Exception as _e:
-            print(f"[DEBUG] Erro ao calcular ruptura por vendedor: {_e}")
+            logger.debug(f"[DEBUG] Erro ao calcular ruptura por vendedor: {_e}")
 
         
         
@@ -368,14 +362,12 @@ class VendasPorVendedorView(APIView):
             vendedor["Ruptura_TotalValor"]            = _rup_by_cod.get(codcampo_int, 0.0)
             # ── venda/dia: PDV conta sábado, rota só seg-sex ──
 
-            print(
-                f"[DEBUG] Vendedor {codcampo_int}: "
+            logger.debug(f"[DEBUG] Vendedor {codcampo_int}: "
                 f"ValorLiquido={valor_realizado}, prevenda={valor_prevenda}, alocado={vendedor['alocado']}"
-                f" Cupons(Qtd)={dados_cupom['quantidade']}, "
-            )
+                f" Cupons(Qtd)={dados_cupom['quantidade']}, ")
 
-        print("🔥 [VENDAS POR VENDEDOR] FIM")
-        print("============================\n")
+        logger.debug("🔥 [VENDAS POR VENDEDOR] FIM")
+        logger.debug("============================\n")
 
         return Response({"resultado": resultado})
 

@@ -63,10 +63,9 @@ class ObjetivoMensalView(APIView):
                 }
             )
 
-            print(f"[DEBUG][OBJETIVO_MENSAL][OUT] created={created}, "
+            logger.debug(f"[DEBUG][OBJETIVO_MENSAL][OUT] created={created}, "
                      f"financeiro={objetivo.objetivo_financeiro}, mix={objetivo.objetivo_mix}, "
-                     f"peso={objetivo.objetivo_peso}, pos={objetivo.objetivo_positivacao}"
-            )
+                     f"peso={objetivo.objetivo_peso}, pos={objetivo.objetivo_positivacao}")
             return Response(ObjetivoMensalSerializer(objetivo).data)
         return Response(serializer.errors, status=400)
 

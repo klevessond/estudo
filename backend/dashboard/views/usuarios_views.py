@@ -139,7 +139,7 @@ def me(request):
         # ------------------------------
         
     except Exception as e:
-        print(f"DEBUG: Erro ao obter contexto/rotas: {e}")
+        logger.debug(f"DEBUG: Erro ao obter contexto/rotas: {e}")
         ctx = None
         eh_gerente_por_rota = False
 
