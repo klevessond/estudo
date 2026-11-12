@@ -3,12 +3,6 @@
 from .main_views import (
     MinhasRotasSupervisorView,
     IndicadoresView,
-    MinhaUnidGestoraView,
-    PDVPorVendedorAPIView,
-    IndicadoresPDV,
-    VendasPorVendedorView,
-    ResumoSegmentoAreaVendaView,
-    VendaHojeView,
 )
 from .feriados_views import FeriadoView
 from .telegram_views import TelegramGerarCodigoView, TelegramStatusView, TelegramDesvincularView
@@ -19,4 +13,6 @@ from .ruptura_views import RupturaView, RupturaItensView
 from .pre_venda_views import PreVendaStatusView, PreVendaItensView
 from .mix_positivacao_views import ComissoesVendedorView, ClientesPositivacaoView, MixItensPorVendedorView, MixItensAreaView, ClientesPositivacaoAreaView
 from .objetivos_views import ObjetivoMensalView, ObjetivoMensalResumoView, get_objetivo_mensal_serializado, ObjetivoMensalVendedorView, get_objetivos_vendedores_por_mes, ObjetivoMixNivelView
+from .pdv_views import MinhaUnidGestoraView, PDVPorVendedorAPIView, IndicadoresPDV
+from .vendas_views import VendasPorVendedorView, ResumoSegmentoAreaVendaView, VendaHojeView
 from .pivot_views import PivotVendasView
