@@ -14,19 +14,35 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 import os
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8668292501:AAEu-vjytEL7F6ivDXdmMlhN5fBXjENPXWg")
-TELEGRAM_BOT_USERNAME = os.environ.get("TELEGRAM_BOT_USERNAME", "Ctrigo_ruptura_alerta_bot")
 
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Segredos vêm do backend/.env (não versionado). Veja backend/.env.example.
+load_dotenv(BASE_DIR / ".env", override=False)
+
+
+def _env(nome):
+    valor = os.environ.get(nome)
+    if not valor:
+        raise ImproperlyConfigured(
+            f"Variável {nome} ausente: defina-a em backend/.env (modelo em backend/.env.example)."
+        )
+    return valor
+
+
+TELEGRAM_BOT_TOKEN = _env("TELEGRAM_BOT_TOKEN")
+TELEGRAM_BOT_USERNAME = os.environ.get("TELEGRAM_BOT_USERNAME", "Ctrigo_ruptura_alerta_bot")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-sj#espo4*pqo%rfsgl@*zbtbu@m#u8rnk&*gsqd4^4r_!m&(qy'
+SECRET_KEY = _env("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
@@ -92,7 +108,7 @@ DATABASES = {
         'ENGINE': 'mssql',
         'NAME': 'ctrigo',
         'USER': 'industria',
-        'PASSWORD': 't3ch1nf0',
+        'PASSWORD': _env('MSSQL_INDUSTRIA_PASSWORD'),
         'HOST': 'DESKTOP-EMV533K',
         'PORT': '1433',
         'OPTIONS': {
