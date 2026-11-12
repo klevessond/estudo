@@ -2482,63 +2482,8 @@ def get_objetivos_vendedores_por_mes(data_inicio, data_fim=None):
  
  
 
-class RupturaView(APIView):
-    # permission_classes = [IsAuthenticated]  # habilite se quiser proteger
-    def get(self, request):
-        de = request.GET.get("de")
-        ate = request.GET.get("ate")
-        cod_vendedor = request.GET.get("cod_vendedor")  # opcional
-
-        if not de or not ate:
-            return Response({"error": "Parâmetros 'de' e 'ate' são obrigatórios."}, status=400)
-
-        try:
-            dados = buscar_ruptura(de, ate, cod_vendedor=cod_vendedor)
-            return Response({"ruptura": dados})
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
     
 
-class RupturaItensView(APIView):
-    """
-    Detalhamento da ruptura por ITEM (Material) — usado pelo modal "Detalhar"
-    do card Captado (IndicativosDeVenda) e pela aba Ruptura (CardsDetalhadosVendedor).
-
-    Recebe: de, ate, vendedores=178,190,224 (CSV), criterio=valor|qtd (default: valor)
-    """
-    def get(self, request):
-        de         = request.GET.get("de")
-        ate        = request.GET.get("ate")
-        vendedores = request.GET.get("vendedores", "")
-        criterio   = request.GET.get("criterio", "valor")
-        fabricante = request.GET.get("fabricante")  # opcional: CodFabricante
-
-        if not de or not ate or not vendedores:
-            return Response({"error": "Parâmetros obrigatórios: de, ate, vendedores"}, status=400)
-
-        try:
-            ids = [int(v.strip()) for v in vendedores.split(",") if v.strip()]
-        except ValueError:
-            return Response({"error": "vendedores inválidos"}, status=400)
-
-        if not ids:
-            return Response({"error": "Nenhum vendedor válido informado"}, status=400)
-
-        cod_fabricante = None
-        if fabricante not in (None, "", "todos", "Todos"):
-            try:
-                cod_fabricante = int(fabricante)
-            except ValueError:
-                return Response({"error": "fabricante inválido"}, status=400)
-
-        try:
-            resultado = buscar_ruptura_itens_detalhado(
-                de, ate, cod_vendedores=ids, criterio=criterio, cod_fabricante=cod_fabricante
-            )
-            return Response(resultado)
-        except Exception:
-            logger.exception("[RupturaItensView] erro")
-            return Response({"error": "Erro interno"}, status=500)
 
 
 class ResumoSegmentoAreaVendaView(APIView):
@@ -3087,76 +3032,6 @@ def _media_ponderada_gerente(
     return round(soma_num / soma_den, 1) if soma_den else 0.0
  
 
-class PreVendaStatusView(APIView):
-    """
-    Retorna pré-vendas pendentes (não processadas ou com problema) do período.
-
-    Regras de acesso:
-      - GERENTE     → sem filtro de vendedores (vê todos), pode filtrar por ?vendedores=1,2,3
-      - SUPERVISOR  → apenas seus vendedores (escopo do buscar_rotas_usuario)
-      - VENDEDOR    → apenas ele mesmo
-
-    Query params:
-      de          (obrigatório) YYYY-MM-DD
-      ate         (obrigatório) YYYY-MM-DD
-      vendedores  (opcional)    "178,190,224" — filtro extra para gerente
-    """
-
-    def get(self, request):
-        de  = request.GET.get("de")
-        ate = request.GET.get("ate")
-
-        if not de or not ate:
-            return Response({"error": "Parâmetros obrigatórios: de, ate"}, status=400)
-
-        try:
-            ctx           = get_role_context(request.user)
-            is_gerente    = getattr(ctx, "is_gerente",    False)
-            is_supervisor = getattr(ctx, "is_supervisor", False)
-            is_vendedor   = getattr(ctx, "is_vendedor",   False)
-
-            # Determina o filtro de vendedores conforme o papel
-            # lê o parâmetro uma vez, antes de qualquer if
-            param_vend = request.GET.get("vendedores", "")
-            solicitados = [int(v.strip()) for v in param_vend.split(",") if v.strip().isdigit()] if param_vend else []
-
-            if is_gerente:
-                cod_vendedores = solicitados if solicitados else None
-
-            elif is_supervisor:
-                rotas_info = buscar_rotas_usuario(ctx)
-                permitidos = set(rotas_info.get("vendedores") or []) if rotas_info else set()
-                if solicitados:
-                    cod_vendedores = [v for v in solicitados if v in permitidos] or list(permitidos)  # ← intersecta
-                else:
-                    cod_vendedores = list(permitidos) if permitidos else None
-
-            elif is_vendedor:
-                cod_vendedores = [int(cod_funcionario)]  # ← inalterado
-
-            else:
-                cod_vendedores = solicitados if solicitados else None
-
-            pendencias = buscar_status_pre_vendas(
-                data_inicio    = de,
-                data_fim       = ate,
-                cod_vendedores = cod_vendedores,
-            )
-
-            # Agrupa contadores por situação para facilitar o front
-            total_nao_processadas = sum(1 for p in pendencias if p["Situacao"] == "NAO_PROCESSADA")
-            total_com_problema    = sum(1 for p in pendencias if p["Situacao"] == "COM_PROBLEMA")
-
-            return Response({
-                "pendencias"          : pendencias,
-                "total"               : len(pendencias),
-                "total_nao_processadas": total_nao_processadas,
-                "total_com_problema"  : total_com_problema,
-            })
-
-        except Exception:
-            logger.exception("[PreVendaStatusView] erro")
-            return Response({"error": "Erro interno"}, status=500)
 
 class VendaHojeView(APIView):
     permission_classes = [IsAuthenticated]
@@ -3192,37 +3067,4 @@ class VendaHojeView(APIView):
 
 
 
-class PreVendaItensView(APIView):
-    """
-    Retorna os itens de uma pré-venda específica (CodPocket + CodDoc),
-    usado no botão "Pré-venda Detalhada" do modal de pendências.
-
-    Query params:
-      cod_pocket  (obrigatório)
-      cod_doc     (obrigatório)
-    """
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        cod_pocket = request.GET.get("cod_pocket")
-        cod_doc    = request.GET.get("cod_doc")
-
-        if not cod_pocket or not cod_doc:
-            return Response({"error": "Parâmetros obrigatórios: cod_pocket, cod_doc"}, status=400)
-
-        try:
-            itens = buscar_itens_pre_venda(
-                cod_pocket=int(cod_pocket),
-                cod_doc=int(cod_doc),
-            )
-            valor_total = sum(i["ValorTotal"] for i in itens)
-
-            return Response({
-                "itens": itens,
-                "total_itens": len(itens),
-                "valor_total": round(valor_total, 2),
-            })
-        except Exception:
-            logger.exception("[PreVendaItensView] erro")
-            return Response({"error": "Erro interno"}, status=500)
 
