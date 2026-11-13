@@ -109,6 +109,12 @@ class UsuarioDetailView(APIView):
     def put(self, request, user_id):
         try:
             usuario = User.objects.get(pk=user_id)
+            # Sem isso, um gerente trocaria a senha de um administrador e assumiria a conta.
+            if usuario.is_superuser and not request.user.is_superuser:
+                return Response(
+                    {"detail": "Somente um administrador pode alterar uma conta de administrador."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             serializer = CustomUserSerializer(usuario, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()

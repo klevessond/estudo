@@ -216,3 +216,31 @@ class FeriadosAceitaSupervisor(SimpleTestCase):
                 "dashboard.permissions.buscar_rotas_usuario", return_value={"e_gerente": e_gerente}
             ):
                 self.assertEqual(FeriadoView().tem_permissao(_req(user)), ok)
+
+
+class GerenteNaoEditaContaDeAdmin(SimpleTestCase):
+    """Gerente pode editar usuários, mas não pode assumir uma conta de administrador."""
+
+    def _put(self, perfil, alvo_e_admin):
+        from django.core.exceptions import ObjectDoesNotExist
+        user, e_gerente = PERFIS[perfil]
+        client = APIClient()
+        client.force_authenticate(user=user)
+        alvo = SimpleNamespace(is_superuser=alvo_e_admin, pk=2)
+        with patch("dashboard.permissions.buscar_rotas_usuario", return_value={"e_gerente": e_gerente}), \
+             patch("dashboard.views.usuarios_views.User") as modelo, \
+             patch("dashboard.views.usuarios_views.CustomUserSerializer") as serializador:
+            modelo.objects.get.return_value = alvo
+            modelo.DoesNotExist = ObjectDoesNotExist
+            serializador.return_value.is_valid.return_value = True
+            serializador.return_value.data = {"id": 2}
+            return client.put("/api/usuario/2/", {"password": "nova"}, format="json").status_code
+
+    def test_gerente_nao_altera_admin(self):
+        self.assertEqual(self._put("gerente", alvo_e_admin=True), 403)
+
+    def test_gerente_altera_usuario_comum(self):
+        self.assertEqual(self._put("gerente", alvo_e_admin=False), 200)
+
+    def test_admin_altera_admin(self):
+        self.assertEqual(self._put("admin", alvo_e_admin=True), 200)
