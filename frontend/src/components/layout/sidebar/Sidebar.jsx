@@ -7,16 +7,16 @@ const Sidebar = () => {
     const [isCollapsed, setIsCollapsed] = useState(false);
     const { user, roles } = useAuth();
 
-    const podeGerenciarFeriados =
-        user?.is_superuser ||
-        user?.is_gerente === true ||
-        user?.gerente === true;
+    // Mesmas regras do backend (backend/dashboard/permissions.py).
+    // O backend é quem garante; aqui só escondemos o que o usuário não pode usar.
+    const ehAdmin = user?.is_superuser === true;
+    const ehGerente = user?.is_gerente === true || user?.gerente === true;
+    const ehSupervisor = user?.supervisor === true;
 
-    const podeGerenciarCampanhas =
-        user?.is_superuser ||
-        user?.is_gerente === true ||
-        user?.gerente === true ||
-        user?.supervisor === true;
+    const podeGerenciarUsuarios = ehAdmin || ehGerente;
+    const podeGerenciarObjetivos = ehAdmin || ehGerente || ehSupervisor;
+    const podeGerenciarFeriados = podeGerenciarObjetivos;
+    const podeGerenciarCampanhas = podeGerenciarObjetivos;
 
     return (
         <>
@@ -42,19 +42,23 @@ const Sidebar = () => {
                         </Link>
                     </li>
 
-                    <li>
-                        <Link to="/cadastros" className="sidebar-link">
-                            <span className="icon">📊</span>
-                            <span className="label">Cadastros</span>
-                        </Link>
-                    </li>
+                    {podeGerenciarObjetivos && (
+                        <li>
+                            <Link to="/cadastros" className="sidebar-link">
+                                <span className="icon">📊</span>
+                                <span className="label">Cadastros</span>
+                            </Link>
+                        </li>
+                    )}
 
-                    <li>
-                        <Link to="/cadastro_user" className="sidebar-link">
-                            <span className="icon">👤</span>
-                            <span className="label">Usuários</span>
-                        </Link>
-                    </li>
+                    {podeGerenciarUsuarios && (
+                        <li>
+                            <Link to="/cadastro_user" className="sidebar-link">
+                                <span className="icon">👤</span>
+                                <span className="label">Usuários</span>
+                            </Link>
+                        </li>
+                    )}
 
                     {podeGerenciarFeriados && (
                         <li>
