@@ -373,7 +373,6 @@ class VendasPorVendedorView(APIView):
 
 
 class ResumoSegmentoAreaVendaView(APIView):
-    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
         de = request.GET.get("de")

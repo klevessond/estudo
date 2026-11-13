@@ -214,6 +214,12 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    # Toda rota exige login por padrão. Só /api/token/ e /api/token/refresh/
+    # ficam abertas (o simplejwt as declara sem permissão). Uma view que
+    # precise ser pública deve dizer isso explicitamente com AllowAny.
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
 }
 
 SIMPLE_JWT = {

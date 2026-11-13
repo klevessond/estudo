@@ -112,6 +112,8 @@ class UsuarioDetailView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def funcionario_detail(request, cod_funcionario):
     if request.method == 'GET':
         funcionario = get_funcionario_por_codigo(cod_funcionario)

@@ -6,7 +6,6 @@ from .indicadores_views import (
 from .feriados_views import FeriadoView
 from .telegram_views import TelegramGerarCodigoView, TelegramStatusView, TelegramDesvincularView
 from .cache_admin_views import CacheMesAdminView
-from .legacy_views import get_dados_sql, get_dados_sql_api
 from .usuarios_views import RegisterView, FuncionariosListView, UsuarioDetailView, funcionario_detail, me, TodosVendedoresView
 from .ruptura_views import RupturaView, RupturaItensView
 from .pre_venda_views import PreVendaStatusView, PreVendaItensView

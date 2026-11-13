@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class RupturaView(APIView):
-    # permission_classes = [IsAuthenticated]  # habilite se quiser proteger
     def get(self, request):
         de = request.GET.get("de")
         ate = request.GET.get("ate")

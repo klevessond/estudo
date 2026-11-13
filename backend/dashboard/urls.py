@@ -5,8 +5,6 @@ from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionar
 from .views import PreVendaItensView,TelegramGerarCodigoView, TelegramStatusView, TelegramDesvincularView,VendaHojeView, PreVendaStatusView,CacheMesAdminView,ClientesPositivacaoAreaView,MixItensAreaView,ClientesPositivacaoView,MixItensPorVendedorView,ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
 from .views.pivot_views import PivotVendasView
 urlpatterns = [
-    path('dados-sql/', views.get_dados_sql, name='get_dados_sql'),
-    path('api/clientes/', views.get_dados_sql_api, name='get_dados_sql_api'),
     path('Indicadores/', IndicadoresView.as_view(), name='Indicadores'),
     path('objetivos-mensais/', ObjetivoMensalView.as_view(), name='objetivo-mensal'),
     path('objetivo-mensal-resumo/', ObjetivoMensalResumoView.as_view(), name='objetivo-mensal-resumo'),

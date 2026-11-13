@@ -118,7 +118,6 @@ def _calc_liquido_por_vendedor_por_rotas(ret_vendido: dict, rota_to_vendedor: di
 
 class IndicadoresView(APIView):
     
-    #permission_classes = [IsAuthenticated]
     def get(self, request):
         data_inicio = request.GET.get('de')
         data_fim = request.GET.get('ate')

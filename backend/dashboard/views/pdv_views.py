@@ -59,7 +59,6 @@ class PDVPorVendedorAPIView(APIView):
       - soma o PDV nessas UGs no período (pdv_service)
     Retorna um dicionário por vendedor com ugs, pdv.valor, pdv.peso e o detalhado por UG.
     """
-    #permission_classes = [IsAuthenticated]
 
     def get(self, request):
         de = request.query_params.get("de")
@@ -112,7 +111,6 @@ class PDVPorVendedorAPIView(APIView):
 
 
 class IndicadoresPDV(APIView):
-    #permission_classes = [IsAuthenticated]
 
     def get(self, request):
         data_inicio = request.GET.get("de")
