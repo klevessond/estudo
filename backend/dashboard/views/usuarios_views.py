@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from dashboard.permissions import IsAdminOrGerente
 from dashboard.roles import get_role_context
 from dashboard.serializers import CustomUserSerializer, MeSerializer, UserRegisterSerializer
 from dashboard.services.indicadores.info_service import Todos_Vendedores
@@ -23,7 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 class RegisterView(APIView):
-    #permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOrGerente]
+
     def post(self, request):
         serializer = UserRegisterSerializer(data=request.data)
         if serializer.is_valid():
@@ -36,6 +38,8 @@ class RegisterView(APIView):
 
 
 class FuncionariosListView(APIView):
+    permission_classes = [IsAdminOrGerente]
+
     def get(self, request):
         from django.db.models import Q  # Importação necessária para filtros OR
         
@@ -92,6 +96,8 @@ class FuncionariosListView(APIView):
 
 
 class UsuarioDetailView(APIView):
+    permission_classes = [IsAdminOrGerente]
+
     def get(self, request, user_id):
         try:
             usuario = User.objects.get(pk=user_id)
@@ -113,7 +119,7 @@ class UsuarioDetailView(APIView):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminOrGerente])
 def funcionario_detail(request, cod_funcionario):
     if request.method == 'GET':
         funcionario = get_funcionario_por_codigo(cod_funcionario)

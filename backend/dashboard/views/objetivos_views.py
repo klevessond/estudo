@@ -14,6 +14,7 @@ from django.db.models import Sum
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from dashboard.permissions import EscritaAdminGerenteSupervisor
 from dashboard.models import ObjetivoMensal, ObjetivoMensalVendedor, ObjetivoMixNivel
 from dashboard.serializers import ObjetivoMensalSerializer, ObjetivoMixNivelSerializer
 
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 
 class ObjetivoMensalView(APIView):
+    permission_classes = [EscritaAdminGerenteSupervisor]
+
 
     def get(self, request):
         mes = request.query_params.get('mes')
@@ -136,6 +139,8 @@ def get_objetivo_mensal_serializado(user, data_inicio, data_fim=None, cod_vended
 
 
 class ObjetivoMensalVendedorView(APIView):
+    permission_classes = [EscritaAdminGerenteSupervisor]
+
 
     def get(self, request):
         # Espera: /objetivos-vendedores/?mes_referencia=YYYY-MM-01
@@ -270,6 +275,8 @@ def get_objetivos_vendedores_por_mes(data_inicio, data_fim=None):
 
 
 class ObjetivoMixNivelView(APIView):
+    permission_classes = [EscritaAdminGerenteSupervisor]
+
 
     def get(self, request):
         """

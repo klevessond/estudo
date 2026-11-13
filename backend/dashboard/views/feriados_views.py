@@ -5,36 +5,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from dashboard.models import Feriado
-from dashboard.roles import get_role_context
+from dashboard.permissions import IsAdminGerenteOrSupervisor
 from dashboard.serializers import FeriadoSerializer
-from dashboard.services.indicadores.rotas_simples import buscar_rotas_usuario
 
 
 class FeriadoView(APIView):
     permission_classes = [IsAuthenticated]
 
     def tem_permissao(self, request):
-        # 1. Admin do Django sempre pode
-        if request.user.is_superuser:
-            return True
-        
-        # 2. Obtém contexto básico
-        ctx = get_role_context(request.user)
-        
-        # 3. Verifica se é gerente pelo cadastro estático
-        if getattr(ctx, "is_gerente", False):
-            return True
-            
-        # 4. Verifica se é gerente pela Regra de Negócio (Rotas)
-        # (Esta é a parte que faltava!)
-        try:
-            rotas_info = buscar_rotas_usuario(ctx)
-            if rotas_info.get("e_gerente"):
-                return True
-        except Exception:
-            pass
-            
-        return False
+        # admin, gerente ou supervisor (regra única em dashboard/permissions.py)
+        return IsAdminGerenteOrSupervisor().has_permission(request, self)
 
     def get(self, request):
         if not self.tem_permissao(request):

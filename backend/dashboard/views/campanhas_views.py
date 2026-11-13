@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 from dashboard.models import CampanhaVenda, CampanhaVendaObjetivo
+from dashboard.permissions import EscritaAdminGerenteSupervisor
 from dashboard.roles import get_role_context
 from dashboard.serializers import CampanhaVendaSerializer, CampanhaVendaObjetivoSerializer
 from dashboard.services.indicadores.campanhas_service import (
@@ -122,7 +123,7 @@ class CampanhaVendaViewSet(viewsets.ModelViewSet):
       POST  /api/campanhas/       cria (nome, tipo, cod_fabricante, datas, itens[])
       PATCH /api/campanhas/<id>/  atualiza (se enviar "itens", substitui o escopo)
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EscritaAdminGerenteSupervisor]
     queryset = CampanhaVenda.objects.all().prefetch_related('itens', 'objetivos')
     serializer_class = CampanhaVendaSerializer
 
@@ -144,7 +145,7 @@ class CampanhaVendaObjetivoViewSet(viewsets.ModelViewSet):
       POST   /api/campanhas-objetivos/   -> UPSERT por (campanha, cod_vendedor)
       DELETE /api/campanhas-objetivos/<id>/
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EscritaAdminGerenteSupervisor]
     queryset = CampanhaVendaObjetivo.objects.all()
     serializer_class = CampanhaVendaObjetivoSerializer
 
