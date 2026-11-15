@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/auth.jsx";
-import api from "../../api"; // <- usa o cliente axios centralizado (sem hardcode de host)
+import { postLogin } from "../../services/authApi";
 import "./Login.css";
 
 
@@ -20,11 +20,7 @@ const Login = () => {
     setSubmitting(true);
     try {
       // Chame sempre /api/token/ (Nginx faz proxy para o backend)
-      const { data } = await api.post(
-        "/token/",
-        { username, password },
-        { withCredentials: true } // ok mesmo usando JWT; ignora se não houver cookie
-      );
+      const { data } = await postLogin({ username, password });
 
       // Salva o JWT via contexto (o interceptor pegará localStorage.token)
       login(data.access);

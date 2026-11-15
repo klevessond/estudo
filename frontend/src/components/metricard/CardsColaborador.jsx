@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import './CardsColaborador.css';
 import ResumoSegmentoPies from '../Piechart/ResumoSegmentoPies';
 import ReactSpeedometer from 'react-d3-speedometer';
-import api from '../../api';
+import { getClientesPositivacao, getPreVendaStatus, getPreVendaItens, getRupturaItens, getComissoesVendedor, getMixItens } from '../../services/indicadoresApi';
 import { useAuth } from '../../contexts/auth';
 import CardDiarioNecessarioVendedor from './CardDiarioNecessarioVendedor';
 // jsPDF está disponível via CDN no bundle ou pode ser importado assim:
@@ -62,7 +62,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   if (!modalPosAberto || !codFuncionario || !periodoSelecionado) return;
 
   setLoadingPos(true);
-  api.get('/indicadores/clientes-positivacao/', {
+  getClientesPositivacao({
     params: {
       de:           periodoSelecionado.de,
       ate:          periodoSelecionado.ate,
@@ -87,7 +87,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
     if (!modalPreVendaAberto || !codFuncionario || !periodoSelecionado) return;
     setLoadingPreVenda(true);
     setPendenciasPreVenda([]);
-    api.get('/indicadores/pre-venda-status/', {
+    getPreVendaStatus({
       params: {
         de:         periodoSelecionado.de,
         ate:        periodoSelecionado.ate,
@@ -104,7 +104,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
     if (!modalItensPreVendaAberto || !preVendaSelecionada) return;
     setLoadingItensPreVenda(true);
     setItensPreVenda([]);
-    api.get('/indicadores/pre-venda-itens/', {
+    getPreVendaItens({
       params: {
         cod_pocket: preVendaSelecionada.CodPocket,
         cod_doc:    preVendaSelecionada.CodPocketDocumento,
@@ -122,7 +122,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
     setFiltroFabricanteRuptura('Todos'); // reseta o filtro a cada abertura
 
     setLoadingRuptura(true);
-    api.get('/indicadores/ruptura-itens/', {
+    getRupturaItens({
       params: {
         de:         periodoSelecionado.de,
         ate:        periodoSelecionado.ate,
@@ -188,7 +188,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
       : codFuncionario;
 
     setLoadingComissoes(true);
-    api.get('/comissoes-vendedor/', {
+    getComissoesVendedor({
       params: {
         cod_vendedor: codParaBuscar,
         de: periodoSelecionado?.de,
@@ -209,7 +209,7 @@ useEffect(() => {
   if (!modalMixAberto || !codFuncionario || !periodoSelecionado) return;
 
   setLoadingMix(true);
-  api.get('/indicadores/mix-itens/', {
+  getMixItens({
     params: {
       de:           periodoSelecionado.de,
       ate:          periodoSelecionado.ate,

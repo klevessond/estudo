@@ -7,7 +7,7 @@
 // admin = toda a equipe, supervisor/gerente = sua supervisão, vendedor = só ele.
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import api from '../../api';
+import { getPainelCampanhas } from '../../services/campanhasApi';
 import { fmtNum, fmtNum1, fmtMoeda, fmtMoedaCurta, fmtPct, fmtDataBR as fmtData } from '../../utils/formatters';
 import './CardsCampanhas.css';
 
@@ -290,7 +290,7 @@ const CardsCampanhas = () => {
   const [abertoId, setAbertoId] = useState(null);
 
   const carregar = useCallback(() => {
-    api.get('/campanhas/painel/')
+    getPainelCampanhas()
       .then(({ data }) => { setDados(data); setErro(false); })
       .catch(() => setErro(true));
   }, []);

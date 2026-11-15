@@ -3,7 +3,7 @@ import './register.css';
 import { useNavigate } from 'react-router-dom';
 import React, { useEffect, useState, useMemo } from 'react';
 import CacheAdminSection from './CacheAdminSection';
-import api from '../../../api';
+import { getTodosVendedores, getObjetivosVendedores, salvarObjetivosVendedores, getObjetivosMixNivel, salvarObjetivoMixNivel } from '../../../services/cadastrosApi';
 
 const toYYYYMM = (dateObj) => {
   const y = dateObj.getFullYear();
@@ -52,7 +52,7 @@ const RegisterObjetivosVendedores = () => {
 
     (async () => {
       try {
-        const { data: venResp } = await api.get('/todos-vendedores/?ativos=true');
+        const { data: venResp } = await getTodosVendedores({ params: { ativos: true } });
         setVendedores(venResp.detalhamento || []);
       } catch (err) {
         console.error('Erro ao buscar vendedores:', err);
@@ -86,7 +86,7 @@ const RegisterObjetivosVendedores = () => {
       try {
         const dataRef = `${mesReferencia}-01`;
 
-        const { data: objResp } = await api.get('/objetivos-vendedores/', {
+        const { data: objResp } = await getObjetivosVendedores({
           params: { mes_referencia: dataRef },
         });
         
@@ -108,7 +108,7 @@ const RegisterObjetivosVendedores = () => {
         setObjetivosPeso(objPeso);
         setObjetivosPos(objPos);
 
-        const { data: mixNivelResp } = await api.get('/objetivos-mix-nivel/', {
+        const { data: mixNivelResp } = await getObjetivosMixNivel({
           params: { mes: dataRef },
         });
 
@@ -158,7 +158,7 @@ const RegisterObjetivosVendedores = () => {
 
     setLoading(true);
     try {
-      const { data: objResp } = await api.get('/objetivos-vendedores/', {
+      const { data: objResp } = await getObjetivosVendedores({
         params: { mes_referencia: `${mesBaseCalculo}-01` },
       });
 
@@ -208,7 +208,7 @@ const RegisterObjetivosVendedores = () => {
           objetivo_positivacao: parseInt(objetivosPos[v.CodFuncionario]) || 0,
         })),
       };
-      await api.post('/objetivos-vendedores/', payloadInd);
+      await salvarObjetivosVendedores(payloadInd);
 
       const metasMix = [];
       if (mixEmpresa) metasMix.push({ nivel: 'EMPRESA', codigo_alvo: 0, objetivo_mix: parseInt(mixEmpresa) });
@@ -218,7 +218,7 @@ const RegisterObjetivosVendedores = () => {
       });
 
       if (metasMix.length > 0) {
-        await api.post('/objetivos-mix-nivel/', {
+        await salvarObjetivoMixNivel({
           mes_referencia: dataFormatada,
           metas: metasMix
         });

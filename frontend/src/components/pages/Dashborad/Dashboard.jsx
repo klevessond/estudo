@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './Dashboard.css';
-import api from '../../../api';
+import { getMinhaUg, getPdvPorVendedor } from '../../../services/indicadoresApi';
 
 import { useAuth } from '../../../contexts/auth';
 
@@ -80,7 +80,7 @@ const Dashboard = () => {
     const checarUG = async () => {
       try {
         const t0 = performance.now();
-        const resp = await api.get('/indicadores/minha-ug/');
+        const resp = await getMinhaUg();
         const data = resp.data;
         const t1 = performance.now();
 
@@ -155,7 +155,7 @@ const Dashboard = () => {
       try {
         console.debug('[Dashboard] chamando /indicadores/pdv-por-vendedor', { de, ate, vendParam });
 
-        const { data } = await api.get('/indicadores/pdv-por-vendedor/', {
+        const { data } = await getPdvPorVendedor({
           params: { de, ate, vendedores: vendParam },
           signal: ctrl.signal, // funciona no axios >=1.4 usando fetch adapter; se não, ignora
         });

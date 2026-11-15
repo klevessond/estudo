@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './RegisterUser.css';
 import EditarUsuario from './EditarUsuario';
-import api from '../../../api'; // <- use a instância central do axios
+import { getFuncionarios, registrarUsuario } from '../../../services/cadastrosApi';
 
 const RegisterUser = () => {
   const [formData, setFormData] = useState({
@@ -48,7 +48,7 @@ const RegisterUser = () => {
     const run = async () => {
       if (searchTerm.length <= 2) return;
       try {
-        const { data } = await api.get('/funcionarios/', {
+        const { data } = await getFuncionarios({
           params: { search: searchTerm }
         });
         if (!cancel) setFuncionarios(data.funcionarios_sql || []);
@@ -65,7 +65,7 @@ const RegisterUser = () => {
   // Listagem de usuários (AGORA usando api, sem localhost)
   const fetchUsuariosDjango = useCallback(async () => {
     try {
-      const { data } = await api.get('/funcionarios/');
+      const { data } = await getFuncionarios();
       setUsuariosDjango(data.usuarios_django || []);
     } catch (err) {
       console.error('Erro ao carregar usuários Django:', err);
@@ -128,7 +128,7 @@ const RegisterUser = () => {
     setIsSubmitting(true);
     try {
       const dataToSend = { ...formData, phone: formData.phone.replace(/\D/g, '') };
-      const { status, data } = await api.post('/register/', dataToSend);
+      const { status, data } = await registrarUsuario(dataToSend);
       if (status >= 200 && status < 300) {
         alert('Usuário cadastrado com sucesso!');
         setFormData({

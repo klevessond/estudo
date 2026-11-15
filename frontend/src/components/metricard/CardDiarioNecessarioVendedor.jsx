@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import api from '../../api';
+import { getVendaHoje } from '../../services/indicadoresApi';
 import { contarDiasUteisLocal } from '../../utils/diasUteis';
 import './CardsColaborador.css';
 
@@ -18,7 +18,7 @@ const CardDiarioNecessarioVendedor = ({
     if (!codFuncionario) return;
     let cancelado = false;
     setLoadingHoje(true);
-    api.get('/indicadores/venda-hoje/')
+    getVendaHoje()
       .then(({ data }) => {
         if (cancelado) return;
         const entry = data?.por_vendedor?.[String(codFuncionario)];

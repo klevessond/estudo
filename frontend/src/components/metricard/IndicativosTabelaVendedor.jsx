@@ -8,7 +8,7 @@ import {
   flexRender,
 } from '@tanstack/react-table';
 
-import api from '../../api';
+import { getVendasPorVendedor } from '../../services/indicadoresApi';
 import './IndicativosTabelaVendedor.css';
 
 const DEV = process.env.NODE_ENV !== 'production';
@@ -115,8 +115,7 @@ useEffect(() => {
       if (!periodoSelecionado?.de || !periodoSelecionado?.ate) return;
       setIsLoading(true);
       try {
-        const url = `/vendas-por-vendedor/?de=${periodoSelecionado.de}&ate=${periodoSelecionado.ate}`;
-        const { data: json } = await api.get(url);
+        const { data: json } = await getVendasPorVendedor({ de: periodoSelecionado.de, ate: periodoSelecionado.ate });
         dlog('valor recebido de vendas-por-vendedor:', json);
 
         const rows = Array.isArray(json?.resultado?.vendas_por_vendedor)

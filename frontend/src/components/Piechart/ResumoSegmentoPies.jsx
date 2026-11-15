@@ -1,7 +1,7 @@
 // src/components/Piechart/ResumoSegmentoPies.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import Plot from "react-plotly.js";
-import api from "../../api";
+import { getResumoSegmentoAreaVenda } from '../../services/indicadoresApi';
 import "../Piechart/PieChart.css"; // usa o seu CSS
 
 // Paleta base (personalize à vontade)
@@ -32,7 +32,7 @@ export default function ResumoSegmentoPies({ periodoSelecionado, codFuncionario 
         setLoading(true);
         const { de, ate } = periodoSelecionado;
 
-        const response = await api.get("/resumo-segmento-area-venda/", {
+        const response = await getResumoSegmentoAreaVenda({
           params: { de, ate, cod_funcionarios: codFuncionario },
         });
 

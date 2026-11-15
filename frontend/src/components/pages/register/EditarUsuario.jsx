@@ -1,7 +1,7 @@
 // EditarUsuario.jsx
 import React, { useEffect, useState } from 'react';
 import './EditarUsuario.css';
-import api from '../../../api'; // <- usa a instância central do axios
+import { getFuncionarios, getFuncionario, getUsuario, atualizarUsuario } from '../../../services/cadastrosApi';
 
 function EditarUsuario({ id, onSaved, onCancel }) {
   const [usuario, setUsuario] = useState({
@@ -35,7 +35,7 @@ function EditarUsuario({ id, onSaved, onCancel }) {
     const run = async () => {
       if (searchTerm.length <= 2) return;
       try {
-        const { data } = await api.get('/funcionarios/', {
+        const { data } = await getFuncionarios({
           params: { search: searchTerm }
         });
         if (!cancel) setFuncionarios(data.funcionarios_sql || []);
@@ -53,7 +53,7 @@ function EditarUsuario({ id, onSaved, onCancel }) {
     (async () => {
       try {
         // carrega usuário
-        const { data } = await api.get(`/usuario/${id}/`);
+        const { data } = await getUsuario(id);
         const cod_funcionario = data.profile?.cod_funcionario?.toString() || '';
         setUsuario(prev => ({
           ...prev,
@@ -74,14 +74,14 @@ function EditarUsuario({ id, onSaved, onCancel }) {
         }));
 
         // lista base de funcionários
-        const listaResp = await api.get('/funcionarios/');
+        const listaResp = await getFuncionarios();
         let lista = listaResp.data?.funcionarios_sql || [];
         const jaTem = lista.some(f => f.CodFuncionario?.toString() === cod_funcionario);
 
         if (cod_funcionario && !jaTem) {
           // busca individual se não veio na lista
           try {
-            const { data: func } = await api.get(`/funcionarios/${cod_funcionario}/`);
+            const { data: func } = await getFuncionario(cod_funcionario);
             if (func && func.CodFuncionario) lista.push(func);
             setFuncionarios(lista);
             const nome = func?.Funcionario || '';
@@ -133,7 +133,7 @@ function EditarUsuario({ id, onSaved, onCancel }) {
     }
 
     try {
-      const res = await api.put(`/usuario/${id}/`, payload);
+      const res = await atualizarUsuario(id, payload);
       if (res.status >= 200 && res.status < 300) {
         alert("Usuário atualizado com sucesso!");
         onSaved?.();

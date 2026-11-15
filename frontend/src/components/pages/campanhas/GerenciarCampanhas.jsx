@@ -1,6 +1,7 @@
 // frontend/src/components/pages/campanhas/GerenciarCampanhas.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import api from '../../../api';
+import { buscarCatalogo, listarCampanhas, criarCampanha, atualizarCampanha, getProgressoCampanha, salvarObjetivoCampanha, excluirObjetivoCampanha } from '../../../services/campanhasApi';
+import { getTodosVendedores } from '../../../services/cadastrosApi';
 import { fmtNum, fmtMoeda, fmtDataBR } from '../../../utils/formatters';
 import './GerenciarCampanhas.css';
 
@@ -49,7 +50,7 @@ const BuscaAutocomplete = ({ endpoint, params, placeholder, minChars = 2, mapIte
     let cancelado = false;
     setLoading(true);
     const timer = setTimeout(() => {
-      api.get(endpoint, { params: { ...(params || {}), q: termo.trim() } })
+      buscarCatalogo(endpoint, { params: { ...(params || {}), q: termo.trim() } })
         .then(({ data }) => { if (!cancelado) setResultados((data.resultados || []).map(mapItem)); })
         .catch(() => { if (!cancelado) setResultados([]); })
         .finally(() => { if (!cancelado) setLoading(false); });
@@ -171,7 +172,7 @@ const FormNovaCampanha = ({ onCriada, onCancelar }) => {
     setSalvando(true);
     setErro('');
     try {
-      const { data } = await api.post('/campanhas/', {
+      const { data } = await criarCampanha({
         nome: form.nome.trim(),
         tipo: form.tipo,
         cod_fabricante: fabricante.cod,
@@ -300,7 +301,7 @@ const DetalheCampanha = ({ campanha, vendedores, onFechar, onAtualizada }) => {
   const buscarProgresso = useCallback(() => {
     setLoading(true);
     setErroCarga('');
-    return api.get(`/campanhas/${campanha.id}/progresso/`)
+    return getProgressoCampanha(campanha.id)
       .then(({ data }) => {
         setProgresso(data);
         if (data?.campanha) setCamp(data.campanha);
@@ -345,7 +346,7 @@ const DetalheCampanha = ({ campanha, vendedores, onFechar, onAtualizada }) => {
 
     setSalvando(true);
     try {
-      await api.post('/campanhas-objetivos/', {
+      await salvarObjetivoCampanha({
         campanha: camp.id,
         cod_vendedor: Number(vendSel),
         nome_vendedor: nome,
@@ -368,7 +369,7 @@ const DetalheCampanha = ({ campanha, vendedores, onFechar, onAtualizada }) => {
   const removerObjetivo = async (id) => {
     if (!window.confirm('Remover o objetivo deste vendedor?')) return;
     try {
-      await api.delete(`/campanhas-objetivos/${id}/`);
+      await excluirObjetivoCampanha(id);
       await buscarProgresso();
       if (onAtualizada) onAtualizada();
     } catch {
@@ -379,7 +380,7 @@ const DetalheCampanha = ({ campanha, vendedores, onFechar, onAtualizada }) => {
   const salvarItens = async (novaLista) => {
     setErroEscopo('');
     try {
-      await api.patch(`/campanhas/${camp.id}/`, {
+      await atualizarCampanha(camp.id, {
         itens: novaLista.map((i) => ({ cod_referencia: i.cod_referencia, nome_referencia: i.nome_referencia })),
       });
       await buscarProgresso();
@@ -503,7 +504,7 @@ const GerenciarCampanhas = () => {
 
   const carregarCampanhas = useCallback((silencioso = false) => {
     if (!silencioso) setLoading(true);
-    api.get('/campanhas/')
+    listarCampanhas()
       .then(({ data }) => setCampanhas(Array.isArray(data) ? data : data.results || []))
       .catch(() => setCampanhas([]))
       .finally(() => setLoading(false));
@@ -512,7 +513,7 @@ const GerenciarCampanhas = () => {
   useEffect(() => { carregarCampanhas(); }, [carregarCampanhas]);
 
   useEffect(() => {
-    api.get('/todos-vendedores/', { params: { ativos: true } })
+    getTodosVendedores({ params: { ativos: true } })
       .then(({ data }) => {
         // Todos_Vendedores() no backend retorna { detalhamento: [...] }
         const lista = Array.isArray(data) ? data : (data.detalhamento || data.vendedores || data.funcionarios_sql || []);

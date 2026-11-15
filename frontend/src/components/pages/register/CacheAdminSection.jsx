@@ -1,7 +1,7 @@
 // frontend/src/components/pages/register/CacheAdminSection.jsx
 
 import React, { useState, useCallback } from 'react';
-import api from '../../../api';
+import { getCacheMesAdmin, limparCacheMesAdmin } from '../../../services/cadastrosApi';
 import { useAuth } from '../../../contexts/auth';
 
 const fmtData = (iso) => {
@@ -241,7 +241,7 @@ const CacheAdminSection = () => {
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/admin/cache-mes/');
+      const { data } = await getCacheMesAdmin();
       setDados(data);
     } catch {
       mostrarFeedback('erro', 'Erro ao carregar informações do cache.');
@@ -266,7 +266,7 @@ const CacheAdminSection = () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ modo: 'periodo', data_ini: p.data_ini, data_fim: p.data_fim });
-      const { data } = await api.delete(`/admin/cache-mes/?${params}`);
+      const { data } = await limparCacheMesAdmin(params);
       mostrarFeedback('ok', `✓ ${data.removidos} entrada(s) do período ${label} removida(s).`);
       await carregar();
     } catch {
@@ -283,7 +283,7 @@ const CacheAdminSection = () => {
     )) return;
     setLoading(true);
     try {
-      const { data } = await api.delete('/admin/cache-mes/?modo=tudo');
+      const { data } = await limparCacheMesAdmin('modo=tudo');
       mostrarFeedback('ok', `✓ Cache limpo — ${data.removidos} entrada(s) removida(s).`);
       await carregar();
     } catch {

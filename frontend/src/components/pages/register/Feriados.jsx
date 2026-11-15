@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../../api';
+import { listarFeriados, criarFeriado, excluirFeriado } from '../../../services/cadastrosApi';
 import './Feriados.css'; // Vamos criar o CSS abaixo
 
 const Feriados = () => {
@@ -16,7 +16,7 @@ const Feriados = () => {
 
   const carregarFeriados = async () => {
     try {
-      const res = await api.get('/feriados/');
+      const res = await listarFeriados();
       // Ordenar por data (do backend já vem, mas garantindo)
       const sorted = res.data.sort((a, b) => new Date(a.data) - new Date(b.data));
       setFeriados(sorted);
@@ -32,7 +32,7 @@ const Feriados = () => {
     setLoading(true);
 
     try {
-      await api.post('/feriados/', {
+      await criarFeriado({
         data: novaData,
         descricao: descricao
       });
@@ -55,7 +55,7 @@ const Feriados = () => {
     if (!window.confirm("Deseja realmente excluir este feriado?")) return;
     
     try {
-      await api.delete(`/feriados/${id}/`);
+      await excluirFeriado(id);
       setFeriados(feriados.filter(f => f.id !== id));
     } catch (error) {
       alert("Erro ao excluir.");

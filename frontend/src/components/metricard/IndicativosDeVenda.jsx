@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import './IndicativosDeVenda.css';
-import api from '../../api';
+import { getIndicadores, getPdv, getPreVendaStatus, getMixItensArea, getClientesPositivacaoArea, getRupturaItens } from '../../services/indicadoresApi';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 import Select from 'react-select';
 import { useAuth } from '../../contexts/auth';
@@ -437,7 +437,7 @@ const IndicadoresCards = ({
     setLoadingPreVenda(true);
     setPendenciasPreVenda([]);
     const { de, ate } = periodoSelecionado;
-    api.get('/indicadores/pre-venda-status/', { params: { de, ate } })
+    getPreVendaStatus({ params: { de, ate } })
       .then(({ data }) => setPendenciasPreVenda(data.pendencias || []))
       .catch(err => console.error('[PreVendaStatus] erro:', err))
       .finally(() => setLoadingPreVenda(false));
@@ -792,7 +792,7 @@ setAlocacaoVariacao(
     setLoading(true);
 
       try {
-        const { data } = await api.get('/Indicadores/', { params: { de, ate } });
+        const { data } = await getIndicadores({ params: { de, ate } });
         dlog('payload bruto /Indicadores:', data);
 
         const objetivos = [];
@@ -1147,7 +1147,7 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
         const { de, ate } = periodoSelecionado || {};
         if (!de || !ate) return;
 
-        const res = await api.get('/indicadores/pdv/', { params: { de, ate } });
+        const res = await getPdv({ params: { de, ate } });
         const data = res.data || {};
 
         console.log('[DEBUG PDV] Payload Recebido do Backend:', data);
@@ -1461,7 +1461,7 @@ let pFin = 0;
   if (!vendedores.length) return;
 
   setLoadingMixArea(true);
-  api.get('/indicadores/mix-itens-area/', {
+  getMixItensArea({
     params: {
       de:          periodoSelecionado?.de,
       ate:         periodoSelecionado?.ate,
@@ -1494,7 +1494,7 @@ useEffect(() => {
   if (!vendedores.length) return;
 
   setLoadingPosArea(true);
-  api.get('/indicadores/clientes-positivacao-area/', {
+  getClientesPositivacaoArea({
     params: {
       de:          periodoSelecionado?.de,
       ate:         periodoSelecionado?.ate,
@@ -1527,7 +1527,7 @@ useEffect(() => {
   if (!vendedores.length) return;
 
   setLoadingRupturaArea(true);
-  api.get('/indicadores/ruptura-itens/', {
+  getRupturaItens({
     params: {
       de:         periodoSelecionado?.de,
       ate:        periodoSelecionado?.ate,

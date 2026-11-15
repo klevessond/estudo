@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import api from '../../../api';
+import { getVendaHoje } from '../../../services/indicadoresApi';
 import { diasUteisEntre } from '../../../utils/diasUteis';
 import '../IndicativosDeVenda.css';
 
@@ -18,7 +18,7 @@ const CardDiarioNecessario = ({
   useEffect(() => {
     let cancelado = false;
     setLoadingHoje(true);
-    api.get('/indicadores/venda-hoje/')
+    getVendaHoje()
       .then(({ data }) => {
         if (cancelado) return;
         setVendaHojeInfo({
