@@ -330,7 +330,7 @@ const IndicadoresCards = ({
 }) => {
   const { user } = useAuth();
 
-  console.log('[DEBUG] User Context:', user);
+  dlog('[DEBUG] User Context:', user);
 
   const [vendaDia, setVendaDia] = useState(0);
   const [showProjectionModal, setShowProjectionModal] = useState(false);
@@ -689,7 +689,7 @@ const IndicadoresCards = ({
     const agg = data?.vendas?.agregados_area || {};
     const list = data?.vendas?.vendas_por_vendedor || [];
     const soma = (k) => list.reduce((acc, it) => acc + Number(it?.[k] || 0), 0);
-    console.log('[DEBUG venda_dia] list:', list.map(v => ({ cod: v.codcampo, venda_dia: v.venda_dia })));
+    dlog('[DEBUG venda_dia] list:', list.map(v => ({ cod: v.codcampo, venda_dia: v.venda_dia })));
     setVendaDia(Math.round(soma('venda_media_diaria_atual')));
 
     const preAgg = Number(
@@ -852,7 +852,7 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
           return acc;
         }, []);
         // ---> 🚨 INÍCIO DOS LOGS DE DEBUG 🚨 <---
-        console.log("🔍 1. Quantos vendedores existem ANTES do filtro?", objetivosUnificados.length);
+        dlog("🔍 1. Quantos vendedores existem ANTES do filtro?", objetivosUnificados.length);
         
         const listaVendasParaFiltro = data?.vendas?.vendas_por_vendedor || [];
         
@@ -868,14 +868,14 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
           const passouNoFiltro = atividadeTotal > 0.01;
           
           // Imprime o "raciocínio" do sistema para CADA vendedor
-          console.log(`👤 Vendedor: [${obj.codFuncionario}] ${obj.nomeFuncionario} | ` +
+          dlog(`👤 Vendedor: [${obj.codFuncionario}] ${obj.nomeFuncionario} | ` +
                       `Faturado: ${faturado} | Pre: ${preVenda} | Peso: ${pesoVend} | PDV: ${pdvCupon} | ` +
                       `Total: ${atividadeTotal} -> PASSOU? ${passouNoFiltro ? "✅ SIM" : "❌ NÃO"}`);
 
           return passouNoFiltro;
         });
 
-        console.log("🔍 2. Quantos vendedores sobraram DEPOIS do filtro?", objetivosUnificados.length);
+        dlog("🔍 2. Quantos vendedores sobraram DEPOIS do filtro?", objetivosUnificados.length);
         // ---> 🚨 FIM DOS LOGS DE DEBUG 🚨 <---
 
         // 4. Envia para o React gerar os cards
@@ -1150,10 +1150,10 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
         const res = await getPdv({ params: { de, ate } });
         const data = res.data || {};
 
-        console.log('[DEBUG PDV] Payload Recebido do Backend:', data);
-        console.log('[DEBUG PDV] UG do Usuário:', data.unid_gestora_usuario);
-        console.log('[DEBUG PDV] Detalhado AA (Ano Anterior):', data.detalhado_aa_por_unid_gestora);
-        console.log('[IndicadoresPDV][RAW]', data);
+        dlog('[DEBUG PDV] Payload Recebido do Backend:', data);
+        dlog('[DEBUG PDV] UG do Usuário:', data.unid_gestora_usuario);
+        dlog('[DEBUG PDV] Detalhado AA (Ano Anterior):', data.detalhado_aa_por_unid_gestora);
+        dlog('[IndicadoresPDV][RAW]', data);
 
         const ug =
           data.unid_gestora_usuario != null
