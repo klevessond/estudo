@@ -1,12 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import api from '../../api';
+import { fmtNum2 as fmt } from '../../utils/formatters';
 import PivotTableUI from 'react-pivottable/PivotTableUI';
 import TableRenderers from 'react-pivottable/TableRenderers';
 import 'react-pivottable/pivottable.css';
 
 /* ─── Tabela com subtotal manual ─────────────────────────────────────── */
-const fmt = (v) =>
-  Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const TabelaComSubtotal = ({ data, campoLinha1, campoLinha2, campoValor }) => {
   // Agrupa: pai → filho → soma

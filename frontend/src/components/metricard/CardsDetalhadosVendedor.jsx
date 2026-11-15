@@ -3,9 +3,8 @@ import '../ResumoVendas/ResumoVendas.css'; // Reutilizando estilos dos botões
 import TabelaClientesvendedor from './TabelaClientesPosotivados';
 import TabelaMixProdutosVendedor from './TabelaMixProdutosVendedor';
 import api from '../../api';
+import { fmtMoeda } from '../../utils/formatters';
 
-const fmtMoeda = (v) =>
-  Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const CardsDetalhadosVendedor = ({ codFuncionario, periodoSelecionado }) => {
   const [visao, setVisao] = useState('positivados');

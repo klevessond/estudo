@@ -5,18 +5,11 @@ import ResumoSegmentoPies from '../Piechart/ResumoSegmentoPies';
 import ReactSpeedometer from 'react-d3-speedometer';
 import api from '../../api';
 import { useAuth } from '../../contexts/auth';
+import { contarDiasUteisLocal } from '../../utils/diasUteis';
 // jsPDF está disponível via CDN no bundle ou pode ser importado assim:
 // npm install jspdf jspdf-autotable
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
-// ===== Helper: dias úteis local (fallback quando backend ainda não respondeu) =====
-function contarDiasUteisLocal(ini, fim) {
-  if (!ini || !fim) return 0;
-  let n = 0, c = new Date(ini); c.setHours(0, 0, 0, 0);
-  while (c <= fim) { const d = c.getDay(); if (d !== 0 && d !== 6) n++; c.setDate(c.getDate() + 1); }
-  return n;
-}
 
 // ===== Card Diário Necessário — vendedor individual =====
 const CardDiarioNecessarioVendedor = ({

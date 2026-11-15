@@ -8,19 +8,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../api';
+import { fmtNum, fmtNum1, fmtMoeda, fmtMoedaCurta, fmtPct, fmtDataBR as fmtData } from '../../utils/formatters';
 import './CardsCampanhas.css';
 
 const REFRESH_MS = 5 * 60 * 1000;
 const RETA_FINAL_DIAS = 7;
 
-const fmtNum = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
-const fmtNum1 = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
-const fmtMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const fmtMoedaCurta = (v) => Number(v || 0).toLocaleString('pt-BR', {
-  style: 'currency', currency: 'BRL', notation: 'compact', minimumFractionDigits: 0, maximumFractionDigits: 1,
-});
-const fmtPct = (v) => `${Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
-const fmtData = (iso) => (iso ? String(iso).split('-').reverse().join('/') : '');
 
 const MEDIDAS = {
   peso:       { label: 'Peso',       fmt: (v) => `${fmtNum(v)} kg`, curto: (v) => `${fmtNum1(v)} kg` },

@@ -1,6 +1,7 @@
 // frontend/src/components/pages/campanhas/GerenciarCampanhas.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import api from '../../../api';
+import { fmtNum, fmtMoeda, fmtDataBR } from '../../../utils/formatters';
 import './GerenciarCampanhas.css';
 
 const TIPOS = [
@@ -8,9 +9,6 @@ const TIPOS = [
   { value: 'GRUPO',    label: 'Fabricante x Grupo(s) de material', itemLabel: 'Grupos da campanha' },
 ];
 
-const fmtNum = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
-const fmtMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const fmtDataBR = (iso) => (iso ? String(iso).split('-').reverse().join('/') : '');
 
 const MEDIDAS = [
   { key: 'peso',       label: 'Peso',       unidade: 'kg', fmt: (v) => `${fmtNum(v)} kg` },

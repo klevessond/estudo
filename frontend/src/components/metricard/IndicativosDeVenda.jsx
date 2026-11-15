@@ -5,6 +5,8 @@ import api from '../../api';
 import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 import Select from 'react-select';
 import { useAuth } from '../../contexts/auth';
+import { fmtMoeda, fmtNum2, toNum, safeDiv, pct } from '../../utils/formatters';
+import { diasUteisEntre } from '../../utils/diasUteis';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -14,13 +16,6 @@ const dlog = (...args) => { if (DEV) console.log('[IndicativosDeVenda]', ...args
 
 /* ========= HELPERS GERAIS (FORA DO COMPONENTE) ========= */
 
-
-const toNum = (v) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const safeDiv = (n, d) => (d ? n / d : 0);
 
 function filtrarPorSupervisao(data, selecionadas) {
 
@@ -273,14 +268,6 @@ const calcGerenteObjetivosFromEscopo = (data, selecionadas) => {
 };
 
 
-const fmtMoeda = (n) =>
-  Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-const fmtNum2 = (n) =>
-  Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const pct = (num, den) => (Number(den) ? (Number(num) / Number(den)) * 100 : 0);
-
 const getMinhaLinha = (data) => {
   const meuCod = Number(data?.minha_visao?.cod_funcionario || 0);
   if (!meuCod) return null;
@@ -375,19 +362,6 @@ const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, v
   </div>
   
 );
-
-/* ========= HELPER: DIAS ÚTEIS (front-end, sem feriados externos) ========= */
-function diasUteisEntre(inicio, fim) {
-  const dias = [];
-  const cur = new Date(inicio); cur.setHours(0,0,0,0);
-  const end = new Date(fim);    end.setHours(0,0,0,0);
-  while (cur <= end) {
-    const d = cur.getDay();
-    if (d !== 0 && d !== 6) dias.push(new Date(cur)); // seg-sex apenas (exclui sáb e dom)
-    cur.setDate(cur.getDate() + 1);
-  }
-  return dias;
-}
 
 /* ========= CARD DIÁRIO NECESSÁRIO ========= */
 const CardDiarioNecessario = ({
