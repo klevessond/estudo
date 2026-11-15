@@ -9,7 +9,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 
-const dlog = (...args) => console.log('[IndicativosDeVenda]', ...args);
+const DEV = process.env.NODE_ENV !== 'production';
+const dlog = (...args) => { if (DEV) console.log('[IndicativosDeVenda]', ...args); };
 
 /* ========= HELPERS GERAIS (FORA DO COMPONENTE) ========= */
 

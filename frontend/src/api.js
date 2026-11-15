@@ -12,11 +12,11 @@ const baseURL =
 
 const api = axios.create({
   baseURL,
-  timeout: 360000,
+  timeout: 60000,
   headers: { "Content-Type": "application/json" },
 });
 
-console.log("[API] baseURL =", baseURL);
+if (!isProd) console.log("[API] baseURL =", baseURL);
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");

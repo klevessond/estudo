@@ -11,7 +11,8 @@ import {
 import api from '../../api';
 import './IndicativosTabelaVendedor.css';
 
-const dlog = (...args) => console.debug('[IndicativosTabelaVendedor]', ...args);
+const DEV = process.env.NODE_ENV !== 'production';
+const dlog = (...args) => { if (DEV) console.debug('[IndicativosTabelaVendedor]', ...args); };
 
 /**
  * Props

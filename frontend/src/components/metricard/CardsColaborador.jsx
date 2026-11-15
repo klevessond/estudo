@@ -201,7 +201,6 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   })
 .then(res => {
       // ✅ LOG PARA VERIFICAR:
-      console.log("Resposta Positivação (CardsColaborador):", res.data);
       setClientesPos(res.data?.clientes || []);
     })
     .catch((err) => {
@@ -596,11 +595,6 @@ const exportarPosicaoPDF = () => {
   const objetivoMix = dadosColaborador?.objetivo_mix || 0;
   const porcentagemMix = objetivoMix > 0 ? (mixRealizado / objetivoMix) * 100 : 0;
 
-  console.log('[CardsColaborador] campos AA:', {
-  Ano_anterior_ValorLiquido: colaborador?.Ano_anterior_ValorLiquido,
-  Ano_anterior_mes_ValorLiquido: colaborador?.Ano_anterior_mes_ValorLiquido,
-  faturado: colaborador?.faturado,
-});
 
 
 const alocado = colaborador.alocado || 0;
