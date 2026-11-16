@@ -72,6 +72,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem("access");
     localStorage.removeItem("token");
+    localStorage.removeItem("refresh");
     setMe(null);
     setAuthVersion((v) => v + 1);
   };

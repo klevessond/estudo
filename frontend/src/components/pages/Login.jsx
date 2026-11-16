@@ -27,7 +27,7 @@ const Login = () => {
       // Salva o JWT via contexto (o interceptor pegará localStorage.token)
       login(data.access);
 
-      // (Opcional) guarde o refresh se você usar refresh flow depois:
+      // Refresh token: usado pelo interceptor do api.js para renovar o access
       if (data.refresh) localStorage.setItem("refresh", data.refresh);
 
       navigate("/");
