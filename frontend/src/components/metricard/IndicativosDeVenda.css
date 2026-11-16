@@ -255,3 +255,31 @@
 .erro-carga-banner button:hover {
   background: #991b1b;
 }
+
+/* Skeleton: enquanto carrega, os valores dos cards pulsam em cinza
+   em vez de mostrar R$ 0,00 */
+.idv-carregando .card-value,
+.idv-carregando .card-percentage,
+.idv-carregando .card-variation {
+  color: transparent !important;
+  background: linear-gradient(90deg,
+    rgba(148, 163, 184, 0.25) 25%,
+    rgba(148, 163, 184, 0.45) 50%,
+    rgba(148, 163, 184, 0.25) 75%);
+  background-size: 200% 100%;
+  animation: idv-skeleton 1.2s ease-in-out infinite;
+  border-radius: 6px;
+  min-height: 1em;
+  user-select: none;
+}
+
+.idv-carregando .card-value * ,
+.idv-carregando .card-percentage *,
+.idv-carregando .card-variation * {
+  visibility: hidden;
+}
+
+@keyframes idv-skeleton {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

@@ -1999,7 +1999,7 @@ setMixVariacao(String(mixReal - metaMixFinal));
 };
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative' }} className={loading ? 'idv-carregando' : ''}>
       {showProjectionModal && (
         <ProjectionModal 
             onClose={() => setShowProjectionModal(false)} 
