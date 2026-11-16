@@ -53,13 +53,7 @@ export const AuthProvider = ({ children }) => {
 
   // Carrega/relê o /api/me sempre que authVersion muda (login/logout)
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      await loadMe();
-    })();
-    return () => {
-      alive = false;
-    };
+    loadMe();
   }, [loadMe, authVersion]);
 
   // Ações

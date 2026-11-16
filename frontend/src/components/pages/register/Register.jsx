@@ -1,6 +1,5 @@
 // src/components/pages/Register.jsx
 import './register.css';
-import { useNavigate } from 'react-router-dom';
 import React, { useEffect, useState, useMemo } from 'react';
 import { useToast } from '../../ui/Toast.jsx';
 import CacheAdminSection from './CacheAdminSection';
@@ -43,7 +42,6 @@ const RegisterObjetivosVendedores = () => {
   const [percCrescimento, setPercCrescimento] = useState(0);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
-  const navigate = useNavigate();
 
   // 1) Carrega lista
   useEffect(() => {

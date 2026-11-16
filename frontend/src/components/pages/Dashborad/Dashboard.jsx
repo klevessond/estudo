@@ -12,16 +12,6 @@ import CardsDetalhadosVendedor from '../../metricard/CardsDetalhadosVendedor';
 import BarChartsColaboradoresKPIs from '../../BarChart/BarChartsColaboradoresKPIs';
 import CardsCampanhas from '../../metricard/CardsCampanhas';
 
-// === Helpers HTTP (fetch) ===
-const API_BASE =
-  (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_BASE_URL) ||
-  '/api'; // fallback relativo
-
-const authHeaders = () => {
-  const token = (typeof localStorage !== 'undefined' && localStorage.getItem('token')) || '';
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
 // LOG helper
 const logUG = (payload, extra = {}) => {
   const ts = new Date().toISOString();

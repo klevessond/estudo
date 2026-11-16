@@ -478,9 +478,7 @@ const captadoProjPerc  = objetivoFinanceiro > 0 ? (captadoProjTotal / objetivoFi
 const percentualAlocado = objetivoFinanceiro > 0 ? (alocado / objetivoFinanceiro) * 100 : 0;
 
 const anoAnterior    = colaborador.Ano_anterior_ValorLiquido || 0;
-const anoAnteriorMes = colaborador.Ano_anterior_mes_ValorLiquido || 0;
 const evolucaoPerc   = anoAnterior > 0 ? ((faturado - anoAnterior) / anoAnterior) * 100 : null;
-const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
 
   // % de Variação em relação ao objetivo financeiro
   // (equivale ao crescimento/queda vs meta)

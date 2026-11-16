@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import './IndicativosDeVenda.css';
 import { getIndicadores, getPdv, getPreVendaStatus, getMixItensArea, getClientesPositivacaoArea, getRupturaItens } from '../../services/indicadoresApi';
-import BarChartColaboradores from '../BarChart/BarChartColaboradores';
 import Select from 'react-select';
 import { useAuth } from '../../contexts/auth';
 import { fmtMoeda, fmtNum2, toNum, safeDiv, pct } from '../../utils/formatters';
@@ -213,25 +212,6 @@ function filtrarPorSupervisao(data, selecionadas) {
 const sumAreas = (areas, key) =>
   (Array.isArray(areas) ? areas : []).reduce((acc, a) => acc + toNum(a?.[key]), 0);
 
-const getVendaBases = ({ rawData, selecionadas }) => {
-  const escopo = rawData?.escopo_rotas || {};
-  const isGerente = Boolean(escopo.e_gerente);
-
-  // NÃO gerente: mantém o comportamento antigo (usa payload padrão)
-  if (!isGerente) {
-    const atual = toNum(rawData?.realizado_financeiro?.valor);
-    const aa = toNum(rawData?.evolucao?.valor_ano_anterior); // já vem do backend hoje
-    return { atual, aa };
-  }
-
-  // Gerente: usa escopo_rotas.areas_supervisao
-  const areas = pickAreas(escopo.areas_supervisao || [], selecionadas);
-
-  const atual = sumAreas(areas, "venda_realizada_area");
-  const aa = sumAreas(areas, "venda_ano_anterior_area");
-
-  return { atual, aa };
-};
 
 
 const pickAreas = (areas, selecionadas) => {
@@ -277,44 +257,6 @@ const getMinhaLinha = (data) => {
   return arr.find((x) => Number(x?.codcampo) === meuCod) || null;
 };
 
-// 🔍 helper só para exibir o texto do "Vendas Ano Anterior" no card
-const getValorAnoAnteriorTexto = (
-  rawData,
-  somarArea,
-  valorAnoAnteriorMesCheioBase,
-  valorAnoAnteriorBase,
-  usarPDV,
-  vendaPDVAnoAnterior
-) => {
-  if (!rawData) return '--';
-
-  const pdvAA = usarPDV ? Number(vendaPDVAnoAnterior || 0) : 0;
-
-  // 👥 SOMA DA ÁREA
-  if (somarArea) {
-    const baseMesArea =
-      Number(valorAnoAnteriorMesCheioBase || 0) ||
-      Number(rawData?.vendas?.ano_anterior_agregado_mes?.ValorLiquido || 0);
-
-    const total = Number(baseMesArea || 0) + pdvAA;
-    return total ? fmtMoeda(total) : '--';
-  }
-
-  // 👤 INDIVIDUAL
-  const linha = getMinhaLinha(rawData);
-  const vendMes = Number(linha?.Ano_anterior_mes_ValorLiquido || 0);
-
-  // se tiver mês cheio do vendedor, soma PDV AA
-  if (vendMes) {
-    const total = vendMes + pdvAA;
-    return fmtMoeda(total);
-  }
-
-  // fallback “até hoje”
-  const base = Number(valorAnoAnteriorBase || 0);
-  const total = base + pdvAA;
-  return total ? fmtMoeda(total) : '--';
-};
 
 /* ========= COMPONENTES DE APRESENTAÇÃO ========= */
 
@@ -1742,17 +1684,6 @@ const exportarRupturaPDF = () => {
       notifyPDVResumo(novo, false);
     }  
 
-  };
-  const handleChangeSupervisao = (event) => {
-    const selectedValues = Array.from(event.target.selectedOptions).map((opt) =>
-      String(opt.value)
-    );
-
-    const selecionadas = supervisaoOptions.filter((opt) =>
-      selectedValues.includes(String(opt.value))
-    );
-
-    setSupervisaoSelecionada(selecionadas);
   };
 
 const applySupervisaoFromRaw = (data, selecionadas) => {

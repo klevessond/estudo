@@ -85,13 +85,6 @@ export default function ResumoSegmentoPies({ periodoSelecionado, codFuncionario 
     return { labelsRate: labels, valuesRateBase: base, posCounts: pos, percsRate: percs, totalRateBase: total };
   }, [rateData]);
 
-  // Hover já formatado (evita customdata[...])
-  const hoverTextRate = useMemo(() => {
-    const fmt = (n, d = 2) => Number(n).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
-    return labelsRate.map((seg, i) =>
-      `${seg}<br>Clientes: ${valuesRateBase[i]}<br>Positivaram: ${posCounts[i]} (${fmt(percsRate[i])}%)`
-    );
-  }, [labelsRate, valuesRateBase, posCounts, percsRate]);
 
   // Cores consistentes por segmento (mesmas nos 3 gráficos)
   const allSegments = useMemo(() => {
