@@ -345,6 +345,12 @@ const IndicadoresCards = ({
   const [projPercentPos, setProjPercentPos] = useState('--');
 
   const [loading, setLoading] = useState(false);
+  const [erroCarga, setErroCarga] = useState(null);
+  const [tentativa, setTentativa] = useState(0);
+  const [erroMixArea, setErroMixArea] = useState(false);
+  const [erroPosArea, setErroPosArea] = useState(false);
+  const [erroRupturaArea, setErroRupturaArea] = useState(false);
+  const [erroPreVenda, setErroPreVenda] = useState(false);
 // === ✅ COLE AQUI (NOVO CÓDIGO) ===
   const [valorRotasAnoAnterior, setValorRotasAnoAnterior] = useState(0); 
   const [valorRotasAnoAnteriorFmt, setValorRotasAnoAnteriorFmt] = useState(null); 
@@ -435,13 +441,14 @@ const IndicadoresCards = ({
   useEffect(() => {
     if (!modalPreVendaAberto || !periodoSelecionado) return;
     setLoadingPreVenda(true);
+    setErroPreVenda(false);
     setPendenciasPreVenda([]);
     const { de, ate } = periodoSelecionado;
     getPreVendaStatus({ params: { de, ate } })
       .then(({ data }) => setPendenciasPreVenda(data.pendencias || []))
-      .catch(err => console.error('[PreVendaStatus] erro:', err))
+      .catch(err => { console.error('[PreVendaStatus] erro:', err); setErroPreVenda(true); })
       .finally(() => setLoadingPreVenda(false));
-  }, [modalPreVendaAberto, periodoSelecionado]);
+  }, [modalPreVendaAberto, periodoSelecionado, tentativa]);
   const [modalPosAreaAberto,  setModalPosAreaAberto]   = useState(false);
   const [itensMixArea,        setItensMixArea]         = useState([]);
   const [clientesPosArea,     setClientesPosArea]      = useState([]);
@@ -790,6 +797,7 @@ setAlocacaoVariacao(
     setPdvValorAAUG(null);
     setPdvValorAAArea(null);
     setLoading(true);
+    setErroCarga(null);
 
       try {
         const { data } = await getIndicadores({ params: { de, ate } });
@@ -966,6 +974,7 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
             }
             } catch (error) {
               console.error('Erro ao buscar os indicadores:', error);
+              setErroCarga('Não foi possível carregar os indicadores. Verifique a conexão e tente novamente.');
               setPeso('Erro');
             } finally {
               setLoading(false);
@@ -975,7 +984,7 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
 
 
     fetchIndicadores();
-  }, [periodoSelecionado, onObjetivosRecebidos,user]);
+  }, [periodoSelecionado, onObjetivosRecebidos, user, tentativa]);
 
   // === CÁLCULO ESPECÍFICO PARA O CARD "ROTAS" (GERÊNCIA) ===
 
@@ -1191,6 +1200,7 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
         atualizarValoresPDV(valorSel || 0, pesoSel || 0, valorAASel || 0);
       } catch (err) {
         console.error('Erro ao buscar vendas de PDV:', err);
+        setErroCarga('Não foi possível carregar os dados de PDV. Tente novamente.');
       }
       setLoading(false);
     };
@@ -1225,6 +1235,7 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
       notifyPDVResumo(somarArea, false);
     }
   }, [
+    tentativa,
     usarPDV,
     periodoSelecionado,
     vendaRealizadaBase,
@@ -1460,6 +1471,7 @@ let pFin = 0;
 
   if (!vendedores.length) return;
 
+  setErroMixArea(false);
   setLoadingMixArea(true);
   getMixItensArea({
     params: {
@@ -1472,10 +1484,10 @@ let pFin = 0;
     }
   })
     .then(res => setItensMixArea(res.data?.itens || []))
-    .catch(() => setItensMixArea([]))
+    .catch(() => { setItensMixArea([]); setErroMixArea(true); })
     .finally(() => setLoadingMixArea(false));
 
-}, [modalMixAreaAberto, mostrarNaoVendidosArea, criterioValorArea, rawData, supervisaoSelecionada, periodoSelecionado]);
+}, [modalMixAreaAberto, mostrarNaoVendidosArea, criterioValorArea, rawData, supervisaoSelecionada, periodoSelecionado, tentativa]);
 
 useEffect(() => {
   if (!modalPosAreaAberto || !rawData) return;
@@ -1493,6 +1505,7 @@ useEffect(() => {
 
   if (!vendedores.length) return;
 
+  setErroPosArea(false);
   setLoadingPosArea(true);
   getClientesPositivacaoArea({
     params: {
@@ -1503,10 +1516,10 @@ useEffect(() => {
     }
   })
     .then(res => setClientesPosArea(res.data?.clientes || []))
-    .catch(() => setClientesPosArea([]))
+    .catch(() => { setClientesPosArea([]); setErroPosArea(true); })
     .finally(() => setLoadingPosArea(false));
 
-}, [modalPosAreaAberto, mostrarNaoPosArea, rawData, supervisaoSelecionada, periodoSelecionado]);
+}, [modalPosAreaAberto, mostrarNaoPosArea, rawData, supervisaoSelecionada, periodoSelecionado, tentativa]);
 
 useEffect(() => {
   if (!modalRupturaAberto || !rawData) return;
@@ -1526,6 +1539,7 @@ useEffect(() => {
 
   if (!vendedores.length) return;
 
+  setErroRupturaArea(false);
   setLoadingRupturaArea(true);
   getRupturaItens({
     params: {
@@ -1542,10 +1556,10 @@ useEffect(() => {
         total_qtd:   res.data?.total_qtd || 0,
       });
     })
-    .catch(() => { setItensRupturaArea([]); setTotaisRuptura({ total_valor: 0, total_qtd: 0 }); })
+    .catch(() => { setItensRupturaArea([]); setTotaisRuptura({ total_valor: 0, total_qtd: 0 }); setErroRupturaArea(true); })
     .finally(() => setLoadingRupturaArea(false));
 
-}, [modalRupturaAberto, criterioValorRuptura, rawData, supervisaoSelecionada, periodoSelecionado]);
+}, [modalRupturaAberto, criterioValorRuptura, rawData, supervisaoSelecionada, periodoSelecionado, tentativa]);
 
 // Lista de fabricantes distintos presentes na ruptura (para o dropdown do modal)
 const fabricantesRupturaDisponiveis = useMemo(() => {
@@ -1999,6 +2013,15 @@ setMixVariacao(String(mixReal - metaMixFinal));
         </div>
       )}
 
+      {erroCarga && !loading && (
+        <div className="erro-carga-banner" role="alert">
+          <span>⚠️ {erroCarga}</span>
+          <button onClick={() => { setErroCarga(null); setTentativa((n) => n + 1); }}>
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
       <div className="modo-toggle">
         <button
           onClick={() => setModo('indicadores')}
@@ -2360,6 +2383,16 @@ setMixVariacao(String(mixReal - metaMixFinal));
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
             Carregando...
           </div>
+        ) : erroMixArea ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#b91c1c' }}>
+            ⚠️ Não foi possível carregar os dados.{' '}
+            <button
+              onClick={() => setTentativa((n) => n + 1)}
+              style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline', fontSize: 'inherit', padding: 0 }}
+            >
+              Tentar novamente
+            </button>
+          </div>
         ) : itensMixArea.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
             Nenhum item encontrado.
@@ -2487,6 +2520,16 @@ setMixVariacao(String(mixReal - metaMixFinal));
         {loadingPosArea ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
             Carregando...
+          </div>
+        ) : erroPosArea ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#b91c1c' }}>
+            ⚠️ Não foi possível carregar os dados.{' '}
+            <button
+              onClick={() => setTentativa((n) => n + 1)}
+              style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline', fontSize: 'inherit', padding: 0 }}
+            >
+              Tentar novamente
+            </button>
           </div>
         ) : clientesPosArea.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
@@ -2641,6 +2684,16 @@ setMixVariacao(String(mixReal - metaMixFinal));
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
             Carregando...
           </div>
+        ) : erroRupturaArea ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#b91c1c' }}>
+            ⚠️ Não foi possível carregar os dados.{' '}
+            <button
+              onClick={() => setTentativa((n) => n + 1)}
+              style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline', fontSize: 'inherit', padding: 0 }}
+            >
+              Tentar novamente
+            </button>
+          </div>
         ) : itensRupturaFiltrados.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
             Nenhum item em ruptura no período{filtroFabricanteRuptura !== 'Todos' ? ' para este fabricante.' : '.'}
@@ -2744,6 +2797,16 @@ setMixVariacao(String(mixReal - metaMixFinal));
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {loadingPreVenda ? (
             <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>Carregando...</div>
+          ) : erroPreVenda ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#b91c1c' }}>
+            ⚠️ Não foi possível carregar os dados.{' '}
+            <button
+              onClick={() => setTentativa((n) => n + 1)}
+              style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline', fontSize: 'inherit', padding: 0 }}
+            >
+              Tentar novamente
+            </button>
+          </div>
           ) : pendenciasPreVenda.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '2rem', color: '#22c55e', fontWeight: 600 }}>
               ✅ Nenhuma pendência encontrada no período.
