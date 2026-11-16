@@ -1,5 +1,6 @@
 // frontend/src/components/pages/campanhas/GerenciarCampanhas.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useToast } from '../../ui/Toast.jsx';
 import { buscarCatalogo, listarCampanhas, criarCampanha, atualizarCampanha, getProgressoCampanha, salvarObjetivoCampanha, excluirObjetivoCampanha } from '../../../services/campanhasApi';
 import { getTodosVendedores } from '../../../services/cadastrosApi';
 import { fmtNum, fmtMoeda, fmtDataBR } from '../../../utils/formatters';
@@ -285,6 +286,7 @@ const CelulaMedida = ({ medida, dados }) => {
 
 // ===== Detalhe: escopo, objetivos por vendedor e acompanhamento do realizado =====
 const DetalheCampanha = ({ campanha, vendedores, onFechar, onAtualizada }) => {
+  const toast = useToast();
   const [camp, setCamp] = useState(campanha);
   const [progresso, setProgresso] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -373,7 +375,7 @@ const DetalheCampanha = ({ campanha, vendedores, onFechar, onAtualizada }) => {
       await buscarProgresso();
       if (onAtualizada) onAtualizada();
     } catch {
-      alert('Erro ao remover objetivo.');
+      toast.erro('Erro ao remover objetivo.');
     }
   };
 

@@ -1,9 +1,11 @@
 // EditarUsuario.jsx
 import React, { useEffect, useState } from 'react';
+import { useToast } from '../../ui/Toast.jsx';
 import './EditarUsuario.css';
 import { getFuncionarios, getFuncionario, getUsuario, atualizarUsuario } from '../../../services/cadastrosApi';
 
 function EditarUsuario({ id, onSaved, onCancel }) {
+  const toast = useToast();
   const [usuario, setUsuario] = useState({
     username: '',
     email: '',
@@ -106,7 +108,7 @@ function EditarUsuario({ id, onSaved, onCancel }) {
     e.preventDefault();
 
     if (usuario.password !== usuario.confirmPassword) {
-      alert("As senhas não coincidem!");
+      toast.aviso("As senhas não coincidem!");
       return;
     }
 
@@ -135,7 +137,7 @@ function EditarUsuario({ id, onSaved, onCancel }) {
     try {
       const res = await atualizarUsuario(id, payload);
       if (res.status >= 200 && res.status < 300) {
-        alert("Usuário atualizado com sucesso!");
+        toast.sucesso("Usuário atualizado com sucesso!");
         onSaved?.();
         return;
       }

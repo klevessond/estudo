@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from "./contexts/auth.jsx";
+import { ToastProvider } from './components/ui/Toast.jsx';
 import Dashboard from './components/pages/Dashborad/Dashboard.jsx';
 import Layout from './components/layout/layout.jsx';
 import PivotVendas from './components/Pivot/PivotVendas.jsx';
@@ -16,6 +17,7 @@ import GerenciarCampanhas from './components/pages/campanhas/GerenciarCampanhas.
 const App = () => {
   return (
     <AuthProvider>
+      <ToastProvider>
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -109,6 +111,7 @@ const App = () => {
           />
         </Routes>
       </Router>
+      </ToastProvider>
     </AuthProvider>
   );
 };

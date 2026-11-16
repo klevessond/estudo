@@ -1,11 +1,13 @@
 // RegisterUser.jsx
 import React, { useState, useEffect, useCallback } from 'react';
+import { useToast } from '../../ui/Toast.jsx';
 import { useNavigate } from 'react-router-dom';
 import './RegisterUser.css';
 import EditarUsuario from './EditarUsuario';
 import { getFuncionarios, registrarUsuario } from '../../../services/cadastrosApi';
 
 const RegisterUser = () => {
+  const toast = useToast();
   const [formData, setFormData] = useState({
     username: '', email: '', first_name: '', last_name: '', phone: '',
     password: '', password2: '', cod_funcionario: '', cod_unid_gestora: '',
@@ -130,7 +132,7 @@ const RegisterUser = () => {
       const dataToSend = { ...formData, phone: formData.phone.replace(/\D/g, '') };
       const { status, data } = await registrarUsuario(dataToSend);
       if (status >= 200 && status < 300) {
-        alert('Usuário cadastrado com sucesso!');
+        toast.sucesso('Usuário cadastrado com sucesso!');
         setFormData({
           username: '', email: '', first_name: '', last_name: '', phone: '',
           password: '', password2: '', cod_funcionario: '', cod_unid_gestora: '',
@@ -147,7 +149,7 @@ const RegisterUser = () => {
     } catch (error) {
       // Se API devolver 400 com JSON de erros, exiba:
       if (error?.response?.data) setErrors(error.response.data);
-      else alert('Erro ao cadastrar usuário. Por favor, tente novamente.');
+      else toast.erro('Erro ao cadastrar usuário. Por favor, tente novamente.');
     } finally {
       setIsSubmitting(false);
     }

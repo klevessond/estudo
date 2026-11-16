@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from '../../ui/Toast.jsx';
 import { listarFeriados, criarFeriado, excluirFeriado } from '../../../services/cadastrosApi';
 import './Feriados.css'; // Vamos criar o CSS abaixo
 
 const Feriados = () => {
+  const toast = useToast();
   const [feriados, setFeriados] = useState([]);
   const [novaData, setNovaData] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -58,7 +60,7 @@ const Feriados = () => {
       await excluirFeriado(id);
       setFeriados(feriados.filter(f => f.id !== id));
     } catch (error) {
-      alert("Erro ao excluir.");
+      toast.erro("Erro ao excluir.");
     }
   };
 

@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/auth.jsx";
+import { useToast } from "../ui/Toast.jsx";
 import { postLogin } from "../../services/authApi";
 import "./Login.css";
 
@@ -11,6 +12,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
 
   const clienteID = process.env.REACT_APP_CLIENTE_ID || "desconhecido";
@@ -31,7 +33,7 @@ const Login = () => {
       navigate("/");
     } catch (err) {
       console.error("[Login] erro ao autenticar:", err);
-      alert("Usuário ou senha inválidos");
+      toast.erro("Usuário ou senha inválidos");
     } finally {
       setSubmitting(false);
     }

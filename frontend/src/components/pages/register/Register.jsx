@@ -2,6 +2,7 @@
 import './register.css';
 import { useNavigate } from 'react-router-dom';
 import React, { useEffect, useState, useMemo } from 'react';
+import { useToast } from '../../ui/Toast.jsx';
 import CacheAdminSection from './CacheAdminSection';
 import { getTodosVendedores, getObjetivosVendedores, salvarObjetivosVendedores, getObjetivosMixNivel, salvarObjetivoMixNivel } from '../../../services/cadastrosApi';
 
@@ -19,6 +20,7 @@ const addMonthsYYYYMM = (yyyyMm, delta) => {
 };
 
 const RegisterObjetivosVendedores = () => {
+  const toast = useToast();
   const [vendedores, setVendedores] = useState([]);
   
   // Objetivos Individuais (Vendedores)
@@ -151,8 +153,8 @@ const RegisterObjetivosVendedores = () => {
   };
 
   const handleAplicarCrescimento = async () => {
-    if (!mesBaseCalculo) return alert("Selecione um mês base.");
-    if (selectedIds.size === 0) return alert("Selecione pelo menos um vendedor.");
+    if (!mesBaseCalculo) return toast.aviso("Selecione um mês base.");
+    if (selectedIds.size === 0) return toast.aviso("Selecione pelo menos um vendedor.");
 
     if (!window.confirm(`Aplicar ${percCrescimento}% sobre ${mesBaseCalculo} para ${selectedIds.size} vendedores?`)) return;
 
@@ -184,10 +186,10 @@ const RegisterObjetivosVendedores = () => {
       setObjetivosPeso(novoPeso);
       setObjetivosMix(novoMix);
       setObjetivosPos(novoPos);
-      alert("Cálculo aplicado!");
+      toast.sucesso("Cálculo aplicado!");
     } catch (err) {
       console.error("Erro:", err);
-      alert("Erro ao buscar dados.");
+      toast.erro("Erro ao buscar dados.");
     } finally {
       setLoading(false);
     }
@@ -223,10 +225,10 @@ const RegisterObjetivosVendedores = () => {
           metas: metasMix
         });
       }
-      alert('Objetivos salvos com sucesso!');
+      toast.sucesso('Objetivos salvos com sucesso!');
     } catch (err) {
       console.error(err);
-      alert('Erro ao salvar.');
+      toast.erro('Erro ao salvar.');
     } finally {
       setLoading(false);
     }
