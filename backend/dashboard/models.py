@@ -253,6 +253,56 @@ class TelegramPollState(models.Model):
         db_table = "telegram_poll_state"
 
 
+class AlertaApp(models.Model):
+    """
+    Caixa de entrada de alertas do app mobile.
+
+    Diferente do Telegram, o alerta é gravado para TODO destinatário
+    (vendedor e supervisor; gerentes quando houver como listá-los), tenha ele
+    Telegram vinculado ou não. O app consulta esta tabela e gera a notificação
+    local no celular. Quando houver push de verdade (development build), o
+    mesmo registro servirá de origem para o envio.
+    """
+    PAPEL_VENDEDOR = "vendedor"
+    PAPEL_SUPERVISOR = "supervisor"
+    PAPEL_GERENTE = "gerente"
+
+    cod_funcionario = models.IntegerField(db_index=True)
+    tipo = models.CharField(max_length=30, default="ruptura")
+    papel = models.CharField(max_length=20)
+    titulo = models.CharField(max_length=120)
+    mensagem = models.TextField()
+    dados = models.JSONField(default=dict, blank=True)
+
+    ruptura = models.ForeignKey(
+        RupturaNotificada,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="alertas_app",
+    )
+
+    criado_em = models.DateTimeField(auto_now_add=True, db_index=True)
+    lido_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "alerta_app"
+        ordering = ["-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ruptura", "cod_funcionario"],
+                name="uniq_alerta_ruptura_funcionario",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["cod_funcionario", "lido_em"], name="alerta_func_lido_idx"),
+        ]
+
+    def __str__(self):
+        estado = "lido" if self.lido_em else "não lido"
+        return f"[{self.tipo}] {self.titulo} -> {self.cod_funcionario} ({estado})"
+
+
 
 class CampanhaVenda(models.Model):
     """

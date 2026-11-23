@@ -4,6 +4,7 @@ from .views import IndicadoresView, ObjetivoMensalView,ObjetivoMensalResumoView,
 from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionario_detail, me,TodosVendedoresView,RupturaView,RupturaItensView
 from .views import PreVendaItensView,TelegramGerarCodigoView, TelegramStatusView, TelegramDesvincularView,VendaHojeView, PreVendaStatusView,CacheMesAdminView,ClientesPositivacaoAreaView,MixItensAreaView,ClientesPositivacaoView,MixItensPorVendedorView,ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
 from .views.pivot_views import PivotVendasView
+from .views import AlertasListView, AlertasMarcarLidosView
 urlpatterns = [
     path('Indicadores/', IndicadoresView.as_view(), name='Indicadores'),
     path('objetivos-mensais/', ObjetivoMensalView.as_view(), name='objetivo-mensal'),
@@ -38,6 +39,9 @@ urlpatterns = [
     path('telegram/status/', TelegramStatusView.as_view(), name='telegram-status'),
     path('telegram/desvincular/', TelegramDesvincularView.as_view(), name='telegram-desvincular'),
     path('indicadores/pre-venda-itens/', PreVendaItensView.as_view(), name='pre-venda-itens'),
+    # Central de alertas do app mobile
+    path('alertas/', AlertasListView.as_view(), name='alertas'),
+    path('alertas/marcar-lidos/', AlertasMarcarLidosView.as_view(), name='alertas-marcar-lidos'),
 
 ]
 

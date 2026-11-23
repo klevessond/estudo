@@ -21,8 +21,11 @@ from dashboard.services.telegram_service import (
 )
 from dashboard.services.indicadores.ruptura_service import buscar_ruptura
 from dashboard.services.indicadores.info_service import obter_cod_supervisor
+from dashboard.services.alertas_service import criar_alertas_ruptura
 
-CODIGO_RE = re.compile(r"/vincular\s+(\d{6})")
+# "/vincular 123456" digitado à mão, ou "/start 123456" quando o app abre
+# t.me/<bot>?start=123456 e o usuário só toca em "Iniciar".
+CODIGO_RE = re.compile(r"/(?:vincular|start)\s+(\d{6})")
 
 JANELA_DIAS = 3        # verifica ruptura dos últimos N dias (protege contra lançamento atrasado)
 MAX_TENTATIVAS = 96    # ~1 dia inteiro rodando a cada 15 min; depois disso, para de tentar reenviar
@@ -119,7 +122,7 @@ class Command(BaseCommand):
             cod_vend = item.get("CodVendedor")
             cod_sup = cod_supervisor_de(cod_vend)
 
-            _, criado = RupturaNotificada.objects.get_or_create(
+            ruptura_obj, criado = RupturaNotificada.objects.get_or_create(
                 cod_pocket=cod_pocket,
                 cod_doc=cod_doc,
                 sequencia=sequencia,
@@ -127,6 +130,9 @@ class Command(BaseCommand):
             )
             if criado:
                 novos += 1
+                # Caixa de entrada do app: grava para vendedor e supervisor,
+                # tenham eles Telegram vinculado ou não.
+                criar_alertas_ruptura(ruptura_obj, item)
 
         if novos:
             self.stdout.write(f"{novos} nova(s) ruptura(s) detectada(s).")

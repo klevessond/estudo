@@ -48,6 +48,9 @@ SECRET_KEY = _env("DJANGO_SECRET_KEY")
 DEBUG = False
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1","168.119.245.32","app.comercialdotrigo.com.br"]
+# Hosts extras só da máquina local, separados por vírgula. Ex.: o IP do PC na rede
+# Wi-Fi para testar o app mobile no celular (EXTRA_ALLOWED_HOSTS=192.168.1.206).
+ALLOWED_HOSTS += [h.strip() for h in os.environ.get("EXTRA_ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 
 # Application definition
