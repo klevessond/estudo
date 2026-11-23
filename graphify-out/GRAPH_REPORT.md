@@ -1,15 +1,18 @@
-# Graph Report - dash-dev  (2026-11-12)
+# Graph Report - dash-dev  (2026-11-23)
 
 ## Corpus Check
-- cluster-only mode — file stats not available
+- 117 files · ~112,775 words
+- Verdict: corpus is large enough that graph structure adds value.
+- Unclassified: 35 file(s) not represented in the graph (top: .css 30, (none) 4, .example 1)
+- WARNING: 35 of 154 files seen (23%) have no supported extractor and are missing from this graph entirely. It may look complete while representing only part of the codebase.
 
 ## Summary
-- 1440 nodes · 2698 edges · 105 communities (63 shown, 42 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 49 edges (avg confidence: 0.94)
+- 1557 nodes · 3129 edges · 92 communities (55 shown, 37 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 31 edges (avg confidence: 0.94)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `10e2ea5b`
+- Built from commit: `cd1b8296`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -18,64 +21,59 @@
 - dbo.Cliente
 - .get
 - campanhas_views.py
-- APIView
-- os
-- pdv_mix_service.py
+- vendas_views.py
+- db_conn.py
+- IndicativosDeVenda.jsx
 - dbo.Funcionario
 - IndicativosDeVenda.jsx
 - APIView
-- pdv_service.py
-- App.js
-- Feriado
-- django_core_management_base
+- ref_react
+- get_cached_data
+- views/__init__.py
+- teste_db.py
 - pre_venda_status_service.py
 - buscar_rotas_usuario
 - CacheAdminSection.jsx
-- dbo.FormaReceb
-- Dashboard.jsx
-- CardsDetalhadosVendedor.jsx
-- GerenciarCampanhas.jsx
-- dbo.NaturezaOperacao
-- models.py
-- MultiDBRouter
-- campanhas_views.py
-- query_all
-- Command
-- CardsColaborador.jsx
-- Pivot/PivotVendas.jsx
-- dbo.Conta
+- ._ano_anterior
 - api.js
-- .get
+- TelegramLinkCode
+- GerenciarCampanhas.jsx
+- dbo.PedidoVenda
+- models.py
+- ObjetivoMensalSerializer
+- campanhas_service.py
+- query_all
+- indicadoresApi.js
+- GerenciarCampanhas.jsx
+- Pivot/PivotVendas.jsx
+- telegram_views.py
+- CampanhaVendaObjetivoSerializer
+- pdv_views.py
 - index.js
 - django_core_management_base
-- query_all
-- ResumoVendas.jsx
-- ref_react
+- .get
+- campanhas_views.py
+- auth.jsx
 - campanhas_service.py
 - Command
-- Meta
+- venda_hoje_service.py
 - buscar_ruptura
 - admin.py
 - venda_hoje_service.py
 - buscar_dump_vendas
 - manage.py
 - Pivot/PivotVendas.jsx
-- datetime
-- dashboard/management/__init__.py
+- indicadores_views.py
+- UserRegisterSerializer
 - indicadores/__init__.py
-- services/__init__.py
-- signals.py
-- backend/management/commands/__init__.py
+- RupturaNotificada
 - backend/management/__init__.py
 - RegisterMix.jsx
-- admin.py
-- setupTests.js
-- CustomUserSerializer
-- HasAnyRole
+- TelegramPollState
+- usuarios_views.py
+- tests.py
 - apps.py
 - VendedorTelegram
-- RupturaNotificacaoGerente
-- converter_schema.py
 - dbo.CartaoProcess
 - dbo.NFe
 - dbo.NFeDest
@@ -86,7 +84,6 @@
 - dbo.IndiceComissao
 - dbo.IntegracaoMovimento
 - dbo.PDVECF
-- CardsDetalhadosVendedor.jsx
 - dbo.Formato
 - dbo.Grupo
 - dbo.IntegracaoContabilConfigDocumento
@@ -100,234 +97,218 @@
 - dbo.Sequencia
 - dbo.UsuarioWeb
 - dbo.Widget
-- UserRegisterSerializer
-- dbo.UnidadeGestora
-- dbo.ContasPagar
-- dbo.ClienteDocumento
-- dbo.VeiculoMovimentacao
-- dbo.ClienteAnotacao
-- dbo.CriterioFornecedorFornecedor
 
 ## God Nodes (most connected - your core abstractions)
-1. `query_all()` - 58 edges
+1. `query_all()` - 56 edges
 2. `dbo.Material` - 46 edges
 3. `dbo.Cliente` - 43 edges
-4. `get_role_context()` - 26 edges
-5. `dbo.Funcionario` - 22 edges
-6. `api` - 20 edges
-7. `IndicadoresCards()` - 19 edges
-8. `buscar_rotas_usuario()` - 18 edges
-9. `useAuth()` - 15 edges
-10. `buscar_ruptura()` - 14 edges
+4. `get_role_context()` - 33 edges
+5. `IndicadoresCards()` - 25 edges
+6. `buscar_rotas_usuario()` - 22 edges
+7. `dbo.Funcionario` - 22 edges
+8. `get_cache_mes()` - 17 edges
+9. `set_cache_mes()` - 17 edges
+10. `useAuth()` - 15 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `ObjetivoMensalVendedorView` --uses--> `ObjetivoMensal`  [INFERRED]
-  backend/dashboard/views/main_views.py → backend/dashboard/models.py
-- `get_dias_uteis_info()` --uses--> `Feriado`  [INFERRED]
-  backend/dashboard/services/indicadores/calculos_projecao.py → backend/dashboard/models.py
-- `Command` --uses--> `RupturaNotificada`  [INFERRED]
-  backend/dashboard/management/commands/notificar_ruptura.py → backend/dashboard/models.py
-- `Command` --uses--> `RupturaNotificada`  [INFERRED]
-  backend/management/commands/notificar_ruptura.py → backend/dashboard/models.py
-- `Command` --uses--> `TelegramLinkCode`  [INFERRED]
-  backend/dashboard/management/commands/notificar_ruptura.py → backend/dashboard/models.py
+- `MatrizDePermissoes` --uses--> `IsAdminOrGerente`  [INFERRED]
+  backend/dashboard/tests.py → backend/dashboard/permissions.py
+- `FuncionariosListView` --uses--> `IsAdminOrGerente`  [INFERRED]
+  backend/dashboard/views/usuarios_views.py → backend/dashboard/permissions.py
+- `RegisterView` --uses--> `IsAdminOrGerente`  [INFERRED]
+  backend/dashboard/views/usuarios_views.py → backend/dashboard/permissions.py
+- `MatrizDePermissoes` --uses--> `EscritaAdminGerenteSupervisor`  [INFERRED]
+  backend/dashboard/tests.py → backend/dashboard/permissions.py
+- `CampanhaVendaViewSet` --uses--> `EscritaAdminGerenteSupervisor`  [INFERRED]
+  backend/dashboard/views/campanhas_views.py → backend/dashboard/permissions.py
 
 ## Import Cycles
-- None detected.
+- 2-file cycle: `frontend/src/components/metricard/IndicativosDeVenda.jsx -> frontend/src/components/metricard/indicativos/CardDiarioNecessario.jsx -> frontend/src/components/metricard/IndicativosDeVenda.jsx`
+- 2-file cycle: `frontend/src/components/metricard/IndicativosDeVenda.jsx -> frontend/src/components/metricard/indicativos/Card.jsx -> frontend/src/components/metricard/IndicativosDeVenda.jsx`
+- 2-file cycle: `frontend/src/components/metricard/IndicativosDeVenda.jsx -> frontend/src/components/metricard/indicativos/ProjectionModal.jsx -> frontend/src/components/metricard/IndicativosDeVenda.jsx`
+- 2-file cycle: `frontend/src/components/metricard/CardDiarioNecessarioVendedor.jsx -> frontend/src/components/metricard/CardsColaborador.jsx -> frontend/src/components/metricard/CardDiarioNecessarioVendedor.jsx`
 
-## Communities (105 total, 42 thin omitted)
+## Communities (92 total, 37 thin omitted)
 
 ### Community 0 - "models.py"
 Cohesion: 0.01
 Nodes (346): dbo.ApuracaoTipo, dbo.AtivosTI, dbo.Auditoria, dbo.Autorizacao, dbo.BancoEstabelecimento, dbo.BancoExtrato, dbo.BancoHora, dbo.BancoSaldo (+338 more)
 
 ### Community 1 - "dbo.Cliente"
-Cohesion: 0.10
-Nodes (21): dbo.Almoxarifado, dbo.Bairro, dbo.Cidade, dbo.Cliente, dbo.ClienteCota, dbo.ClienteDesconto, dbo.ClienteDiaSemana, dbo.ClienteExtrato (+13 more)
+Cohesion: 0.05
+Nodes (49): dbo.Almoxarifado, dbo.Anotacao, dbo.Bairro, dbo.Boleto, dbo.BoletoFormato, dbo.BoletoTipo, dbo.Caixa, dbo.CaixaParcelas (+41 more)
 
 ### Community 2 - ".get"
 Cohesion: 0.05
-Nodes (47): dbo.ClienteMaterialEmbalagem, dbo.DocumentoProcesso, dbo.DocumentoProcessoFunc, dbo.Embalagem, dbo.EmbalagemTipo, dbo.MapaProducaoMaterial, dbo.MapaProducaoProcesso, dbo.MapaProducaoProcessoFunc (+39 more)
+Nodes (48): dbo.ClienteMaterialEmbalagem, dbo.DocumentoProcesso, dbo.DocumentoProcessoFunc, dbo.Embalagem, dbo.EmbalagemTipo, dbo.MapaProducao, dbo.MapaProducaoApoio, dbo.MapaProducaoDocumento (+40 more)
 
 ### Community 3 - "campanhas_views.py"
-Cohesion: 0.08
-Nodes (18): _chave(), get_cache_aa(), _get_conn(), _init_db(), invalidar_cache_aa(), set_cache_aa(), _chave(), get_cache_mes() (+10 more)
+Cohesion: 0.06
+Nodes (21): _chave(), get_cache_aa(), _get_conn(), _init_db(), invalidar_cache_aa(), set_cache_aa(), _get_conn(), _init_db() (+13 more)
 
-### Community 4 - "APIView"
-Cohesion: 0.05
-Nodes (22): RoleContextMixin, get_role_context(), RoleContext, ClientesPositivacaoAreaView, ClientesPositivacaoView, _cod_vend_int(), ComissoesVendedorView, FuncionariosListView (+14 more)
+### Community 4 - "vendas_views.py"
+Cohesion: 0.09
+Nodes (10): RoleContextMixin, eh_gerente(), get_role_context(), RoleContext, buscar_rotas_usuario(), listar_funcionarios(), _cod_vend_int(), ResumoSegmentoAreaVendaView (+2 more)
 
-### Community 6 - "pdv_mix_service.py"
-Cohesion: 0.15
-Nodes (21): BarChartColaboradores(), calcGerenteObjetivosFromEscopo(), calcGerenteVendaFromEscopo(), Card(), CardDiarioNecessario(), diasUteisEntre(), dlog(), filtrarPorSupervisao() (+13 more)
+### Community 5 - "db_conn.py"
+Cohesion: 0.12
+Nodes (4): conn_str(), _connect(), _ensure_nocount(), query_one()
+
+### Community 6 - "IndicativosDeVenda.jsx"
+Cohesion: 0.18
+Nodes (20): Card(), Gauge(), ProjectionModal(), calcGerenteObjetivosFromEscopo(), calcGerenteVendaFromEscopo(), dlog(), filtrarPorSupervisao(), getMinhaLinha() (+12 more)
 
 ### Community 7 - "dbo.Funcionario"
-Cohesion: 0.06
-Nodes (39): dbo.Assinatura, dbo.Cargo, dbo.ClienteComentario, dbo.ContaSetor, dbo.Corretora, dbo.DocumentoAssinatura, dbo.EficienciaSeparacaoPedido, dbo.Equipe (+31 more)
+Cohesion: 0.08
+Nodes (30): dbo.Assinatura, dbo.Cargo, dbo.ClienteComentario, dbo.ContaSetor, dbo.DocumentoAssinatura, dbo.Equipe, dbo.EquipeFuncionario, dbo.FormaReceb (+22 more)
 
 ### Community 8 - "IndicativosDeVenda.jsx"
-Cohesion: 0.18
+Cohesion: 0.16
 Nodes (12): _as_date(), buscar_itens_mix_por_ug(), buscar_itens_nao_vendidos_por_ug(), _buscar_mapa_materiais_por_ug(), buscar_mix_pdv_gerente(), buscar_mix_pdv_por_perfil(), buscar_mix_pdv_supervisor(), buscar_mix_pdv_vendedor() (+4 more)
 
 ### Community 9 - "APIView"
-Cohesion: 0.15
-Nodes (16): buscar_clientes_positivacao_lista(), buscar_clientes_positivacao_por_vendedor(), buscar_comissoes_vendedor(), buscar_itens_mix_por_vendedor(), buscar_itens_nao_vendidos_por_vendedor(), buscar_mix_agregado(), buscar_positivacao_por_rota(), buscar_pre_venda() (+8 more)
+Cohesion: 0.14
+Nodes (18): query_all(), buscar_clientes_positivacao_lista(), buscar_clientes_positivacao_por_vendedor(), buscar_comissoes_vendedor(), buscar_itens_mix_por_vendedor(), buscar_itens_nao_vendidos_por_vendedor(), buscar_mix_agregado(), buscar_positivacao_por_rota() (+10 more)
 
-### Community 10 - "pdv_service.py"
-Cohesion: 0.16
-Nodes (13): BarChartsColaboradoresKPIs(), toPct(), CardsCampanhas(), CardDiarioNecessarioVendedor(), CardsColaborador(), contarDiasUteisLocal(), dlog(), IndicativosTabelaVendedor() (+5 more)
+### Community 10 - "ref_react"
+Cohesion: 0.09
+Nodes (15): BarChartsColaboradoresKPIs(), toPct(), CardsDetalhadosVendedor(), dlog(), IndicativosTabelaVendedor(), TabelaClientesvendedor(), TabelaMixProdutosVendedor(), Dashboard() (+7 more)
 
-### Community 11 - "App.js"
-Cohesion: 0.06
-Nodes (18): ObjetivoMensalVendedor, Meta, get_cached_data(), _calc_liquido_por_vendedor_por_rotas(), clientes_top10(), get_dados_excel(), get_objetivo_mensal_serializado(), get_objetivos_vendedores_por_mes() (+10 more)
-
-### Community 12 - "Feriado"
-Cohesion: 0.33
-Nodes (5): Feriado, Meta, FeriadoSerializer, Meta, FeriadoView
+### Community 12 - "views/__init__.py"
+Cohesion: 0.12
+Nodes (12): ClientesPositivacaoAreaView, ClientesPositivacaoView, ComissoesVendedorView, MixItensAreaView, MixItensPorVendedorView, ObjetivoMensalVendedorView, PivotVendasView, PreVendaItensView (+4 more)
 
 ### Community 14 - "pre_venda_status_service.py"
 Cohesion: 0.09
 Nodes (23): dbo.Complemento, dbo.Documento, dbo.DocumentoFornecedorMult, dbo.DocumentoImagem, dbo.DocumentoIntegracaoCampos, dbo.DocumentoIntegracaoTIpo, dbo.DocumentoItens, dbo.Evento (+15 more)
 
 ### Community 15 - "buscar_rotas_usuario"
-Cohesion: 0.23
-Nodes (10): App(), Login(), EditarUsuario(), formatPhone(), Feriados(), RegisterUser(), PrivateRoute(), AuthCtx (+2 more)
+Cohesion: 0.17
+Nodes (19): App(), Login(), EditarUsuario(), formatPhone(), Feriados(), RegisterUser(), PrivateRoute(), ToastContext (+11 more)
 
 ### Community 16 - "CacheAdminSection.jsx"
+Cohesion: 0.10
+Nodes (22): dbo.Classificador, dbo.ClassificadorTipo, dbo.Contrato, dbo.ContratoPatrimonio, dbo.Corretora, dbo.Depreciacao, dbo.MapaAbastecimento, dbo.MapaAbastecimentoMovimentacao (+14 more)
+
+### Community 17 - "._ano_anterior"
 Cohesion: 0.15
-Nodes (13): dbo.Classificador, dbo.ClassificadorTipo, dbo.Contrato, dbo.ContratoPatrimonio, dbo.Depreciacao, dbo.Patrimonio, dbo.PatrimonioMeta, dbo.PatrimonioTipo (+5 more)
+Nodes (10): _chave(), get_cache_mes(), periodo_cacheavel(), set_cache_mes(), _num(), safe_divide(), _to_float(), _to_int() (+2 more)
 
-### Community 17 - "dbo.FormaReceb"
-Cohesion: 0.28
-Nodes (9): dbo.FormaReceb, dbo.FormaRecebGrupo, dbo.FormaRecebParcelas, dbo.NaturezaOpFormaReceb, dbo.RestauranteCaixa, dbo.RestaurantePedidoVenda, dbo.TabelaPreco, dbo.TabelaPrecoFormaReceb (+1 more)
-
-### Community 18 - "Dashboard.jsx"
-Cohesion: 0.17
-Nodes (6): api, AuthCtx, TelegramVincular(), PALETTE, apiServices, ClienteService
-
-### Community 19 - "CardsDetalhadosVendedor.jsx"
-Cohesion: 0.16
-Nodes (6): RupturaNotificada, Meta, TelegramLinkCode, Meta, TelegramPollState, Meta
+### Community 18 - "api.js"
+Cohesion: 0.29
+Nodes (5): api, TelegramVincular(), desvincularTelegram(), gerarCodigoTelegram(), getStatusTelegram()
 
 ### Community 20 - "GerenciarCampanhas.jsx"
 Cohesion: 0.18
 Nodes (8): _as_date(), buscar_pdv_comparativo(), buscar_pdv_por_unid_gestora(), buscar_pdv_por_unid_gestora_ano_anterior(), buscar_vendas_pdv(), _intervalo_ano_anterior(), _intervalo_exclusivo(), somar_linhas_pdv()
 
-### Community 21 - "dbo.NaturezaOperacao"
-Cohesion: 0.20
-Nodes (10): dbo.MaterialIntegracaoContabil, dbo.NaturezaOp, dbo.NaturezaOpCliente, dbo.NaturezaOpCompra, dbo.NaturezaOperacao, dbo.NaturezaOperacaoClasse, dbo.NaturezaOperacaoCompra, dbo.NaturezaOpFiscal (+2 more)
+### Community 21 - "dbo.PedidoVenda"
+Cohesion: 0.11
+Nodes (20): dbo.EficienciaSeparacaoPedido, dbo.MapaExpedicao, dbo.MapaExpedicaoDespesa, dbo.MapaExpedicaoPedido, dbo.MapaExpedicaoPreVenda, dbo.MaterialIntegracaoContabil, dbo.NaturezaOp, dbo.NaturezaOpCliente (+12 more)
 
 ### Community 22 - "models.py"
-Cohesion: 0.17
-Nodes (7): create_user_profile(), Profile, save_user_profile(), MeSerializer, Meta, ProfileSerializer, Meta
+Cohesion: 0.05
+Nodes (25): ObjetivoMensalAdmin, CampanhaVenda, Meta, CampanhaVendaObjetivo, Meta, create_user_profile(), Feriado, Meta (+17 more)
 
-### Community 23 - "MultiDBRouter"
-Cohesion: 0.31
-Nodes (6): ObjetivoMensal, Meta, ObjetivoMensalSerializer, Meta, ObjetivoMensalResumoView, ObjetivoMensalView
+### Community 23 - "ObjetivoMensalSerializer"
+Cohesion: 0.39
+Nodes (4): ObjetivoMensalSerializer, Meta, ObjetivoMensalResumoView, ObjetivoMensalView
 
-### Community 24 - "campanhas_views.py"
-Cohesion: 0.11
-Nodes (11): buscar_fabricantes(), buscar_grupos(), buscar_materiais(), buscar_realizado_campanha(), _clamp_limit(), buscar_rotas_usuario(), CampanhasPainelView, _consolidar() (+3 more)
+### Community 24 - "campanhas_service.py"
+Cohesion: 0.18
+Nodes (6): buscar_fabricantes(), buscar_grupos(), buscar_materiais(), buscar_realizado_campanha(), _clamp_limit(), _to_int_or_none()
 
 ### Community 25 - "query_all"
 Cohesion: 0.14
 Nodes (17): dbo.Analise, dbo.AnaliseCertificado, dbo.AnaliseCertificadoItem, dbo.AnaliseEmitente, dbo.AnaliseGrupo, dbo.AnaliseItem, dbo.AnaliseItemFaixa, dbo.AnaliseMaterial (+9 more)
 
-### Community 26 - "Command"
-Cohesion: 0.21
-Nodes (12): BlocoMedida(), CardResumo(), classePct(), fmtData(), fmtPct(), MEDIDAS, ModalCampanha(), ritmoDe() (+4 more)
+### Community 26 - "indicadoresApi.js"
+Cohesion: 0.19
+Nodes (15): CardDiarioNecessarioVendedor(), CardsColaborador(), CardDiarioNecessario(), PALETTE, ResumoSegmentoPies(), getClientesPositivacao(), getComissoesVendedor(), getMixItens() (+7 more)
 
-### Community 27 - "CardsColaborador.jsx"
-Cohesion: 0.21
-Nodes (14): BuscaAutocomplete(), cardStyle, CelulaMedida(), corPct(), DetalheCampanha(), extrairErro(), fmtDataBR(), FormNovaCampanha() (+6 more)
+### Community 27 - "GerenciarCampanhas.jsx"
+Cohesion: 0.09
+Nodes (39): BlocoMedida(), CardResumo(), CardsCampanhas(), classePct(), MEDIDAS, ModalCampanha(), ritmoDe(), ROTULO_ESCOPO (+31 more)
 
 ### Community 28 - "Pivot/PivotVendas.jsx"
-Cohesion: 0.22
-Nodes (3): buscar_dump_vendas(), _validar_data(), PivotVendasView
+Cohesion: 0.21
+Nodes (4): buscar_objetivo_peso_positivacao(), _to_int_list(), buscar_dump_vendas(), _validar_data()
 
-### Community 29 - "dbo.Conta"
-Cohesion: 0.25
-Nodes (8): dbo.Boleto, dbo.Caixa, dbo.CaixaParcelas, dbo.Conta, dbo.ContasReceber, dbo.Moeda, dbo.PagamentoPeriodico, dbo.PagamentoPeriodicoItem
+### Community 29 - "telegram_views.py"
+Cohesion: 0.14
+Nodes (3): TelegramDesvincularView, TelegramGerarCodigoView, TelegramStatusView
 
-### Community 30 - "api.js"
-Cohesion: 0.19
-Nodes (5): CampanhaVendaObjetivo, Meta, CampanhaVendaObjetivoSerializer, Meta, CampanhaVendaObjetivoViewSet
-
-### Community 31 - ".get"
-Cohesion: 0.12
-Nodes (6): buscar_cupons_por_vendedor(), buscar_vendedores_mesma_supervisao(), obter_unid_gestoras_por_vendedores(), PDVPorVendedorAPIView, ResumoSegmentoAreaVendaView, VendasPorVendedorView
+### Community 31 - "pdv_views.py"
+Cohesion: 0.27
+Nodes (4): obter_unid_gestora(), IndicadoresPDV, MinhaUnidGestoraView, PDVPorVendedorAPIView
 
 ### Community 32 - "index.js"
 Cohesion: 0.20
 Nodes (14): dbo.BICubo, dbo.BILayout, dbo.BIMenuLayout, dbo.UserGrupoUsuario, dbo.UserGrupoUsuarioOp, dbo.UserGrupoUsuarioOpAdicional, dbo.UserGrupoUsuarioOpWeb, dbo.UserModulo (+6 more)
 
 ### Community 33 - "django_core_management_base"
-Cohesion: 0.25
-Nodes (12): CacheAdminSection(), chevronStyle(), feedbackStyle(), fmtData(), fmtDataHora(), S, tagStyle(), TIPO_CORES (+4 more)
+Cohesion: 0.20
+Nodes (19): CacheAdminSection(), chevronStyle(), feedbackStyle(), fmtData(), fmtDataHora(), S, tagStyle(), TIPO_CORES (+11 more)
 
-### Community 34 - "query_all"
-Cohesion: 0.10
-Nodes (14): _connect(), _ensure_nocount(), query_all(), query_one(), obter_cod_supervisor(), Todos_Vendedores(), buscar_objetivo_peso_positivacao(), _to_int_list() (+6 more)
+### Community 34 - ".get"
+Cohesion: 0.17
+Nodes (4): obter_cod_supervisor(), Todos_Vendedores(), buscar_cupons_por_vendedor(), obter_unid_gestoras_por_vendedores()
 
-### Community 35 - "ResumoVendas.jsx"
-Cohesion: 0.16
-Nodes (5): CampanhaVendaProgressoView, FabricanteSearchView, GrupoSearchView, MaterialSearchView, _to_int_or_none()
+### Community 35 - "campanhas_views.py"
+Cohesion: 0.09
+Nodes (10): EscritaAdminGerenteSupervisor, CampanhasPainelView, CampanhaVendaObjetivoViewSet, CampanhaVendaProgressoView, _consolidar(), FabricanteSearchView, GrupoSearchView, _mapa_realizado() (+2 more)
 
-### Community 36 - "ref_react"
-Cohesion: 0.15
-Nodes (4): Footer(), Header(), Layout(), Sidebar()
+### Community 36 - "auth.jsx"
+Cohesion: 0.29
+Nodes (9): Footer(), Header(), Layout(), Sidebar(), AuthCtx, AuthProvider(), getVisibleRoles(), useAuth() (+1 more)
 
 ### Community 37 - "campanhas_service.py"
-Cohesion: 0.18
-Nodes (6): buscar_itens_pre_venda(), buscar_status_pre_vendas(), _dt_bounds(), _validar_data(), PreVendaItensView, PreVendaStatusView
+Cohesion: 0.31
+Nodes (4): buscar_itens_pre_venda(), buscar_status_pre_vendas(), _dt_bounds(), _validar_data()
 
 ### Community 38 - "Command"
 Cohesion: 0.17
 Nodes (12): dbo.AreaSupervisao, dbo.AreaVenda, dbo.AreaVendaFabricante, dbo.AreaVendaMetaPositivacao, dbo.Fabricante, dbo.ObjetivoFinanceiro, dbo.ObjetivoFinanceiroFabricante, dbo.Rota (+4 more)
 
-### Community 39 - "Meta"
-Cohesion: 0.25
-Nodes (4): ObjetivoMixNivel, Meta, ObjetivoMixNivelSerializer, Meta
+### Community 39 - "venda_hoje_service.py"
+Cohesion: 0.32
+Nodes (3): _build_in_filter(), buscar_venda_hoje(), _hoje_brasil()
 
 ### Community 41 - "admin.py"
-Cohesion: 0.21
-Nodes (6): CampanhaVendaItem, Meta, CampanhaVendaItemSerializer, Meta, CampanhaVendaSerializer, Meta
+Cohesion: 0.16
+Nodes (5): CampanhaVendaItem, Meta, CampanhaVendaSerializer, Meta, CampanhaVendaViewSet
 
 ### Community 42 - "venda_hoje_service.py"
-Cohesion: 0.22
-Nodes (5): buscar_ruptura(), buscar_ruptura_itens_detalhado(), _to_int_list(), _validar_data(), RupturaItensView
+Cohesion: 0.19
+Nodes (6): buscar_ruptura(), buscar_ruptura_itens_detalhado(), _to_int_list(), _validar_data(), RupturaItensView, RupturaView
 
 ### Community 43 - "buscar_dump_vendas"
 Cohesion: 0.20
 Nodes (10): dbo.Estacao, dbo.EstacaoStone, dbo.Mensagem, dbo.Pocket, dbo.PocketDiaSemana, dbo.PocketMensagem, dbo.StoneEstabelecimento, dbo.StoneMaquina (+2 more)
 
-### Community 44 - "manage.py"
-Cohesion: 0.31
-Nodes (3): Command, cod_supervisor_de(), formatar_moeda_brl()
-
 ### Community 45 - "Pivot/PivotVendas.jsx"
 Cohesion: 0.32
-Nodes (4): fmt(), MODOS, PivotVendas(), TabelaComSubtotal()
+Nodes (4): MODOS, PivotVendas(), TabelaComSubtotal(), getPivotVendas()
 
-### Community 46 - "datetime"
-Cohesion: 0.14
-Nodes (7): calcular_matematica_projecao(), get_dias_uteis_info(), _hoje_brasil(), _build_in_filter(), buscar_venda_hoje(), _hoje_brasil(), VendaHojeView
-
-### Community 47 - "dashboard/management/__init__.py"
-Cohesion: 0.25
-Nodes (3): CampanhaVenda, Meta, CampanhaVendaViewSet
+### Community 46 - "indicadores_views.py"
+Cohesion: 0.10
+Nodes (11): calcular_matematica_projecao(), get_dias_uteis_info(), _hoje_brasil(), buscar_vendedores_mesma_supervisao(), _meses_no_periodo(), _to_float_safe(), _calc_liquido_por_vendedor_por_rotas(), _media_ponderada_gerente() (+3 more)
 
 ### Community 48 - "indicadores/__init__.py"
-Cohesion: 0.39
-Nodes (3): _bot_token(), buscar_updates(), enviar_mensagem()
+Cohesion: 0.31
+Nodes (4): _bot_token(), buscar_updates(), enviar_mensagem(), formatar_moeda_brl()
 
 ### Community 53 - "RegisterMix.jsx"
 Cohesion: 0.40
 Nodes (6): dbo.PDVCartaCredito, dbo.PDVCupom, dbo.PDVCupomItens, dbo.PDVCupomParcelas, dbo.PDVDevolucao, dbo.PDVDevolucaoItens
 
-### Community 56 - "CustomUserSerializer"
-Cohesion: 0.38
-Nodes (3): CustomUserSerializer, Meta, UsuarioDetailView
+### Community 56 - "usuarios_views.py"
+Cohesion: 0.12
+Nodes (9): IsAdminOrGerente, CustomUserSerializer, Meta, MeSerializer, Meta, get_funcionario_por_codigo(), funcionario_detail(), me() (+1 more)
+
+### Community 57 - "tests.py"
+Cohesion: 0.05
+Nodes (17): eh_supervisor(), HasAnyRole, IsAdminGerenteOrSupervisor, _logado(), FeriadoSerializer, Meta, FeriadosAceitaSupervisor, GerenteNaoEditaContaDeAdmin (+9 more)
 
 ### Community 62 - "dbo.CartaoProcess"
 Cohesion: 0.50
@@ -369,43 +350,23 @@ Nodes (3): dbo.Integracao, dbo.IntegracaoLancamento, dbo.IntegracaoMovimento
 Cohesion: 1.00
 Nodes (3): dbo.PDVECF, dbo.PDVReducaoZ, dbo.PDVReducaoZItens
 
-### Community 72 - "CardsDetalhadosVendedor.jsx"
-Cohesion: 0.52
-Nodes (4): CardsDetalhadosVendedor(), fmtMoeda(), TabelaClientesvendedor(), TabelaMixProdutosVendedor()
-
-### Community 99 - "dbo.UnidadeGestora"
-Cohesion: 0.33
-Nodes (6): dbo.BoletoFormato, dbo.BoletoTipo, dbo.LoginUsuarioUnidade, dbo.TabelaPrecoUnidadeGestora, dbo.UnidadeGestora, dbo.UserUsuarioUnidade
-
-### Community 100 - "dbo.ContasPagar"
-Cohesion: 0.33
-Nodes (6): dbo.CelulaProducao, dbo.CelulaProducaoLinha, dbo.CentroCusto, dbo.ContasPagar, dbo.LinhaProducao, dbo.LinhaProducaoMaterial
-
-### Community 101 - "dbo.ClienteDocumento"
-Cohesion: 0.67
-Nodes (3): dbo.ClienteDocumento, dbo.DocumentoModelo, dbo.DocumentoTipo
-
-### Community 102 - "dbo.VeiculoMovimentacao"
-Cohesion: 0.67
-Nodes (3): dbo.MapaAbastecimento, dbo.MapaAbastecimentoMovimentacao, dbo.VeiculoMovimentacao
-
 ## Knowledge Gaps
-- **42 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **37 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `buscar_ruptura()` connect `venda_hoje_service.py` to `query_all`, `App.js`, `manage.py`, `signals.py`, `CardsDetalhadosVendedor.jsx`, `.get`?**
-  _High betweenness centrality (0.009) - this node is a cross-community bridge._
+- **Why does `query_all()` connect `APIView` to `.get`, `campanhas_views.py`, `vendas_views.py`, `db_conn.py`, `campanhas_service.py`, `venda_hoje_service.py`, `IndicativosDeVenda.jsx`, `venda_hoje_service.py`, `indicadores_views.py`, `GerenciarCampanhas.jsx`, `campanhas_service.py`, `usuarios_views.py`, `Pivot/PivotVendas.jsx`, `pdv_views.py`?**
+  _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **Should `models.py` be split into smaller, more focused modules?**
   _Cohesion score 0.005763688760806916 - nodes in this community are weakly interconnected._
-- **Why does `UserRegisterSerializer` connect `UserRegisterSerializer` to `App.js`, `models.py`?**
+- **Why does `FeriadoView` connect `tests.py` to `campanhas_views.py`, `views/__init__.py`?**
   _High betweenness centrality (0.009) - this node is a cross-community bridge._
 - **Should `dbo.Cliente` be split into smaller, more focused modules?**
-  _Cohesion score 0.10476190476190476 - nodes in this community are weakly interconnected._
-- **Why does `query_all()` connect `query_all` to `campanhas_service.py`, `IndicativosDeVenda.jsx`, `APIView`, `venda_hoje_service.py`, `App.js`, `datetime`, `GerenciarCampanhas.jsx`, `campanhas_views.py`, `Pivot/PivotVendas.jsx`, `.get`?**
+  _Cohesion score 0.0467687074829932 - nodes in this community are weakly interconnected._
+- **Why does `get_role_context()` connect `vendas_views.py` to `.get`, `campanhas_views.py`, `campanhas_views.py`, `views/__init__.py`, `indicadores_views.py`, `._ano_anterior`, `usuarios_views.py`, `telegram_views.py`, `pdv_views.py`?**
   _High betweenness centrality (0.008) - this node is a cross-community bridge._
 - **Should `.get` be split into smaller, more focused modules?**
-  _Cohesion score 0.04810360777058279 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.047872340425531915 - nodes in this community are weakly interconnected._
 - **Should `campanhas_views.py` be split into smaller, more focused modules?**
-  _Cohesion score 0.08048103607770583 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.060496067755595885 - nodes in this community are weakly interconnected._
