@@ -7,7 +7,7 @@ import React, {
   useState,
   useCallback,
 } from "react";
-import api from "../api"; // <- usa o cliente axios centralizado
+import { getMe } from "./../services/authApi";
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
@@ -41,7 +41,7 @@ export const AuthProvider = ({ children }) => {
     try {
       // Chama sempre /api/me/; se houver JWT, o interceptor adiciona o Bearer;
       // se for sessão, enviamos cookies com withCredentials.
-      const { data } = await api.get("/me/", { withCredentials: true });
+      const { data } = await getMe();
       setMe(data || null);
     } catch (e) {
       console.error("[Auth] /me error:", e);
@@ -53,13 +53,7 @@ export const AuthProvider = ({ children }) => {
 
   // Carrega/relê o /api/me sempre que authVersion muda (login/logout)
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      await loadMe();
-    })();
-    return () => {
-      alive = false;
-    };
+    loadMe();
   }, [loadMe, authVersion]);
 
   // Ações
@@ -72,6 +66,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem("access");
     localStorage.removeItem("token");
+    localStorage.removeItem("refresh");
     setMe(null);
     setAuthVersion((v) => v + 1);
   };

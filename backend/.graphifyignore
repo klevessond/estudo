@@ -1,0 +1,7 @@
+node_modules/
+venv/
+.venv/
+**/migrations/
+staticfiles/
+build/
+dist/

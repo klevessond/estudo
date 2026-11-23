@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../api'; // ajuste o caminho conforme a localização real do seu axios instance
+import { getStatusTelegram, gerarCodigoTelegram, desvincularTelegram } from '../../services/telegramApi';
 
 const TelegramVincular = () => {
   const [vinculado, setVinculado] = useState(null); // null = carregando
@@ -14,7 +14,7 @@ const TelegramVincular = () => {
   const checarStatus = () => {
     setVerificando(true);
     setErro(null);
-    api.get('/telegram/status/')
+    getStatusTelegram()
       .then(({ data }) => {
         setVinculado(!!data?.vinculado);
         if (data?.cod_funcionario !== undefined) setMeuCodFuncionario(data.cod_funcionario);
@@ -36,7 +36,7 @@ const TelegramVincular = () => {
     setGerando(true);
     setErro(null);
     try {
-      const { data } = await api.post('/telegram/gerar-codigo/');
+      const { data } = await gerarCodigoTelegram();
       setCodigo(data?.codigo);
       setBotUsername(data?.bot_username);
       setExpiraEm(Date.now() + (data?.expira_em_minutos || 10) * 60 * 1000);
@@ -50,7 +50,7 @@ const TelegramVincular = () => {
   const desvincular = async () => {
     if (!window.confirm('Tem certeza que deseja desvincular seu Telegram?')) return;
     try {
-      await api.post('/telegram/desvincular/');
+      await desvincularTelegram();
       setVinculado(false);
       setCodigo(null);
     } catch {

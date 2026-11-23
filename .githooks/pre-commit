@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Atualiza o grafo do graphify e inclui no commit.
+RAIZ="$(git rev-parse --show-toplevel)" || exit 0
+GRAPHIFY="$(command -v graphify || echo "$HOME/.local/bin/graphify")"
+
+if [ ! -x "$GRAPHIFY" ]; then
+  echo "[graphify] comando não encontrado; commit segue sem atualizar o grafo." >&2
+  exit 0
+fi
+
+cd "$RAIZ" || exit 0
+echo "[graphify] atualizando grafo..."
+if "$GRAPHIFY" update . --force >/dev/null && "$GRAPHIFY" cluster-only . --no-label >/dev/null; then
+  git add -f graphify-out/graph.json graphify-out/GRAPH_REPORT.md
+else
+  echo "[graphify] falha ao atualizar; commit segue sem o grafo atualizado." >&2
+fi
+exit 0

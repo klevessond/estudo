@@ -1,12 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import api from '../../api';
+import { getPivotVendas } from '../../services/indicadoresApi';
+import { fmtNum2 as fmt } from '../../utils/formatters';
 import PivotTableUI from 'react-pivottable/PivotTableUI';
 import TableRenderers from 'react-pivottable/TableRenderers';
 import 'react-pivottable/pivottable.css';
 
 /* ─── Tabela com subtotal manual ─────────────────────────────────────── */
-const fmt = (v) =>
-  Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const TabelaComSubtotal = ({ data, campoLinha1, campoLinha2, campoValor }) => {
   // Agrupa: pai → filho → soma
@@ -157,9 +156,7 @@ const PivotVendas = () => {
     setErro(null);
     setLoading(true);
     try {
-      const { data: json } = await api.get(
-        `/indicadores/pivot-vendas/?de=${datas.de}&ate=${datas.ate}`
-      );
+      const { data: json } = await getPivotVendas({ de: datas.de, ate: datas.ate });
       const resultado = json?.resultado;
       if (!Array.isArray(resultado) || resultado.length === 0) {
         setErro('Nenhum dado encontrado para o período selecionado.');

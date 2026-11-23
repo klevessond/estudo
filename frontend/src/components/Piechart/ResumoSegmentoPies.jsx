@@ -1,7 +1,7 @@
 // src/components/Piechart/ResumoSegmentoPies.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import Plot from "react-plotly.js";
-import api from "../../api";
+import { getResumoSegmentoAreaVenda } from '../../services/indicadoresApi';
 import "../Piechart/PieChart.css"; // usa o seu CSS
 
 // Paleta base (personalize à vontade)
@@ -32,7 +32,7 @@ export default function ResumoSegmentoPies({ periodoSelecionado, codFuncionario 
         setLoading(true);
         const { de, ate } = periodoSelecionado;
 
-        const response = await api.get("/resumo-segmento-area-venda/", {
+        const response = await getResumoSegmentoAreaVenda({
           params: { de, ate, cod_funcionarios: codFuncionario },
         });
 
@@ -85,13 +85,6 @@ export default function ResumoSegmentoPies({ periodoSelecionado, codFuncionario 
     return { labelsRate: labels, valuesRateBase: base, posCounts: pos, percsRate: percs, totalRateBase: total };
   }, [rateData]);
 
-  // Hover já formatado (evita customdata[...])
-  const hoverTextRate = useMemo(() => {
-    const fmt = (n, d = 2) => Number(n).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
-    return labelsRate.map((seg, i) =>
-      `${seg}<br>Clientes: ${valuesRateBase[i]}<br>Positivaram: ${posCounts[i]} (${fmt(percsRate[i])}%)`
-    );
-  }, [labelsRate, valuesRateBase, posCounts, percsRate]);
 
   // Cores consistentes por segmento (mesmas nos 3 gráficos)
   const allSegments = useMemo(() => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './Dashboard.css';
-import api from '../../../api';
+import { getMinhaUg, getPdvPorVendedor } from '../../../services/indicadoresApi';
 
 import { useAuth } from '../../../contexts/auth';
 
@@ -10,16 +10,7 @@ import IndicativosTabelaVendedor from '../../metricard/IndicativosTabelaVendedor
 import CardsColaborador from '../../metricard/CardsColaborador';
 import CardsDetalhadosVendedor from '../../metricard/CardsDetalhadosVendedor';
 import BarChartsColaboradoresKPIs from '../../BarChart/BarChartsColaboradoresKPIs';
-
-// === Helpers HTTP (fetch) ===
-const API_BASE =
-  (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_BASE_URL) ||
-  '/api'; // fallback relativo
-
-const authHeaders = () => {
-  const token = (typeof localStorage !== 'undefined' && localStorage.getItem('token')) || '';
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+import CardsCampanhas from '../../metricard/CardsCampanhas';
 
 // LOG helper
 const logUG = (payload, extra = {}) => {
@@ -79,7 +70,7 @@ const Dashboard = () => {
     const checarUG = async () => {
       try {
         const t0 = performance.now();
-        const resp = await api.get('/indicadores/minha-ug/');
+        const resp = await getMinhaUg();
         const data = resp.data;
         const t1 = performance.now();
 
@@ -154,7 +145,7 @@ const Dashboard = () => {
       try {
         console.debug('[Dashboard] chamando /indicadores/pdv-por-vendedor', { de, ate, vendParam });
 
-        const { data } = await api.get('/indicadores/pdv-por-vendedor/', {
+        const { data } = await getPdvPorVendedor({
           params: { de, ate, vendedores: vendParam },
           signal: ctrl.signal, // funciona no axios >=1.4 usando fetch adapter; se não, ignora
         });
@@ -259,6 +250,9 @@ const Dashboard = () => {
             onProjecoesPorVendedorChange={setProjecoesPorVendedor}  
           />
         </div>
+
+        {/* Campanhas em andamento (o backend já restringe os números ao papel do usuário) */}
+        <CardsCampanhas />
 
         {/* Botões de modo */}
         {!isRestricted && (

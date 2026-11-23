@@ -226,3 +226,60 @@
 .rs__multi-value__remove {
   color: #333 !important;
 }
+/* Banner de falha de carregamento, com ação de repetir */
+.erro-carga-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 0.9rem;
+}
+
+.erro-carga-banner button {
+  background: #b91c1c;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.erro-carga-banner button:hover {
+  background: #991b1b;
+}
+
+/* Skeleton: enquanto carrega, os valores dos cards pulsam em cinza
+   em vez de mostrar R$ 0,00 */
+.idv-carregando .card-value,
+.idv-carregando .card-percentage,
+.idv-carregando .card-variation {
+  color: transparent !important;
+  background: linear-gradient(90deg,
+    rgba(148, 163, 184, 0.25) 25%,
+    rgba(148, 163, 184, 0.45) 50%,
+    rgba(148, 163, 184, 0.25) 75%);
+  background-size: 200% 100%;
+  animation: idv-skeleton 1.2s ease-in-out infinite;
+  border-radius: 6px;
+  min-height: 1em;
+  user-select: none;
+}
+
+.idv-carregando .card-value * ,
+.idv-carregando .card-percentage *,
+.idv-carregando .card-variation * {
+  visibility: hidden;
+}
+
+@keyframes idv-skeleton {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

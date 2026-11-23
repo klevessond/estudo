@@ -1,9 +1,9 @@
 // src/components/pages/Register.jsx
 import './register.css';
-import { useNavigate } from 'react-router-dom';
 import React, { useEffect, useState, useMemo } from 'react';
+import { useToast } from '../../ui/Toast.jsx';
 import CacheAdminSection from './CacheAdminSection';
-import api from '../../../api';
+import { getTodosVendedores, getObjetivosVendedores, salvarObjetivosVendedores, getObjetivosMixNivel, salvarObjetivoMixNivel } from '../../../services/cadastrosApi';
 
 const toYYYYMM = (dateObj) => {
   const y = dateObj.getFullYear();
@@ -19,6 +19,7 @@ const addMonthsYYYYMM = (yyyyMm, delta) => {
 };
 
 const RegisterObjetivosVendedores = () => {
+  const toast = useToast();
   const [vendedores, setVendedores] = useState([]);
   
   // Objetivos Individuais (Vendedores)
@@ -41,7 +42,6 @@ const RegisterObjetivosVendedores = () => {
   const [percCrescimento, setPercCrescimento] = useState(0);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
-  const navigate = useNavigate();
 
   // 1) Carrega lista
   useEffect(() => {
@@ -52,7 +52,7 @@ const RegisterObjetivosVendedores = () => {
 
     (async () => {
       try {
-        const { data: venResp } = await api.get('/todos-vendedores/?ativos=true');
+        const { data: venResp } = await getTodosVendedores({ params: { ativos: true } });
         setVendedores(venResp.detalhamento || []);
       } catch (err) {
         console.error('Erro ao buscar vendedores:', err);
@@ -86,7 +86,7 @@ const RegisterObjetivosVendedores = () => {
       try {
         const dataRef = `${mesReferencia}-01`;
 
-        const { data: objResp } = await api.get('/objetivos-vendedores/', {
+        const { data: objResp } = await getObjetivosVendedores({
           params: { mes_referencia: dataRef },
         });
         
@@ -108,7 +108,7 @@ const RegisterObjetivosVendedores = () => {
         setObjetivosPeso(objPeso);
         setObjetivosPos(objPos);
 
-        const { data: mixNivelResp } = await api.get('/objetivos-mix-nivel/', {
+        const { data: mixNivelResp } = await getObjetivosMixNivel({
           params: { mes: dataRef },
         });
 
@@ -151,14 +151,14 @@ const RegisterObjetivosVendedores = () => {
   };
 
   const handleAplicarCrescimento = async () => {
-    if (!mesBaseCalculo) return alert("Selecione um mês base.");
-    if (selectedIds.size === 0) return alert("Selecione pelo menos um vendedor.");
+    if (!mesBaseCalculo) return toast.aviso("Selecione um mês base.");
+    if (selectedIds.size === 0) return toast.aviso("Selecione pelo menos um vendedor.");
 
     if (!window.confirm(`Aplicar ${percCrescimento}% sobre ${mesBaseCalculo} para ${selectedIds.size} vendedores?`)) return;
 
     setLoading(true);
     try {
-      const { data: objResp } = await api.get('/objetivos-vendedores/', {
+      const { data: objResp } = await getObjetivosVendedores({
         params: { mes_referencia: `${mesBaseCalculo}-01` },
       });
 
@@ -184,10 +184,10 @@ const RegisterObjetivosVendedores = () => {
       setObjetivosPeso(novoPeso);
       setObjetivosMix(novoMix);
       setObjetivosPos(novoPos);
-      alert("Cálculo aplicado!");
+      toast.sucesso("Cálculo aplicado!");
     } catch (err) {
       console.error("Erro:", err);
-      alert("Erro ao buscar dados.");
+      toast.erro("Erro ao buscar dados.");
     } finally {
       setLoading(false);
     }
@@ -208,7 +208,7 @@ const RegisterObjetivosVendedores = () => {
           objetivo_positivacao: parseInt(objetivosPos[v.CodFuncionario]) || 0,
         })),
       };
-      await api.post('/objetivos-vendedores/', payloadInd);
+      await salvarObjetivosVendedores(payloadInd);
 
       const metasMix = [];
       if (mixEmpresa) metasMix.push({ nivel: 'EMPRESA', codigo_alvo: 0, objetivo_mix: parseInt(mixEmpresa) });
@@ -218,15 +218,15 @@ const RegisterObjetivosVendedores = () => {
       });
 
       if (metasMix.length > 0) {
-        await api.post('/objetivos-mix-nivel/', {
+        await salvarObjetivoMixNivel({
           mes_referencia: dataFormatada,
           metas: metasMix
         });
       }
-      alert('Objetivos salvos com sucesso!');
+      toast.sucesso('Objetivos salvos com sucesso!');
     } catch (err) {
       console.error(err);
-      alert('Erro ao salvar.');
+      toast.erro('Erro ao salvar.');
     } finally {
       setLoading(false);
     }

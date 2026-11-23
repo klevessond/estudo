@@ -2,10 +2,9 @@ import React, { useState, useEffect } from 'react';
 import '../ResumoVendas/ResumoVendas.css'; // Reutilizando estilos dos botões
 import TabelaClientesvendedor from './TabelaClientesPosotivados';
 import TabelaMixProdutosVendedor from './TabelaMixProdutosVendedor';
-import api from '../../api';
+import { getRupturaItens } from '../../services/indicadoresApi';
+import { fmtMoeda } from '../../utils/formatters';
 
-const fmtMoeda = (v) =>
-  Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const CardsDetalhadosVendedor = ({ codFuncionario, periodoSelecionado }) => {
   const [visao, setVisao] = useState('positivados');
@@ -48,7 +47,7 @@ const CardsDetalhadosVendedor = ({ codFuncionario, periodoSelecionado }) => {
     if (visao !== 'ruptura' || !codFuncionario || !periodoSelecionado?.de || !periodoSelecionado?.ate) return;
 
     setLoadingRuptura(true);
-    api.get('/indicadores/ruptura-itens/', {
+    getRupturaItens({
       params: {
         de: periodoSelecionado.de,
         ate: periodoSelecionado.ate,

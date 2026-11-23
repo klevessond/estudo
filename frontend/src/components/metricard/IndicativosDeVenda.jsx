@@ -1,25 +1,22 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import './IndicativosDeVenda.css';
-import ReactSpeedometer from 'react-d3-speedometer';
-import api from '../../api';
-import BarChartColaboradores from '../BarChart/BarChartColaboradores';
+import { getIndicadores, getPdv, getPreVendaStatus, getMixItensArea, getClientesPositivacaoArea, getRupturaItens } from '../../services/indicadoresApi';
 import Select from 'react-select';
 import { useAuth } from '../../contexts/auth';
+import { fmtMoeda, fmtNum2, toNum, safeDiv, pct } from '../../utils/formatters';
+import Card from './indicativos/Card';
+import Gauge from './indicativos/Gauge';
+import CardDiarioNecessario from './indicativos/CardDiarioNecessario';
+import ProjectionModal from './indicativos/ProjectionModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 
-const dlog = (...args) => console.log('[IndicativosDeVenda]', ...args);
+const DEV = process.env.NODE_ENV !== 'production';
+const dlog = (...args) => { if (DEV) console.log('[IndicativosDeVenda]', ...args); };
 
 /* ========= HELPERS GERAIS (FORA DO COMPONENTE) ========= */
 
-
-const toNum = (v) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const safeDiv = (n, d) => (d ? n / d : 0);
 
 function filtrarPorSupervisao(data, selecionadas) {
 
@@ -215,25 +212,6 @@ function filtrarPorSupervisao(data, selecionadas) {
 const sumAreas = (areas, key) =>
   (Array.isArray(areas) ? areas : []).reduce((acc, a) => acc + toNum(a?.[key]), 0);
 
-const getVendaBases = ({ rawData, selecionadas }) => {
-  const escopo = rawData?.escopo_rotas || {};
-  const isGerente = Boolean(escopo.e_gerente);
-
-  // NÃO gerente: mantém o comportamento antigo (usa payload padrão)
-  if (!isGerente) {
-    const atual = toNum(rawData?.realizado_financeiro?.valor);
-    const aa = toNum(rawData?.evolucao?.valor_ano_anterior); // já vem do backend hoje
-    return { atual, aa };
-  }
-
-  // Gerente: usa escopo_rotas.areas_supervisao
-  const areas = pickAreas(escopo.areas_supervisao || [], selecionadas);
-
-  const atual = sumAreas(areas, "venda_realizada_area");
-  const aa = sumAreas(areas, "venda_ano_anterior_area");
-
-  return { atual, aa };
-};
 
 
 const pickAreas = (areas, selecionadas) => {
@@ -272,14 +250,6 @@ const calcGerenteObjetivosFromEscopo = (data, selecionadas) => {
 };
 
 
-const fmtMoeda = (n) =>
-  Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-const fmtNum2 = (n) =>
-  Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const pct = (num, den) => (Number(den) ? (Number(num) / Number(den)) * 100 : 0);
-
 const getMinhaLinha = (data) => {
   const meuCod = Number(data?.minha_visao?.cod_funcionario || 0);
   if (!meuCod) return null;
@@ -287,436 +257,8 @@ const getMinhaLinha = (data) => {
   return arr.find((x) => Number(x?.codcampo) === meuCod) || null;
 };
 
-// 🔍 helper só para exibir o texto do "Vendas Ano Anterior" no card
-const getValorAnoAnteriorTexto = (
-  rawData,
-  somarArea,
-  valorAnoAnteriorMesCheioBase,
-  valorAnoAnteriorBase,
-  usarPDV,
-  vendaPDVAnoAnterior
-) => {
-  if (!rawData) return '--';
-
-  const pdvAA = usarPDV ? Number(vendaPDVAnoAnterior || 0) : 0;
-
-  // 👥 SOMA DA ÁREA
-  if (somarArea) {
-    const baseMesArea =
-      Number(valorAnoAnteriorMesCheioBase || 0) ||
-      Number(rawData?.vendas?.ano_anterior_agregado_mes?.ValorLiquido || 0);
-
-    const total = Number(baseMesArea || 0) + pdvAA;
-    return total ? fmtMoeda(total) : '--';
-  }
-
-  // 👤 INDIVIDUAL
-  const linha = getMinhaLinha(rawData);
-  const vendMes = Number(linha?.Ano_anterior_mes_ValorLiquido || 0);
-
-  // se tiver mês cheio do vendedor, soma PDV AA
-  if (vendMes) {
-    const total = vendMes + pdvAA;
-    return fmtMoeda(total);
-  }
-
-  // fallback “até hoje”
-  const base = Number(valorAnoAnteriorBase || 0);
-  const total = base + pdvAA;
-  return total ? fmtMoeda(total) : '--';
-};
 
 /* ========= COMPONENTES DE APRESENTAÇÃO ========= */
-
-const Card = ({ title, title2, value, value2, subtitle, subtitle2, percentage, variation, icon, className, onDetailClick, extra }) => (
-  <div className={`indicativo-card ${className || ''}`}>
-    <div className="card-header">
-      <h2>{title}</h2>
-      {icon && <img src={icon} alt="Ícone" className="card-icon" />}
-    </div>
-    <div className="card-group">
-      <div className="card-value">{value}</div>
-      {subtitle && <p className="card-subtitle">{subtitle}</p>}
-    </div>
-    <div className="card-group">
-      <div className="card-value">{value2}</div>
-    </div>
-    <div className="card-subtitle">
-      {title2}
-      {icon && <img src={icon} alt="Ícone" className="card-icon" />}
-    </div>
-    <div className="card-group">
-      {percentage && <p className="card-percentage">{percentage}</p>}
-      {subtitle2 && <p className="card-subtitle">{subtitle2}</p>}
-    </div>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-        {variation && <p className="card-variation"> {variation} Desvio</p>}
-        {/* 👇 O BOTÃO DE DETALHAR ENTRA AQUI 👇 */}
-        {onDetailClick && (
-            <button 
-                onClick={onDetailClick} 
-                style={{ 
-                    background: 'none', border: 'none', color: '#007bff', 
-                    cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline',
-                    padding: 0, marginLeft: 'auto'
-                }}
-            >
-                Detalhar 🔍
-            </button>
-        )}
-
-    </div>
-    {extra && (
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', marginTop: '0.25rem', paddingTop: '0.25rem', fontSize: '0.75rem', textAlign: 'center', opacity: 0.9 }}>
-        {extra}
-      </div>
-    )}
-  </div>
-  
-);
-
-/* ========= HELPER: DIAS ÚTEIS (front-end, sem feriados externos) ========= */
-function diasUteisEntre(inicio, fim) {
-  const dias = [];
-  const cur = new Date(inicio); cur.setHours(0,0,0,0);
-  const end = new Date(fim);    end.setHours(0,0,0,0);
-  while (cur <= end) {
-    const d = cur.getDay();
-    if (d !== 0 && d !== 6) dias.push(new Date(cur)); // seg-sex apenas (exclui sáb e dom)
-    cur.setDate(cur.getDate() + 1);
-  }
-  return dias;
-}
-
-/* ========= CARD DIÁRIO NECESSÁRIO ========= */
-const CardDiarioNecessario = ({
-  periodoSelecionado,
-  objetivoFinanceiroBase,
-  vendaRealizadaBase,
-  usarPDV,
-  vendaPDVBase,
-}) => {
-  const [vendaHojeInfo, setVendaHojeInfo] = useState(null);  // { total, rotas, preVenda } | null = ainda carregando
-  const [loadingHoje, setLoadingHoje] = useState(false);
-
-  // Busca venda do dia (rotas + pré-venda) — atualiza quando o período muda
-  useEffect(() => {
-    let cancelado = false;
-    setLoadingHoje(true);
-    api.get('/indicadores/venda-hoje/')
-      .then(({ data }) => {
-        if (cancelado) return;
-        setVendaHojeInfo({
-          total: Number(data?.total_hoje || 0),
-          rotas: Number(data?.total_rotas_hoje || 0),
-          preVenda: Number(data?.total_pre_venda_hoje || 0),
-        });
-      })
-      .catch(() => { if (!cancelado) setVendaHojeInfo({ total: 0, rotas: 0, preVenda: 0 }); })
-      .finally(() => { if (!cancelado) setLoadingHoje(false); });
-    return () => { cancelado = true; };
-  }, [periodoSelecionado?.de]);   // re-busca se o mês mudar
-
-  const calc = useMemo(() => {
-    if (!periodoSelecionado?.de || !periodoSelecionado?.ate || !objetivoFinanceiroBase) return null;
-
-    const di   = new Date(periodoSelecionado.de  + 'T00:00:00');
-    const df   = new Date(periodoSelecionado.ate + 'T00:00:00');
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
-
-    const totalUteis = diasUteisEntre(di, df);
-    const decorridos = diasUteisEntre(di, hoje <= df ? hoje : df);
-    const amanha     = new Date(hoje); amanha.setDate(hoje.getDate() + 1);
-    const restantes  = hoje < df ? diasUteisEntre(amanha, df) : [];
-
-    const pdvNum = usarPDV ? (Number(vendaPDVBase) || 0) : 0;
-    const venda  = (Number(vendaRealizadaBase) || 0) + pdvNum;
-    const meta   = Number(objetivoFinanceiroBase) || 0;
-
-    const falta    = Math.max(meta - venda, 0);
-    const batida   = venda >= meta;
-    const diaNec   = (!batida && restantes.length > 0) ? falta / restantes.length : 0;
-
-    return {
-      nTotal: totalUteis.length,
-      nDecorridos: decorridos.length,
-      nRestantes: restantes.length,
-      falta,
-      diaNec,
-      batida,
-    };
-  }, [periodoSelecionado, objetivoFinanceiroBase, vendaRealizadaBase, usarPDV, vendaPDVBase]);
-
-  if (!calc) return null;
-
-  const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-  const vendaHojeTotal = vendaHojeInfo?.total ?? null;
-
-  // Cor do diário necessário: verde se batida, vermelho se ritmo muito abaixo, amarelo se próximo
-  const corDiaNec = calc.batida ? '#4ade80' : '#fde68a';
-
-  // Cor da venda de hoje (sem pré-venda): verde se >= necessário, amarelo se próximo, vermelho se baixo
-  const vendaHojeSemPre = vendaHojeInfo?.rotas ?? null;
-  const corHojeSemPre = vendaHojeSemPre === null
-    ? 'rgba(255,255,255,0.6)'
-    : vendaHojeSemPre >= calc.diaNec
-    ? '#4ade80'
-    : vendaHojeSemPre >= calc.diaNec * 0.7
-    ? '#fde68a'
-    : '#fca5a5';
-
-  // Cor da venda de hoje (com pré-venda): mesma régua, mas sobre o total
-  const corHojeComPre = vendaHojeTotal === null
-    ? 'rgba(255,255,255,0.6)'
-    : vendaHojeTotal >= calc.diaNec
-    ? '#4ade80'
-    : vendaHojeTotal >= calc.diaNec * 0.7
-    ? '#fde68a'
-    : '#fca5a5';
-
-  return (
-    <div className="indicativo-card card-diario">
-      <div className="card-header">
-        <h2>Diário Necessário</h2>
-      </div>
-
-      {/* Necessário por dia */}
-      <div className="card-value" style={{ color: corDiaNec }}>
-        {calc.batida
-          ? '🏆 Meta atingida!'
-          : calc.nRestantes === 0
-          ? 'Período encerrado'
-          : fmt(calc.diaNec)}
-      </div>
-      <p className="card-subtitle">necessário/dia para bater a meta</p>
-
-      {/* Separador */}
-      <div style={{ borderTop:'1px solid rgba(255,255,255,0.2)', margin:'4px 0' }} />
-
-      {/* Vendido HOJE — sem pré-venda */}
-      <div className="card-value" style={{ color: corHojeSemPre, fontSize:'clamp(11px,3vw,13px)' }}>
-        {loadingHoje
-          ? '...'
-          : vendaHojeSemPre === null
-          ? '--'
-          : fmt(vendaHojeSemPre)}
-      </div>
-      <p className="card-subtitle">vendido hoje (sem pré-venda)</p>
-
-      {/* Vendido HOJE — com pré-venda somada */}
-      <div className="card-value" style={{ color: corHojeComPre, fontSize:'clamp(11px,3vw,13px)', marginTop: 4 }}>
-        {loadingHoje
-          ? '...'
-          : vendaHojeTotal === null
-          ? '--'
-          : fmt(vendaHojeTotal)}
-      </div>
-      <p className="card-subtitle">vendido hoje (com pré-venda)</p>
-
-      {/* Separador */}
-      <div style={{ borderTop:'1px solid rgba(255,255,255,0.2)', margin:'4px 0' }} />
-
-      {/* Pré-venda efetuada hoje (valor isolado, para referência) */}
-      <p className="card-subtitle" style={{ margin:'2px 0' }}>
-        Pré-venda: {loadingHoje ? '...' : fmt(vendaHojeInfo?.preVenda)}
-      </p>
-
-      {/* Calendário + falta */}
-      <p className="card-subtitle" style={{ margin:'2px 0' }}>
-        🗓 {calc.nDecorridos}/{calc.nTotal} dias · {calc.nRestantes} rest.
-      </p>
-      {!calc.batida && (
-        <p className="card-subtitle" style={{ opacity:0.8, margin:'1px 0' }}>
-          Falta: {fmt(calc.falta)}
-        </p>
-      )}
-    </div>
-  );
-};
-
-/* ========= NOVO COMPONENTE: MODAL DE PROJEÇÃO ========= */
-const ProjectionModal = ({ onClose, data, usarPDV }) => {
-    if (!data) return null;
-
-    const proj = data.projecao_empresa || {};
-    const rotas = proj.financeiro_rotas || {};
-    const pdv = proj.financeiro_pdv || {};
-    const mix = proj.mix || {};
-    
-    // Lista de vendedores com suas projeções (vem do backend no campo 'vendas')
-    const vendedores = data.vendas?.vendas_por_vendedor || [];
-
-    // Verifica se deve considerar PDV
-    const temPDVAtivo = proj.tem_pdv && usarPDV; 
-
-    // --- Totais Gerais (Mantidos) ---
-    const realizadoRotas = Number(proj.detalhes_valores?.rotas || 0);
-    const projecaoRotas  = Number(rotas.projecao_final || 0);
-    const realizadoPDV   = Number(proj.detalhes_valores?.pdv || 0);
-    const projecaoPDV    = Number(pdv.projecao_final || 0);
-    const objetivoRotas = Number(data.objetivo?.financeiro || 0);
-
-    const totalRealizado = temPDVAtivo ? realizadoRotas + realizadoPDV : realizadoRotas;
-    const totalProjecao = temPDVAtivo ? projecaoRotas + projecaoPDV : projecaoRotas;
-
-    let percAtingimentoRotas = objetivoRotas > 0 ? (projecaoRotas / objetivoRotas) * 100 : 0;
-    let percAtingimentoTotal = objetivoRotas > 0 ? (totalProjecao / objetivoRotas) * 100 : 0;
-
-    // --- Estilos ---
-    const overlayStyle = {
-        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', 
-        alignItems: 'center', justifyContent: 'center', zIndex: 1000
-    };
-    const contentStyle = {
-        backgroundColor: '#fff', padding: '20px', borderRadius: '8px',
-        width: '95%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto',
-        boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
-    };
-    const tableStyle = { width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '0.85rem' };
-    const thStyle = { borderBottom: '2px solid #ddd', textAlign: 'left', padding: '8px', backgroundColor: '#f9f9f9' };
-    const tdStyle = { borderBottom: '1px solid #eee', padding: '6px' };
-    const trSubStyle = { fontSize: '0.8rem', color: '#555', backgroundColor: '#fafafa' };
-
-    return (
-        <div style={overlayStyle} onClick={onClose}>
-            <div style={contentStyle} onClick={e => e.stopPropagation()}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px'}}>
-                    <h3 style={{margin:0}}>Detalhes da Projeção</h3>
-                    <button onClick={onClose} style={{border:'none', background:'none', fontSize:'1.5rem', cursor:'pointer'}}>&times;</button>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                    {/* COLUNA 1: DADOS GERAIS */}
-                    <div>
-                        <h4 style={{marginTop:0, color:'#007bff'}}>🏢 Visão Geral (Empresa/Equipe)</h4>
-                        <table style={tableStyle}>
-                            <thead>
-                                <tr>
-                                    <th style={thStyle}>Origem</th>
-                                    <th style={thStyle}>Realizado</th>
-                                    <th style={thStyle}>Projeção</th>
-                                    <th style={thStyle}>Meta</th>
-                                    <th style={thStyle}>% Proj.</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td style={tdStyle}><strong>Rotas</strong></td>
-                                    <td style={tdStyle}>{fmtMoeda(realizadoRotas)}</td>
-                                    <td style={tdStyle}>{fmtMoeda(projecaoRotas)}</td>
-                                    <td style={tdStyle}>{fmtMoeda(objetivoRotas)}</td>
-                                    <td style={tdStyle}>{fmtNum2(percAtingimentoRotas)}%</td>
-                                </tr>
-                                {temPDVAtivo && (
-                                    <tr>
-                                        <td style={tdStyle}><strong>PDV</strong></td>
-                                        <td style={tdStyle}>{fmtMoeda(realizadoPDV)}</td>
-                                        <td style={tdStyle}>{fmtMoeda(projecaoPDV)}</td>
-                                        <td style={tdStyle}>-</td>
-                                        <td style={tdStyle}>-</td>
-                                    </tr>
-                                )}
-                                <tr style={{backgroundColor: '#e3f2fd'}}>
-                                    <td style={tdStyle}><strong>TOTAL</strong></td>
-                                    <td style={tdStyle}><strong>{fmtMoeda(totalRealizado)}</strong></td>
-                                    <td style={tdStyle}><strong>{fmtMoeda(totalProjecao)}</strong></td>
-                                    <td style={tdStyle}><strong>{fmtMoeda(objetivoRotas)}</strong></td>
-                                    <td style={tdStyle}><strong>{fmtNum2(percAtingimentoTotal)}%</strong></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        
-                        <div style={{marginTop: '15px'}}>
-                           <strong>KPIs Gerais:</strong> Mix Proj: {fmtNum2(mix.projecao?.atingimento_projetado)}% | 
-                           Peso Proj: {fmtNum2(data.projecao_empresa?.peso?.atingimento_projetado)}% |
-                           Pos Proj: {fmtNum2(data.projecao_empresa?.positivacao?.atingimento_projetado)}%
-                        </div>
-                    </div>
-
-                    {/* COLUNA 2 ou LINHA ABAIXO: VENDEDORES */}
-                    <div>
-                         <h4 style={{marginTop:0, color:'#28a745'}}>👤 Projeção por Vendedor</h4>
-                         <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #eee' }}>
-                            <table style={tableStyle}>
-                                <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                                    <tr>
-                                        <th style={thStyle}>Vendedor</th>
-                                        <th style={thStyle}>Fin. Proj (R$)</th>
-                                        <th style={thStyle}>% Meta</th>
-                                        <th style={thStyle}>Diário Nec.</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {vendedores.map((v) => {
-                                        const p = v.projecoes_detalhadas?.financeiro_total || {};
-                                        const pMix = v.projecoes_detalhadas?.mix || {};
-                                        const pPeso = v.projecoes_detalhadas?.peso || {};
-                                        const pPos = v.projecoes_detalhadas?.positivacao || {};
-                                        
-                                        return (
-                                            <React.Fragment key={v.codcampo}>
-                                                <tr style={{borderTop: '2px solid #eee'}}>
-                                                    <td style={tdStyle}><strong>{v.codcampo} - {v.Campo}</strong></td>
-                                                    <td style={tdStyle}>{fmtMoeda(p.projecao_final)}</td>
-                                                    <td style={{...tdStyle, color: p.atingimento_projetado >= 100 ? 'green' : 'red'}}>
-                                                        <strong>{fmtNum2(p.atingimento_projetado)}%</strong>
-                                                    </td>
-                                                    <td style={tdStyle}>{fmtMoeda(p.meta_diaria_necessaria)}</td>
-                                                </tr>
-                                                {/* Detalhes extras em linha menor */}
-                                                <tr style={trSubStyle}>
-                                                    <td colSpan={4} style={{padding: '4px 8px'}}>
-                                                        <div style={{display:'flex', gap:'15px', flexWrap:'wrap'}}>
-                                                            <span>⚖️ Peso: {fmtNum2(pPeso.projecao_final)} ({fmtNum2(pPeso.atingimento_projetado)}%)</span>
-                                                            <span>📦 Mix: {fmtNum2(pMix.projecao_final)} ({fmtNum2(pMix.atingimento_projetado)}%)</span>
-                                                            <span>🏪 Pos: {fmtNum2(pPos.projecao_final)} ({fmtNum2(pPos.atingimento_projetado)}%)</span>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            </React.Fragment>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                         </div>
-                    </div>
-                </div>
-
-                <div style={{marginTop: '15px', fontSize: '0.8rem', color: '#666', textAlign:'right'}}>
-                    * Projeção linear baseada em {proj.dias_uteis?.decorridos}/{proj.dias_uteis?.totais} dias úteis.
-                </div>
-            </div>
-        </div>
-    );
-};
-
-
-const Gauge = ({ label, percent }) => {
-  const val =
-    typeof percent === 'number'
-      ? percent
-      : parseFloat(String(percent || '0').replace('%', '').replace(',', '.')) || 0;
-
-  return (
-    <div>
-      <h4>
-        {label} <small style={{ opacity: 0.7 }}>({val.toFixed(2)}%)</small>
-      </h4>
-      <ReactSpeedometer
-        maxValue={100}
-        value={val}
-        segments={5}
-        height={160}
-        currentValueText="${value}%"
-        valueFormat=".2f"
-        needleTransitionDuration={500}
-        needleTransition="easeElastic"
-      />
-    </div>
-  );
-};
 
 /* ========= COMPONENTE PRINCIPAL ========= */
 
@@ -730,7 +272,7 @@ const IndicadoresCards = ({
 }) => {
   const { user } = useAuth();
 
-  console.log('[DEBUG] User Context:', user);
+  dlog('[DEBUG] User Context:', user);
 
   const [vendaDia, setVendaDia] = useState(0);
   const [showProjectionModal, setShowProjectionModal] = useState(false);
@@ -745,6 +287,12 @@ const IndicadoresCards = ({
   const [projPercentPos, setProjPercentPos] = useState('--');
 
   const [loading, setLoading] = useState(false);
+  const [erroCarga, setErroCarga] = useState(null);
+  const [tentativa, setTentativa] = useState(0);
+  const [erroMixArea, setErroMixArea] = useState(false);
+  const [erroPosArea, setErroPosArea] = useState(false);
+  const [erroRupturaArea, setErroRupturaArea] = useState(false);
+  const [erroPreVenda, setErroPreVenda] = useState(false);
 // === ✅ COLE AQUI (NOVO CÓDIGO) ===
   const [valorRotasAnoAnterior, setValorRotasAnoAnterior] = useState(0); 
   const [valorRotasAnoAnteriorFmt, setValorRotasAnoAnteriorFmt] = useState(null); 
@@ -835,13 +383,14 @@ const IndicadoresCards = ({
   useEffect(() => {
     if (!modalPreVendaAberto || !periodoSelecionado) return;
     setLoadingPreVenda(true);
+    setErroPreVenda(false);
     setPendenciasPreVenda([]);
     const { de, ate } = periodoSelecionado;
-    api.get('/indicadores/pre-venda-status/', { params: { de, ate } })
+    getPreVendaStatus({ params: { de, ate } })
       .then(({ data }) => setPendenciasPreVenda(data.pendencias || []))
-      .catch(err => console.error('[PreVendaStatus] erro:', err))
+      .catch(err => { console.error('[PreVendaStatus] erro:', err); setErroPreVenda(true); })
       .finally(() => setLoadingPreVenda(false));
-  }, [modalPreVendaAberto, periodoSelecionado]);
+  }, [modalPreVendaAberto, periodoSelecionado, tentativa]);
   const [modalPosAreaAberto,  setModalPosAreaAberto]   = useState(false);
   const [itensMixArea,        setItensMixArea]         = useState([]);
   const [clientesPosArea,     setClientesPosArea]      = useState([]);
@@ -1089,7 +638,7 @@ const IndicadoresCards = ({
     const agg = data?.vendas?.agregados_area || {};
     const list = data?.vendas?.vendas_por_vendedor || [];
     const soma = (k) => list.reduce((acc, it) => acc + Number(it?.[k] || 0), 0);
-    console.log('[DEBUG venda_dia] list:', list.map(v => ({ cod: v.codcampo, venda_dia: v.venda_dia })));
+    dlog('[DEBUG venda_dia] list:', list.map(v => ({ cod: v.codcampo, venda_dia: v.venda_dia })));
     setVendaDia(Math.round(soma('venda_media_diaria_atual')));
 
     const preAgg = Number(
@@ -1190,9 +739,10 @@ setAlocacaoVariacao(
     setPdvValorAAUG(null);
     setPdvValorAAArea(null);
     setLoading(true);
+    setErroCarga(null);
 
       try {
-        const { data } = await api.get('/Indicadores/', { params: { de, ate } });
+        const { data } = await getIndicadores({ params: { de, ate } });
         dlog('payload bruto /Indicadores:', data);
 
         const objetivos = [];
@@ -1252,7 +802,7 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
           return acc;
         }, []);
         // ---> 🚨 INÍCIO DOS LOGS DE DEBUG 🚨 <---
-        console.log("🔍 1. Quantos vendedores existem ANTES do filtro?", objetivosUnificados.length);
+        dlog("🔍 1. Quantos vendedores existem ANTES do filtro?", objetivosUnificados.length);
         
         const listaVendasParaFiltro = data?.vendas?.vendas_por_vendedor || [];
         
@@ -1268,14 +818,14 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
           const passouNoFiltro = atividadeTotal > 0.01;
           
           // Imprime o "raciocínio" do sistema para CADA vendedor
-          console.log(`👤 Vendedor: [${obj.codFuncionario}] ${obj.nomeFuncionario} | ` +
+          dlog(`👤 Vendedor: [${obj.codFuncionario}] ${obj.nomeFuncionario} | ` +
                       `Faturado: ${faturado} | Pre: ${preVenda} | Peso: ${pesoVend} | PDV: ${pdvCupon} | ` +
                       `Total: ${atividadeTotal} -> PASSOU? ${passouNoFiltro ? "✅ SIM" : "❌ NÃO"}`);
 
           return passouNoFiltro;
         });
 
-        console.log("🔍 2. Quantos vendedores sobraram DEPOIS do filtro?", objetivosUnificados.length);
+        dlog("🔍 2. Quantos vendedores sobraram DEPOIS do filtro?", objetivosUnificados.length);
         // ---> 🚨 FIM DOS LOGS DE DEBUG 🚨 <---
 
         // 4. Envia para o React gerar os cards
@@ -1366,6 +916,7 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
             }
             } catch (error) {
               console.error('Erro ao buscar os indicadores:', error);
+              setErroCarga('Não foi possível carregar os indicadores. Verifique a conexão e tente novamente.');
               setPeso('Erro');
             } finally {
               setLoading(false);
@@ -1375,7 +926,7 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
 
 
     fetchIndicadores();
-  }, [periodoSelecionado, onObjetivosRecebidos,user]);
+  }, [periodoSelecionado, onObjetivosRecebidos, user, tentativa]);
 
   // === CÁLCULO ESPECÍFICO PARA O CARD "ROTAS" (GERÊNCIA) ===
 
@@ -1547,13 +1098,13 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
         const { de, ate } = periodoSelecionado || {};
         if (!de || !ate) return;
 
-        const res = await api.get('/indicadores/pdv/', { params: { de, ate } });
+        const res = await getPdv({ params: { de, ate } });
         const data = res.data || {};
 
-        console.log('[DEBUG PDV] Payload Recebido do Backend:', data);
-        console.log('[DEBUG PDV] UG do Usuário:', data.unid_gestora_usuario);
-        console.log('[DEBUG PDV] Detalhado AA (Ano Anterior):', data.detalhado_aa_por_unid_gestora);
-        console.log('[IndicadoresPDV][RAW]', data);
+        dlog('[DEBUG PDV] Payload Recebido do Backend:', data);
+        dlog('[DEBUG PDV] UG do Usuário:', data.unid_gestora_usuario);
+        dlog('[DEBUG PDV] Detalhado AA (Ano Anterior):', data.detalhado_aa_por_unid_gestora);
+        dlog('[IndicadoresPDV][RAW]', data);
 
         const ug =
           data.unid_gestora_usuario != null
@@ -1591,6 +1142,7 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
         atualizarValoresPDV(valorSel || 0, pesoSel || 0, valorAASel || 0);
       } catch (err) {
         console.error('Erro ao buscar vendas de PDV:', err);
+        setErroCarga('Não foi possível carregar os dados de PDV. Tente novamente.');
       }
       setLoading(false);
     };
@@ -1625,6 +1177,7 @@ if (Array.isArray(data?.vendas?.vendas_por_vendedor)) {
       notifyPDVResumo(somarArea, false);
     }
   }, [
+    tentativa,
     usarPDV,
     periodoSelecionado,
     vendaRealizadaBase,
@@ -1860,8 +1413,9 @@ let pFin = 0;
 
   if (!vendedores.length) return;
 
+  setErroMixArea(false);
   setLoadingMixArea(true);
-  api.get('/indicadores/mix-itens-area/', {
+  getMixItensArea({
     params: {
       de:          periodoSelecionado?.de,
       ate:         periodoSelecionado?.ate,
@@ -1872,10 +1426,10 @@ let pFin = 0;
     }
   })
     .then(res => setItensMixArea(res.data?.itens || []))
-    .catch(() => setItensMixArea([]))
+    .catch(() => { setItensMixArea([]); setErroMixArea(true); })
     .finally(() => setLoadingMixArea(false));
 
-}, [modalMixAreaAberto, mostrarNaoVendidosArea, criterioValorArea, rawData, supervisaoSelecionada, periodoSelecionado]);
+}, [modalMixAreaAberto, mostrarNaoVendidosArea, criterioValorArea, rawData, supervisaoSelecionada, periodoSelecionado, tentativa]);
 
 useEffect(() => {
   if (!modalPosAreaAberto || !rawData) return;
@@ -1893,8 +1447,9 @@ useEffect(() => {
 
   if (!vendedores.length) return;
 
+  setErroPosArea(false);
   setLoadingPosArea(true);
-  api.get('/indicadores/clientes-positivacao-area/', {
+  getClientesPositivacaoArea({
     params: {
       de:          periodoSelecionado?.de,
       ate:         periodoSelecionado?.ate,
@@ -1903,10 +1458,10 @@ useEffect(() => {
     }
   })
     .then(res => setClientesPosArea(res.data?.clientes || []))
-    .catch(() => setClientesPosArea([]))
+    .catch(() => { setClientesPosArea([]); setErroPosArea(true); })
     .finally(() => setLoadingPosArea(false));
 
-}, [modalPosAreaAberto, mostrarNaoPosArea, rawData, supervisaoSelecionada, periodoSelecionado]);
+}, [modalPosAreaAberto, mostrarNaoPosArea, rawData, supervisaoSelecionada, periodoSelecionado, tentativa]);
 
 useEffect(() => {
   if (!modalRupturaAberto || !rawData) return;
@@ -1926,8 +1481,9 @@ useEffect(() => {
 
   if (!vendedores.length) return;
 
+  setErroRupturaArea(false);
   setLoadingRupturaArea(true);
-  api.get('/indicadores/ruptura-itens/', {
+  getRupturaItens({
     params: {
       de:         periodoSelecionado?.de,
       ate:        periodoSelecionado?.ate,
@@ -1942,10 +1498,10 @@ useEffect(() => {
         total_qtd:   res.data?.total_qtd || 0,
       });
     })
-    .catch(() => { setItensRupturaArea([]); setTotaisRuptura({ total_valor: 0, total_qtd: 0 }); })
+    .catch(() => { setItensRupturaArea([]); setTotaisRuptura({ total_valor: 0, total_qtd: 0 }); setErroRupturaArea(true); })
     .finally(() => setLoadingRupturaArea(false));
 
-}, [modalRupturaAberto, criterioValorRuptura, rawData, supervisaoSelecionada, periodoSelecionado]);
+}, [modalRupturaAberto, criterioValorRuptura, rawData, supervisaoSelecionada, periodoSelecionado, tentativa]);
 
 // Lista de fabricantes distintos presentes na ruptura (para o dropdown do modal)
 const fabricantesRupturaDisponiveis = useMemo(() => {
@@ -2128,17 +1684,6 @@ const exportarRupturaPDF = () => {
       notifyPDVResumo(novo, false);
     }  
 
-  };
-  const handleChangeSupervisao = (event) => {
-    const selectedValues = Array.from(event.target.selectedOptions).map((opt) =>
-      String(opt.value)
-    );
-
-    const selecionadas = supervisaoOptions.filter((opt) =>
-      selectedValues.includes(String(opt.value))
-    );
-
-    setSupervisaoSelecionada(selecionadas);
   };
 
 const applySupervisaoFromRaw = (data, selecionadas) => {
@@ -2385,7 +1930,7 @@ setMixVariacao(String(mixReal - metaMixFinal));
 };
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative' }} className={loading ? 'idv-carregando' : ''}>
       {showProjectionModal && (
         <ProjectionModal 
             onClose={() => setShowProjectionModal(false)} 
@@ -2396,6 +1941,15 @@ setMixVariacao(String(mixReal - metaMixFinal));
       {loading && (
         <div className="overlay-loader">
           <div className="spinner"></div>
+        </div>
+      )}
+
+      {erroCarga && !loading && (
+        <div className="erro-carga-banner" role="alert">
+          <span>⚠️ {erroCarga}</span>
+          <button onClick={() => { setErroCarga(null); setTentativa((n) => n + 1); }}>
+            Tentar novamente
+          </button>
         </div>
       )}
 
@@ -2760,6 +2314,16 @@ setMixVariacao(String(mixReal - metaMixFinal));
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
             Carregando...
           </div>
+        ) : erroMixArea ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#b91c1c' }}>
+            ⚠️ Não foi possível carregar os dados.{' '}
+            <button
+              onClick={() => setTentativa((n) => n + 1)}
+              style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline', fontSize: 'inherit', padding: 0 }}
+            >
+              Tentar novamente
+            </button>
+          </div>
         ) : itensMixArea.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
             Nenhum item encontrado.
@@ -2887,6 +2451,16 @@ setMixVariacao(String(mixReal - metaMixFinal));
         {loadingPosArea ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
             Carregando...
+          </div>
+        ) : erroPosArea ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#b91c1c' }}>
+            ⚠️ Não foi possível carregar os dados.{' '}
+            <button
+              onClick={() => setTentativa((n) => n + 1)}
+              style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline', fontSize: 'inherit', padding: 0 }}
+            >
+              Tentar novamente
+            </button>
           </div>
         ) : clientesPosArea.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
@@ -3041,6 +2615,16 @@ setMixVariacao(String(mixReal - metaMixFinal));
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
             Carregando...
           </div>
+        ) : erroRupturaArea ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#b91c1c' }}>
+            ⚠️ Não foi possível carregar os dados.{' '}
+            <button
+              onClick={() => setTentativa((n) => n + 1)}
+              style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline', fontSize: 'inherit', padding: 0 }}
+            >
+              Tentar novamente
+            </button>
+          </div>
         ) : itensRupturaFiltrados.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
             Nenhum item em ruptura no período{filtroFabricanteRuptura !== 'Todos' ? ' para este fabricante.' : '.'}
@@ -3144,6 +2728,16 @@ setMixVariacao(String(mixReal - metaMixFinal));
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {loadingPreVenda ? (
             <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>Carregando...</div>
+          ) : erroPreVenda ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#b91c1c' }}>
+            ⚠️ Não foi possível carregar os dados.{' '}
+            <button
+              onClick={() => setTentativa((n) => n + 1)}
+              style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline', fontSize: 'inherit', padding: 0 }}
+            >
+              Tentar novamente
+            </button>
+          </div>
           ) : pendenciasPreVenda.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '2rem', color: '#22c55e', fontWeight: 600 }}>
               ✅ Nenhuma pendência encontrada no período.

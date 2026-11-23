@@ -248,7 +248,7 @@ def buscar_rotas_usuario(ctx, db_alias: str = "dados_industria") -> Dict[str, An
                         continue
                     inativos_por_supervisor_2_2.setdefault(int(cs), set()).add(int(cf))
 
-                logger.warning(
+                logger.debug(
                     f"🚨 [DEBUG ROTAS_SIMPLES 2.2] cod_gerente={cod_sup} "
                     f"| inativos_por_supervisor={ {k: sorted(v) for k, v in inativos_por_supervisor_2_2.items()} }"
                 )
@@ -298,7 +298,7 @@ def buscar_rotas_usuario(ctx, db_alias: str = "dados_industria") -> Dict[str, An
         """
         dados_inativos = query_all(sql_inativos, [cod_sup])
         
-        logger.warning(f"🚨 [DEBUG ROTAS_SIMPLES 2.3] cod_sup={cod_sup} | inativos={dados_inativos}")
+        logger.debug(f"🚨 [DEBUG ROTAS_SIMPLES 2.3] cod_sup={cod_sup} | inativos={dados_inativos}")
         
         vendedores_set.update({int(d["CodFuncionario"]) for d in dados_inativos if d.get("CodFuncionario") is not None})
         vendedores = sorted(vendedores_set)

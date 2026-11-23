@@ -1,0 +1,17 @@
+.*/
+graphify-out/
+**/graphify-out/
+node_modules/
+venv/
+.venv/
+build/
+dist/
+staticfiles/
+coverage/
+**/migrations/
+estudo-main/
+frontend/README.md
+frontend/public/
+**/package.json
+**/package-lock.json
+database/script.sql

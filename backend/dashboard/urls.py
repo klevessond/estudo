@@ -2,11 +2,9 @@ from django.urls import path
 from . import views
 from .views import IndicadoresView, ObjetivoMensalView,ObjetivoMensalResumoView,IndicadoresPDV,VendasPorVendedorView,ObjetivoMensalVendedorView,ComissoesVendedorView
 from .views import RegisterView,FuncionariosListView,UsuarioDetailView,funcionario_detail, me,TodosVendedoresView,RupturaView,RupturaItensView
-from .views import TelegramGerarCodigoView, TelegramStatusView, TelegramDesvincularView,VendaHojeView, PreVendaStatusView,CacheMesAdminView,ClientesPositivacaoAreaView,MixItensAreaView,ClientesPositivacaoView,MixItensPorVendedorView,ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
+from .views import PreVendaItensView,TelegramGerarCodigoView, TelegramStatusView, TelegramDesvincularView,VendaHojeView, PreVendaStatusView,CacheMesAdminView,ClientesPositivacaoAreaView,MixItensAreaView,ClientesPositivacaoView,MixItensPorVendedorView,ResumoSegmentoAreaVendaView,MinhaUnidGestoraView,PDVPorVendedorAPIView,ObjetivoMixNivelView,FeriadoView
 from .views.pivot_views import PivotVendasView
 urlpatterns = [
-    path('dados-sql/', views.get_dados_sql, name='get_dados_sql'),
-    path('api/clientes/', views.get_dados_sql_api, name='get_dados_sql_api'),
     path('Indicadores/', IndicadoresView.as_view(), name='Indicadores'),
     path('objetivos-mensais/', ObjetivoMensalView.as_view(), name='objetivo-mensal'),
     path('objetivo-mensal-resumo/', ObjetivoMensalResumoView.as_view(), name='objetivo-mensal-resumo'),
@@ -39,5 +37,34 @@ urlpatterns = [
     path('telegram/gerar-codigo/', TelegramGerarCodigoView.as_view(), name='telegram-gerar-codigo'),
     path('telegram/status/', TelegramStatusView.as_view(), name='telegram-status'),
     path('telegram/desvincular/', TelegramDesvincularView.as_view(), name='telegram-desvincular'),
+    path('indicadores/pre-venda-itens/', PreVendaItensView.as_view(), name='pre-venda-itens'),
 
 ]
+
+from rest_framework.routers import DefaultRouter
+from .views.campanhas_views import (
+    CampanhaVendaViewSet,
+    CampanhaVendaObjetivoViewSet,
+    CampanhaVendaProgressoView,
+    CampanhasPainelView,
+    MaterialSearchView,
+    FabricanteSearchView,
+    GrupoSearchView,
+)
+
+router = DefaultRouter()
+router.register(r'campanhas', CampanhaVendaViewSet, basename='campanhas')
+router.register(r'campanhas-objetivos', CampanhaVendaObjetivoViewSet, basename='campanhas-objetivos')
+
+# Rotas específicas PRIMEIRO, antes do router.urls: senão o DefaultRouter
+# interpreta "painel"/"buscar-fabricante"/"buscar-material"/"buscar-grupo" como o <pk>
+# de uma campanha e responde 404.
+urlpatterns += [
+    path('campanhas/painel/', CampanhasPainelView.as_view(), name='campanhas-painel'),
+    path('campanhas/<int:campanha_id>/progresso/', CampanhaVendaProgressoView.as_view(), name='campanha-progresso'),
+    path('campanhas/buscar-material/', MaterialSearchView.as_view(), name='campanha-buscar-material'),
+    path('campanhas/buscar-fabricante/', FabricanteSearchView.as_view(), name='campanha-buscar-fabricante'),
+    path('campanhas/buscar-grupo/', GrupoSearchView.as_view(), name='campanha-buscar-grupo'),
+]
+
+urlpatterns += router.urls

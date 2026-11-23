@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from "./contexts/auth.jsx";
+import { ToastProvider } from './components/ui/Toast.jsx';
 import Dashboard from './components/pages/Dashborad/Dashboard.jsx';
 import Layout from './components/layout/layout.jsx';
 import PivotVendas from './components/Pivot/PivotVendas.jsx';
@@ -11,10 +12,12 @@ import RegisterUser from './components/pages/register/RegisterUser.jsx';
 import EditarUsuario from './components/pages/register/EditarUsuario.jsx';
 import Feriados from './components/pages/register/Feriados.jsx';
 import TelegramConfig from './components/pages/TelegramConfig.jsx';
+import GerenciarCampanhas from './components/pages/campanhas/GerenciarCampanhas.jsx';
 
 const App = () => {
   return (
     <AuthProvider>
+      <ToastProvider>
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -95,8 +98,20 @@ const App = () => {
               </PrivateRoute>
             }
           />
+
+          <Route
+            path="/campanhas"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <GerenciarCampanhas />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
         </Routes>
       </Router>
+      </ToastProvider>
     </AuthProvider>
   );
 };

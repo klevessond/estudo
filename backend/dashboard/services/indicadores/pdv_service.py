@@ -10,6 +10,9 @@ from dashboard.db_conn import query_all  # usa a conexão pyodbc (FreeTDS)
 # =========================
 # Helpers de datas/formatos
 # =========================
+import logging
+logger = logging.getLogger(__name__)
+
 def _as_date(d) -> date:
     if isinstance(d, date):
         return d
@@ -244,5 +247,5 @@ def buscar_cupons_por_vendedor(data_inicio: str, data_fim: str):
         resultados = query_all(sql, params)
         return resultados
     except Exception as e:
-        print(f"Erro ao buscar cupons por vendedor: {e}")
+        logger.debug(f"Erro ao buscar cupons por vendedor: {e}")
         return []

@@ -3,142 +3,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import './CardsColaborador.css';
 import ResumoSegmentoPies from '../Piechart/ResumoSegmentoPies';
 import ReactSpeedometer from 'react-d3-speedometer';
-import api from '../../api';
+import { getClientesPositivacao, getPreVendaStatus, getPreVendaItens, getRupturaItens, getComissoesVendedor, getMixItens } from '../../services/indicadoresApi';
 import { useAuth } from '../../contexts/auth';
+import CardDiarioNecessarioVendedor from './CardDiarioNecessarioVendedor';
 // jsPDF está disponível via CDN no bundle ou pode ser importado assim:
 // npm install jspdf jspdf-autotable
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
-// ===== Helper: dias úteis local (fallback quando backend ainda não respondeu) =====
-function contarDiasUteisLocal(ini, fim) {
-  if (!ini || !fim) return 0;
-  let n = 0, c = new Date(ini); c.setHours(0, 0, 0, 0);
-  while (c <= fim) { const d = c.getDay(); if (d !== 0 && d !== 6) n++; c.setDate(c.getDate() + 1); }
-  return n;
-}
-
-// ===== Card Diário Necessário — vendedor individual =====
-const CardDiarioNecessarioVendedor = ({
-  codFuncionario,
-  periodoSelecionado,
-  objetivoFinanceiro,
-  faturado,
-  diasInfo,
-}) => {
-  const [vendaHojeInfo, setVendaHojeInfo] = useState(null); // { valor, preVenda } | null = carregando
-  const [loadingHoje, setLoadingHoje] = useState(false);
-
-  useEffect(() => {
-    if (!codFuncionario) return;
-    let cancelado = false;
-    setLoadingHoje(true);
-    api.get('/indicadores/venda-hoje/')
-      .then(({ data }) => {
-        if (cancelado) return;
-        const entry = data?.por_vendedor?.[String(codFuncionario)];
-        setVendaHojeInfo({
-          valor: Number(entry?.valor || 0),
-          preVenda: Number(entry?.pre_venda || 0),
-        });
-      })
-      .catch(() => { if (!cancelado) setVendaHojeInfo({ valor: 0, preVenda: 0 }); })
-      .finally(() => { if (!cancelado) setLoadingHoje(false); });
-    return () => { cancelado = true; };
-  }, [codFuncionario, periodoSelecionado?.de]);
-
-  const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-  let nDecorridos, nRestantes, nTotal;
-  if (diasInfo) {
-    nDecorridos = diasInfo.decorridos ?? 1;
-    nRestantes  = diasInfo.restantes  ?? 0;
-    nTotal      = diasInfo.totais     ?? 20;
-  } else {
-    const di   = periodoSelecionado?.de  ? new Date(periodoSelecionado.de  + 'T00:00:00') : null;
-    const df   = periodoSelecionado?.ate ? new Date(periodoSelecionado.ate + 'T00:00:00') : null;
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const amanha = new Date(hoje); amanha.setDate(hoje.getDate() + 1);
-
-    nTotal      = di && df ? contarDiasUteisLocal(di, df) : 20;
-    nDecorridos = di && df ? contarDiasUteisLocal(di, hoje <= df ? hoje : df) : 1;
-    nRestantes  = di && df && hoje < df ? contarDiasUteisLocal(amanha, df) : 0;
-  }
-
-  const meta   = objetivoFinanceiro || 0;
-  const venda  = faturado || 0;
-  const falta  = Math.max(meta - venda, 0);
-  const batida = venda >= meta;
-  const diaNec = (!batida && nRestantes > 0) ? falta / nRestantes : 0;
-
-  const corDiaNec = batida ? '#16a34a' : '#d97706';
-
-  const vendaHojeSemPre = vendaHojeInfo?.valor ?? null;
-  const vendidoHojeTotal = vendaHojeInfo ? vendaHojeInfo.valor + vendaHojeInfo.preVenda : null;
-
-  const corHojeSemPre = vendaHojeSemPre === null
-    ? '#888'
-    : vendaHojeSemPre >= diaNec ? '#16a34a'
-    : vendaHojeSemPre >= diaNec * 0.7 ? '#d97706'
-    : '#dc2626';
-
-  const corHojeComPre = vendidoHojeTotal === null
-    ? '#888'
-    : vendidoHojeTotal >= diaNec ? '#16a34a'
-    : vendidoHojeTotal >= diaNec * 0.7 ? '#d97706'
-    : '#dc2626';
-
-  if (!meta) return null;
-
-  return (
-    <div className="card" style={{ background: '#f0fdfa', borderLeft: '4px solid #0f766e' }}>
-      <div className="card-title" style={{ color: '#0f766e' }}>📅 Diário Necessário</div>
-
-      {/* Valor necessário por dia */}
-      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: corDiaNec, margin: '4px 0' }}>
-        {batida ? '🏆 Meta atingida!'
-          : nRestantes === 0 ? 'Período encerrado'
-          : fmt(diaNec)}
-      </div>
-      <div style={{ fontSize: '0.75rem', color: '#555' }}>necessário/dia para bater a meta</div>
-
-      {/* Barra de progresso */}
-      <div className="progress-container" style={{ height: 6, margin: '6px 0' }}>
-        <div
-          className={`progress-bar ${batida ? 'progress-high' : falta / meta < 0.5 ? 'progress-medium' : 'progress-low'}`}
-          style={{ width: `${Math.min((venda / meta) * 100, 100).toFixed(1)}%` }}
-        />
-      </div>
-
-      {/* Vendido hoje — sem pré-venda */}
-      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: corHojeSemPre, marginTop: '6px' }}>
-        {loadingHoje ? '...' : vendaHojeSemPre === null ? '--' : fmt(vendaHojeSemPre)}
-      </div>
-      <div style={{ fontSize: '0.75rem', color: '#555' }}>vendido hoje (sem pré-venda)</div>
-
-      {/* Vendido hoje — com pré-venda somada */}
-      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: corHojeComPre, marginTop: '4px' }}>
-        {loadingHoje ? '...' : vendidoHojeTotal === null ? '--' : fmt(vendidoHojeTotal)}
-      </div>
-      <div style={{ fontSize: '0.75rem', color: '#555' }}>vendido hoje (com pré-venda)</div>
-
-      {/* Pré-venda efetuada hoje (valor isolado, para referência) */}
-      <div style={{ fontSize: '0.78rem', color: '#555', marginTop: '4px' }}>
-        Pré-venda: {loadingHoje ? '...' : fmt(vendaHojeInfo?.preVenda)}
-      </div>
-
-      {/* Calendário + falta */}
-      <div style={{ fontSize: '0.78rem', color: '#555' }}>
-        🗓 {nDecorridos}/{nTotal} dias · {nRestantes} restantes
-      </div>
-      {!batida && (
-        <div style={{ fontSize: '0.78rem', color: '#888', marginTop: '2px' }}>
-          Falta: {fmt(falta)}
-        </div>
-      )}
-    </div>
-  );
-};
 
 const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado, vendedoresList = [], onNavegar, projecoesPorVendedor = {} }) => {
   const [modo, setModo] = React.useState('indicadores');
@@ -172,6 +43,12 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   const [pendenciasPreVenda,   setPendenciasPreVenda]   = useState([]);
   const [loadingPreVenda,      setLoadingPreVenda]      = useState(false);
 
+  // === Modal Pré-Venda Detalhada (itens do documento) ===
+  const [modalItensPreVendaAberto, setModalItensPreVendaAberto] = useState(false);
+  const [itensPreVenda,            setItensPreVenda]            = useState([]);
+  const [loadingItensPreVenda,     setLoadingItensPreVenda]     = useState(false);
+  const [preVendaSelecionada,      setPreVendaSelecionada]      = useState(null);
+
   // === Modal Ruptura (Captado) ===
   const [modalRupturaAberto,   setModalRupturaAberto]   = useState(false);
   const [itensRuptura,         setItensRuptura]         = useState([]);
@@ -185,7 +62,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   if (!modalPosAberto || !codFuncionario || !periodoSelecionado) return;
 
   setLoadingPos(true);
-  api.get('/indicadores/clientes-positivacao/', {
+  getClientesPositivacao({
     params: {
       de:           periodoSelecionado.de,
       ate:          periodoSelecionado.ate,
@@ -195,7 +72,6 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
   })
 .then(res => {
       // ✅ LOG PARA VERIFICAR:
-      console.log("Resposta Positivação (CardsColaborador):", res.data);
       setClientesPos(res.data?.clientes || []);
     })
     .catch((err) => {
@@ -211,7 +87,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
     if (!modalPreVendaAberto || !codFuncionario || !periodoSelecionado) return;
     setLoadingPreVenda(true);
     setPendenciasPreVenda([]);
-    api.get('/indicadores/pre-venda-status/', {
+    getPreVendaStatus({
       params: {
         de:         periodoSelecionado.de,
         ate:        periodoSelecionado.ate,
@@ -223,6 +99,22 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
       .finally(() => setLoadingPreVenda(false));
   }, [modalPreVendaAberto, codFuncionario, periodoSelecionado]);
 
+  // === Modal Pré-Venda Detalhada (itens do documento selecionado) ===
+  useEffect(() => {
+    if (!modalItensPreVendaAberto || !preVendaSelecionada) return;
+    setLoadingItensPreVenda(true);
+    setItensPreVenda([]);
+    getPreVendaItens({
+      params: {
+        cod_pocket: preVendaSelecionada.CodPocket,
+        cod_doc:    preVendaSelecionada.CodPocketDocumento,
+      },
+    })
+      .then(({ data }) => setItensPreVenda(data.itens || []))
+      .catch(err => console.error('[PreVendaItens] erro:', err))
+      .finally(() => setLoadingItensPreVenda(false));
+  }, [modalItensPreVendaAberto, preVendaSelecionada]);
+
   // Busca itens de ruptura ao abrir o modal ou trocar o critério — SEMPRE só este vendedor
   useEffect(() => {
     if (!modalRupturaAberto || !codFuncionario || !periodoSelecionado) return;
@@ -230,7 +122,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
     setFiltroFabricanteRuptura('Todos'); // reseta o filtro a cada abertura
 
     setLoadingRuptura(true);
-    api.get('/indicadores/ruptura-itens/', {
+    getRupturaItens({
       params: {
         de:         periodoSelecionado.de,
         ate:        periodoSelecionado.ate,
@@ -296,7 +188,7 @@ const CardsColaborador = ({ colaborador, objetivosVendedores, periodoSelecionado
       : codFuncionario;
 
     setLoadingComissoes(true);
-    api.get('/comissoes-vendedor/', {
+    getComissoesVendedor({
       params: {
         cod_vendedor: codParaBuscar,
         de: periodoSelecionado?.de,
@@ -317,7 +209,7 @@ useEffect(() => {
   if (!modalMixAberto || !codFuncionario || !periodoSelecionado) return;
 
   setLoadingMix(true);
-  api.get('/indicadores/mix-itens/', {
+  getMixItens({
     params: {
       de:           periodoSelecionado.de,
       ate:          periodoSelecionado.ate,
@@ -457,6 +349,43 @@ const exportarPosicaoPDF = () => {
     doc.save(`pre_venda_${nomeVendedor.replace(/\s+/g, '_')}_${periodoSelecionado?.de}.pdf`);
   };
 
+  const exportarItensPreVendaPDF = () => {
+    const doc = new jsPDF();
+    const nomeVendedor = colaborador?.colaborador || 'Vendedor';
+    const cliente = preVendaSelecionada?.Cliente || '';
+
+    doc.setFontSize(14);
+    doc.text(`Pré-venda Detalhada — ${nomeVendedor}`, 14, 15);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Cliente: ${cliente}`, 14, 22);
+    doc.text(`Documento: ${preVendaSelecionada?.CodPocketDocumento} | Pocket: ${preVendaSelecionada?.CodPocket}`, 14, 28);
+    doc.text(`Data: ${preVendaSelecionada?.DataDoc || ''}`, 14, 34);
+
+    const valorTotalGeral = itensPreVenda.reduce((s, i) => s + Number(i.ValorTotal || 0), 0);
+
+    const linhas = itensPreVenda.map((item, i) => [
+      i + 1,
+      item.Material || `Cod: ${item.CodMaterial}`,
+      Number(item.Qtd1).toLocaleString('pt-BR'),
+      Number(item.ValorUnitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+    ]);
+
+    autoTable(doc, {
+      head: [['#', 'Produto', 'Qtd', 'Valor Unit.', 'Valor Total']],
+      body: linhas,
+      startY: 40,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [59, 130, 246] },
+      alternateRowStyles: { fillColor: [239, 246, 255] },
+      foot: [['', '', '', 'Total Geral:', valorTotalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })]],
+      footStyles: { fillColor: [219, 234, 254], fontStyle: 'bold', textColor: [0, 0, 0] },
+    });
+
+    doc.save(`pre_venda_itens_${nomeVendedor.replace(/\s+/g, '_')}_${preVendaSelecionada?.CodPocketDocumento}.pdf`);
+  };
+
   const exportarRupturaPDF = () => {
     const doc = new jsPDF();
     const nomeVendedor = colaborador?.colaborador || 'Vendedor';
@@ -537,11 +466,6 @@ const exportarPosicaoPDF = () => {
   const objetivoMix = dadosColaborador?.objetivo_mix || 0;
   const porcentagemMix = objetivoMix > 0 ? (mixRealizado / objetivoMix) * 100 : 0;
 
-  console.log('[CardsColaborador] campos AA:', {
-  Ano_anterior_ValorLiquido: colaborador?.Ano_anterior_ValorLiquido,
-  Ano_anterior_mes_ValorLiquido: colaborador?.Ano_anterior_mes_ValorLiquido,
-  faturado: colaborador?.faturado,
-});
 
 
 const alocado = colaborador.alocado || 0;
@@ -554,9 +478,7 @@ const captadoProjPerc  = objetivoFinanceiro > 0 ? (captadoProjTotal / objetivoFi
 const percentualAlocado = objetivoFinanceiro > 0 ? (alocado / objetivoFinanceiro) * 100 : 0;
 
 const anoAnterior    = colaborador.Ano_anterior_ValorLiquido || 0;
-const anoAnteriorMes = colaborador.Ano_anterior_mes_ValorLiquido || 0;
 const evolucaoPerc   = anoAnterior > 0 ? ((faturado - anoAnterior) / anoAnterior) * 100 : null;
-const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
 
   // % de Variação em relação ao objetivo financeiro
   // (equivale ao crescimento/queda vs meta)
@@ -1376,11 +1298,13 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
               <thead>
                 <tr style={{ background: '#f3f4f6', textAlign: 'left' }}>
                   <th style={{ padding: '8px' }}>#</th>
+                  <th style={{ padding: '8px' }}>CodCliente</th>
                   <th style={{ padding: '8px' }}>Cliente</th>
                   <th style={{ padding: '8px' }}>Data</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>Valor</th>
                   <th style={{ padding: '8px' }}>Situação</th>
                   <th style={{ padding: '8px' }}>Motivo</th>
+                  <th style={{ padding: '8px' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -1395,6 +1319,7 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
                           : (i % 2 === 0 ? '#fffbeb' : '#fef3c7'),
                       }}>
                       <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
+                      <td style={{ padding: '6px 8px' }}>{p.CodCliente}</td>
                       <td style={{ padding: '6px 8px' }}>
                         <div>{p.Cliente}</div>
                         {p.ClienteFantasia && p.ClienteFantasia !== p.Cliente && (
@@ -1414,10 +1339,119 @@ const evolucaoPositiva = evolucaoPerc !== null && evolucaoPerc >= 0;
                       <td style={{ padding: '6px 8px', color: '#555', fontSize: '0.78rem' }}>
                         {p.Motivo || (isProblema ? '—' : 'Aguardando processamento')}
                       </td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <button
+                          onClick={() => {
+                            setPreVendaSelecionada(p);
+                            setModalItensPreVendaAberto(true);
+                          }}
+                          style={{
+                            padding: '4px 10px', background: '#3b82f6', color: '#fff',
+                            border: 'none', borderRadius: '6px', cursor: 'pointer',
+                            fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap',
+                          }}
+                        >
+                          📦 Ver Itens
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* ===== Modal Pré-Venda Detalhada (itens) ===== */}
+  {modalItensPreVendaAberto && (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 1100,
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: '12px', padding: '1.5rem',
+        width: '90%', maxWidth: '700px', maxHeight: '85vh',
+        display: 'flex', flexDirection: 'column', gap: '1rem',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>
+              📦 Itens da Pré-venda — {preVendaSelecionada?.Cliente || ''}
+            </h3>
+            <span style={{ fontSize: '0.8rem', color: '#888' }}>
+              Doc: {preVendaSelecionada?.CodPocketDocumento} · Pocket: {preVendaSelecionada?.CodPocket} · {itensPreVenda.length} item(ns)
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {itensPreVenda.length > 0 && (
+              <button
+                onClick={exportarItensPreVendaPDF}
+                style={{
+                  padding: '6px 12px', background: '#3b82f6', color: '#fff',
+                  border: 'none', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '0.8rem', fontWeight: 600,
+                }}
+              >
+                📄 Exportar PDF
+              </button>
+            )}
+            <button onClick={() => setModalItensPreVendaAberto(false)}
+              style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {loadingItensPreVenda ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>Carregando...</div>
+          ) : itensPreVenda.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+              Nenhum item encontrado.
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ background: '#eff6ff', textAlign: 'left' }}>
+                  <th style={{ padding: '8px' }}>#</th>
+                  <th style={{ padding: '8px' }}>Produto</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>Qtd</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>Valor Unit.</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>Valor Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itensPreVenda.map((item, i) => (
+                  <tr key={item.CodMaterial}
+                    style={{ borderBottom: '1px solid #eee', background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                    <td style={{ padding: '6px 8px', color: '#888' }}>{i + 1}</td>
+                    <td style={{ padding: '6px 8px' }}>{item.Material}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                      {Number(item.Qtd1).toLocaleString('pt-BR')}
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                      {Number(item.ValorUnitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>
+                      {Number(item.ValorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: '#dbeafe', fontWeight: 700 }}>
+                  <td colSpan={4} style={{ padding: '8px', textAlign: 'right' }}>Total Geral:</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>
+                    {itensPreVenda.reduce((s, i) => s + Number(i.ValorTotal || 0), 0)
+                      .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           )}
         </div>
