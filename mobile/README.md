@@ -41,28 +41,46 @@ compatível com o SDK. Não rode `npm audit fix --force`, que troca versões e q
 ## Estrutura
 
 ```
-src/app/                  rotas (Expo Router)
-  _layout.jsx             sessão, proteção de rotas, tela de "sem conexão"
+src/app/                    rotas (Expo Router)
+  _layout.jsx               sessão, proteção de rotas, tela de "sem conexão"
   login.jsx
-  (app)/_layout.jsx       abas, com contador de alertas não lidos
-  (app)/index.jsx         indicadores + fechamento previsto, alocado, ano passado, ruptura
-  (app)/alertas.jsx       central de rupturas
-  (app)/perfil.jsx        notificações, Telegram, sair
-src/api.js                axios + token no SecureStore + refresh automático
+  (app)/_layout.jsx         abas, com contador de alertas não lidos
+  (app)/index.jsx           indicadores + fechamento previsto, alocado, ano passado, ruptura
+  (app)/equipe.jsx          lista por vendedor (meta, pré-venda, mix, ruptura)
+  (app)/alertas.jsx         central de rupturas
+  (app)/perfil.jsx          notificações, Telegram, sair
+  (detalhe)/vendedor/[cod]  detalhe do vendedor: indicadores, projeção, atalhos, segmentos
+  (detalhe)/mix.jsx         itens vendidos / não vendidos (por quantidade ou valor)
+  (detalhe)/clientes.jsx    clientes positivados / sem compra, por rota
+  (detalhe)/ruptura.jsx     ruptura por item, com totais
+  (detalhe)/pre-venda.jsx   pré-vendas não processadas ou com problema
+  (detalhe)/pre-venda-itens.jsx
+  (detalhe)/comissoes.jsx   total e pedidos comissionáveis
+src/api.js                  axios + token no SecureStore + refresh automático
 src/contexts/auth.jsx
-src/contexts/alertas.jsx  consulta /api/alertas/ e dispara notificação local
-src/lib/indicadores.js    cálculos puros a partir de /api/Indicadores/
-src/lib/periodos.js, src/lib/format.js, src/lib/storage.js
-src/components/           IndicadorLinha (régua de meta), Blocos, Segmentado, Botao
+src/contexts/painel.jsx     período + /api/Indicadores/, compartilhado entre as telas
+src/contexts/alertas.jsx    consulta /api/alertas/ e dispara notificação local
+src/lib/                    lógica pura: indicadores, vendedores, segmentos, consultas, formatação
+src/components/             IndicadorLinha (régua de meta), Blocos, Lista, Segmentos, Segmentado, Botao
 ```
+
+Os detalhamentos seguem a visão escolhida na tela inicial: em "Só eu" mostram o vendedor
+logado; em "Equipe/Empresa", os vendedores do escopo. Abertos pelo detalhe de um vendedor,
+mostram só ele.
 
 ## O que o app usa da API
 
 | Rota | Para quê |
 |---|---|
 | `POST /api/token/`, `POST /api/token/refresh/` | login e renovação do token |
-| `GET /api/me/` | nome, perfil, `cod_funcionario`, `is_gerente` |
-| `GET /api/Indicadores/?de=&ate=` | todos os números da tela inicial |
+| `GET /api/me/` | nome, perfil, `cod_funcionario`, `is_gerente`, unidade gestora |
+| `GET /api/Indicadores/?de=&ate=` | tela inicial, lista por vendedor e números do detalhe |
+| `GET /api/indicadores/mix-itens-area/` | itens do mix (`vendedores`, `modo`, `criterio`) |
+| `GET /api/indicadores/clientes-positivacao-area/` | clientes (`vendedores`, `positivados`) |
+| `GET /api/indicadores/ruptura-itens/` | ruptura por item (`vendedores`, `criterio`) |
+| `GET /api/indicadores/pre-venda-status/`, `GET /api/indicadores/pre-venda-itens/` | pendências e itens da pré-venda |
+| `GET /api/resumo-segmento-area-venda/` | clientes por segmento (`cod_funcionarios`) |
+| `GET /api/comissoes-vendedor/` | comissões (`cod_vendedor`) |
 | `GET /api/alertas/`, `POST /api/alertas/marcar-lidos/` | central de alertas |
 | `GET /api/telegram/status/`, `POST /api/telegram/gerar-codigo/`, `POST /api/telegram/desvincular/` | vínculo com o Telegram |
 
@@ -73,7 +91,8 @@ Campos de `/api/Indicadores/` lidos pelo app: `minha_visao`, `objetivo`,
 `venda_ano_anterior_rotas` e, por vendedor, `codcampo`, `ValorLiquido`, `venda_rotas`,
 `PreVenda_Valor`, `Ruptura_TotalValor`, `Ano_anterior_ValorLiquido`,
 `Ano_anterior_mes_ValorLiquido` e `projecoes_detalhadas`. Renomear algum desses campos
-no backend quebra o app.
+no backend quebra o app. Por vendedor, a lista e o detalhe usam ainda `Campo`, `PesoTotal`,
+`Mix`, `Positivacao_Realizado` e `objetivos_vendedores`.
 
 ## Alertas no Expo Go
 
@@ -86,6 +105,11 @@ continua sendo a fonte: basta salvar o push token de cada usuário e enviar no m
 em que `dashboard/services/alertas_service.py` cria o alerta.
 
 ## Limitações conhecidas
+
+- Comissões aparecem com a mesma regra do web: gerente; supervisor da matriz (UG 1);
+  vendedor só a própria e só se for da matriz.
+- Os segmentos aparecem como barras (clientes da carteira e % que comprou), no lugar das
+  três pizzas do web.
 
 - Os números financeiros são os de rotas. O ajuste de PDV do web ainda não foi trazido.
 - Fora do mês corrente, "onde você deveria estar" usa dias corridos.

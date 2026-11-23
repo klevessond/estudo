@@ -1,7 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import api, { mensagemDeErro } from '../../api';
+import { router } from 'expo-router';
 import { useAuth } from '../../contexts/auth';
+import { usePainel } from '../../contexts/painel';
+import { abrirDetalhe } from '../../lib/navegar';
+import { moeda } from '../../lib/format';
+import { Bloco, LinhaLink, TituloSecao } from '../../components/Lista';
 import { IndicadorLinha } from '../../components/IndicadorLinha';
 import { Segmentado } from '../../components/Segmentado';
 import { Botao } from '../../components/Botao';
@@ -18,61 +22,46 @@ import { dataCurta, percentual } from '../../lib/format';
 import { cores } from '../../theme';
 
 export default function Indicadores() {
-  const { me, ehGerente, ehSupervisor, codFuncionario } = useAuth();
-  const lidera = ehGerente || ehSupervisor;
-
-  const [chavePeriodo, setChavePeriodo] = useState('mes_atual');
-  const [visao, setVisao] = useState(lidera ? 'equipe' : 'individual');
-  const [dados, setDados] = useState(null);
-  const [carregando, setCarregando] = useState(true);
-  const [atualizando, setAtualizando] = useState(false);
-  const [erro, setErro] = useState(null);
-  const pedidoAtual = useRef(0);
-
-  const periodo = useMemo(() => criarPeriodo(chavePeriodo), [chavePeriodo]);
-
-  const buscar = useCallback(
-    async (puxou = false) => {
-      const meuPedido = ++pedidoAtual.current; // ignora respostas de um período antigo
-      puxou ? setAtualizando(true) : setCarregando(true);
-      setErro(null);
-      try {
-        const { data } = await api.get('/Indicadores/', { params: { de: periodo.de, ate: periodo.ate } });
-        if (meuPedido === pedidoAtual.current) setDados(data);
-      } catch (err) {
-        if (meuPedido === pedidoAtual.current) setErro(mensagemDeErro(err));
-      } finally {
-        if (meuPedido === pedidoAtual.current) {
-          setCarregando(false);
-          setAtualizando(false);
-        }
-      }
-    },
-    [periodo]
-  );
-
-  useEffect(() => {
-    buscar();
-  }, [buscar]);
+  const { me, ehGerente, codFuncionario } = useAuth();
+  const {
+    periodo,
+    chavePeriodo,
+    setChavePeriodo,
+    visao,
+    setVisao,
+    lidera,
+    dados,
+    carregando,
+    atualizando,
+    erro,
+    buscar,
+    esperado,
+    codsDaVisao,
+  } = usePainel();
 
   const painel = useMemo(() => {
     if (!dados) return null;
     const opc = { visao, codFuncionario };
-    const ehMesAtual = periodo.chave === 'mes_atual';
-    const projecao = ehMesAtual ? extrairProjecao(dados, opc) : null;
-    // Dias úteis do backend (já com feriados) quando disponíveis; senão, dias corridos.
-    const esperado = projecao?.dias ? projecao.dias.decorridos / projecao.dias.totais : periodo.esperado;
     return {
       resumo: extrairResumo(dados, opc),
-      projecao,
+      projecao: periodo.chave === 'mes_atual' ? extrairProjecao(dados, opc) : null,
       esperado,
       alocacao: extrairAlocacao(dados, opc),
       evolucao: extrairEvolucao(dados, opc),
       ruptura: extrairRuptura(dados, opc),
     };
-  }, [dados, visao, codFuncionario, periodo]);
+  }, [dados, visao, codFuncionario, periodo, esperado]);
   const resumo = painel?.resumo;
   const temVisaoIndividual = !!dados?.minha_visao;
+  const individual = visao === 'individual';
+
+  // Detalhamentos seguem a visão escolhida: "só eu" ou a equipe/empresa.
+  const abrir = (tipo) => {
+    const escopo = resumo?.escopo;
+    // Pré-venda sem lista: o backend aplica o escopo do usuário (inclui o gerente, que vê todos).
+    const vendedores = tipo === 'pre-venda' && !individual ? [] : codsDaVisao;
+    abrirDetalhe(tipo, { vendedores, escopo });
+  };
 
   return (
     <ScrollView
@@ -128,6 +117,10 @@ export default function Indicadores() {
                 item={item}
                 esperado={painel.esperado}
                 ultimo={i === resumo.itens.length - 1}
+                aoTocar={
+                  item.chave === 'mix' ? () => abrir('mix') : item.chave === 'positivacao' ? () => abrir('clientes') : undefined
+                }
+                dicaToque={item.chave === 'mix' ? 'Ver produtos' : item.chave === 'positivacao' ? 'Ver clientes' : undefined}
               />
             ))}
           </View>
@@ -143,6 +136,39 @@ export default function Indicadores() {
           <BlocoAlocacao alocacao={painel.alocacao} />
           <BlocoEvolucao evolucao={painel.evolucao} />
           <BlocoRuptura ruptura={painel.ruptura} />
+
+          <TituloSecao>Detalhar</TituloSecao>
+          <Bloco>
+            <LinhaLink
+              icone="document-text-outline"
+              titulo="Pré-venda pendente"
+              detalhe="Não processadas ou com problema"
+              aoTocar={() => abrir('pre-venda')}
+            />
+            <LinhaLink
+              icone="alert-circle-outline"
+              titulo="Ruptura por item"
+              valor={moeda(painel.ruptura?.valor)}
+              corValor={painel.ruptura?.valor > 0 ? cores.ruim : undefined}
+              aoTocar={() => abrir('ruptura')}
+            />
+            <LinhaLink icone="cube-outline" titulo="Itens do mix" aoTocar={() => abrir('mix')} />
+            <LinhaLink
+              icone="people-outline"
+              titulo="Clientes positivados"
+              aoTocar={() => abrir('clientes')}
+              ultimo={individual}
+            />
+            {!individual && (
+              <LinhaLink
+                icone="podium-outline"
+                titulo="Por vendedor"
+                detalhe="Meta, pré-venda e detalhe de cada um"
+                aoTocar={() => router.navigate('/equipe')}
+                ultimo
+              />
+            )}
+          </Bloco>
         </>
       ) : null}
     </ScrollView>

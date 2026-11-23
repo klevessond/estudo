@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { cores, numeros } from '../theme';
 import { percentual, porUnidade } from '../lib/format';
 import { statusDe } from '../lib/indicadores';
@@ -10,13 +11,22 @@ const posicao = (pct) => `${(Math.min(Math.max(pct, 0), TETO) / TETO) * 100}%`;
 
 const COR_STATUS = { ok: cores.ok, atencao: cores.atencao, ruim: cores.ruim, neutro: cores.marca };
 
-export function IndicadorLinha({ item, esperado, ultimo }) {
+export function IndicadorLinha({ item, esperado, ultimo, aoTocar, dicaToque }) {
   const status = statusDe(item.percentual, esperado);
   const cor = COR_STATUS[status];
   const semMeta = item.objetivo <= 0;
 
+  const Caixa = aoTocar ? Pressable : View;
+  const propsCaixa = aoTocar
+    ? {
+        onPress: aoTocar,
+        accessibilityRole: 'button',
+        style: ({ pressed }) => [s.linha, !ultimo && s.divisor, pressed && { backgroundColor: cores.trilho }],
+      }
+    : { style: [s.linha, !ultimo && s.divisor] };
+
   return (
-    <View style={[s.linha, !ultimo && s.divisor]}>
+    <Caixa {...propsCaixa}>
       <View style={s.topo}>
         <Text style={s.rotulo}>{item.rotulo}</Text>
         <Text style={[s.pct, numeros, { color: semMeta ? cores.suave : cor }]}>
@@ -45,7 +55,13 @@ export function IndicadorLinha({ item, esperado, ultimo }) {
           </Text>
         )}
       </View>
-    </View>
+      {aoTocar && dicaToque ? (
+        <View style={s.dica}>
+          <Text style={s.dicaTexto}>{dicaToque}</Text>
+          <Ionicons name="chevron-forward" size={14} color={cores.marca} />
+        </View>
+      ) : null}
+    </Caixa>
   );
 }
 
@@ -78,4 +94,6 @@ const s = StyleSheet.create({
   valor: { fontSize: 15, fontWeight: '600', color: cores.tinta, flexShrink: 1 },
   meta: { fontWeight: '400', color: cores.suave },
   falta: { fontSize: 13, color: cores.suave },
+  dica: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 10 },
+  dicaTexto: { fontSize: 13, fontWeight: '600', color: cores.marca },
 });

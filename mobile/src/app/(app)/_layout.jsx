@@ -26,6 +26,13 @@ export default function AbasLayout() {
         }}
       />
       <Tabs.Screen
+        name="equipe"
+        options={{
+          title: 'Equipe',
+          tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="alertas"
         options={{
           title: 'Alertas',

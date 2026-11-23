@@ -174,35 +174,45 @@ function pctProjetado(p, objetivo) {
  */
 export function extrairProjecao(data, { visao, codFuncionario }) {
   const m = data?.minha_visao;
-  let finRotas;
-  let realizado;
-  let objetivos;
-  let pPeso;
-  let pMix;
-  let pPos;
 
   if (visao === 'individual' && m) {
     const linha = linhaDoVendedor(data, codFuncionario);
-    const d = linha?.projecoes_detalhadas;
-    if (!d) return null;
-    finRotas = d.financeiro_rotas;
-    realizado = num(linha?.venda_rotas ?? linha?.ValorLiquido ?? m.realizado_financeiro);
-    objetivos = { fin: m.objetivo_financeiro, peso: m.objetivo_peso, mix: m.objetivo_mix, pos: m.objetivo_positivacao };
-    pPeso = d.peso;
-    pMix = d.mix;
-    pPos = d.positivacao;
-  } else {
-    const p = data?.projecao_empresa;
-    if (!p) return null;
-    const o = data?.objetivo || {};
-    finRotas = p.financeiro_rotas;
-    realizado = num(data?.realizado_financeiro?.valor);
-    objetivos = { fin: o.financeiro, peso: o.objetivo_peso, mix: o.objetivo_mix, pos: o.objetivo_positivacao };
-    pPeso = p.peso_rotas || p.peso;
-    pMix = p.mix?.projecao || p.mix;
-    pPos = p.positivacao;
+    return projecaoDaLinha(data, linha, {
+      fin: m.objetivo_financeiro,
+      peso: m.objetivo_peso,
+      mix: m.objetivo_mix,
+      pos: m.objetivo_positivacao,
+    }, m.realizado_financeiro);
   }
 
+  const p = data?.projecao_empresa;
+  if (!p) return null;
+  const o = data?.objetivo || {};
+  return montarProjecao(data, {
+    finRotas: p.financeiro_rotas,
+    realizado: num(data?.realizado_financeiro?.valor),
+    objetivos: { fin: o.financeiro, peso: o.objetivo_peso, mix: o.objetivo_mix, pos: o.objetivo_positivacao },
+    pPeso: p.peso_rotas || p.peso,
+    pMix: p.mix?.projecao || p.mix,
+    pPos: p.positivacao,
+  });
+}
+
+/** Projeção de um vendedor a partir da linha dele em vendas_por_vendedor. */
+export function projecaoDaLinha(data, linha, objetivos, realizadoPadrao) {
+  const d = linha?.projecoes_detalhadas;
+  if (!d) return null;
+  return montarProjecao(data, {
+    finRotas: d.financeiro_rotas,
+    realizado: num(linha?.venda_rotas ?? linha?.ValorLiquido ?? realizadoPadrao),
+    objetivos,
+    pPeso: d.peso,
+    pMix: d.mix,
+    pPos: d.positivacao,
+  });
+}
+
+function montarProjecao(data, { finRotas, realizado, objetivos, pPeso, pMix, pPos }) {
   if (!finRotas) return null;
 
   const objetivo = num(objetivos.fin);
@@ -223,4 +233,17 @@ export function extrairProjecao(data, { visao, codFuncionario }) {
       { chave: 'positivacao', rotulo: 'Positivação', percentual: pctProjetado(pPos, objetivos.pos) },
     ].filter((x) => x.percentual != null),
   };
+}
+
+/**
+ * Fração do período que já deveria ter sido cumprida (0 a 1), para a marca dourada.
+ * No mês corrente usa os dias úteis do backend (com feriados); senão, dias corridos.
+ */
+export function esperadoDoPeriodo(data, periodo) {
+  if (periodo?.chave === 'mes_atual') {
+    const p = data?.projecao_empresa;
+    const dias = diasUteis(data, p?.financeiro_rotas, data?.realizado_financeiro?.valor);
+    if (dias?.totais) return dias.decorridos / dias.totais;
+  }
+  return periodo?.esperado ?? null;
 }

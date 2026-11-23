@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../contexts/auth';
 import { AlertasProvider } from '../contexts/alertas';
+import { PainelProvider } from '../contexts/painel';
 import { Botao } from '../components/Botao';
 import { cores } from '../theme';
 
@@ -34,6 +35,7 @@ function Navegacao() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={logado}>
         <Stack.Screen name="(app)" />
+        <Stack.Screen name="(detalhe)" />
       </Stack.Protected>
       <Stack.Protected guard={!logado}>
         <Stack.Screen name="login" />
@@ -46,8 +48,10 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <AlertasProvider>
-        <StatusBar style="dark" />
-        <Navegacao />
+        <PainelProvider>
+          <StatusBar style="dark" />
+          <Navegacao />
+        </PainelProvider>
       </AlertasProvider>
     </AuthProvider>
   );
