@@ -1,9 +1,11 @@
 # App mobile — Comercial do Trigo
 
-App em Expo (SDK 57) para vendedores, supervisores e gerentes acompanharem metas e
+App em Expo (SDK 58) para vendedores, supervisores e gerentes acompanharem metas e
 rupturas pelo celular. Consome a mesma API do dashboard web (`/api/`).
 
 ## Rodar no celular (Expo Go)
+
+Requer Node.js 22.13 ou mais novo (`node -v`).
 
 ```bash
 cd mobile
@@ -28,7 +30,9 @@ EXTRA_ALLOWED_HOSTS=SEU_IP
 python manage.py runserver 0.0.0.0:8002
 ```
 
-Leia o QR code com o Expo Go (SDK 57). Variáveis `EXPO_PUBLIC_*` só são lidas quando o
+Leia o QR code com o Expo Go (SDK 58). O Expo Go do iPhone só roda a versão mais
+recente do SDK: quando a loja atualizar o Expo Go, o projeto precisa subir junto
+(`npx expo install expo@^<nova>.0.0 --fix`). Variáveis `EXPO_PUBLIC_*` só são lidas quando o
 `expo start` inicia: depois de mudar o `.env`, reinicie com `-c`.
 
 Se o login mostrar "Sem conexão com o servidor", abra `http://SEU_IP:8002/api/me/` no

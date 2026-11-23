@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { usePainel } from '../../contexts/painel';
 import { useConsulta } from '../../hooks/useConsulta';
@@ -20,6 +20,7 @@ const SITUACAO = {
 
 export default function PreVenda() {
   const params = useLocalSearchParams();
+  const router = useRouter();
   const vendedores = lerCods(params.vendedores);
   const escopo = lerTexto(params.escopo);
   const { periodo } = usePainel();

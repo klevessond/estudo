@@ -14,6 +14,7 @@ export default function AbasLayout() {
         tabBarInactiveTintColor: cores.suave,
         headerStyle: { backgroundColor: cores.fundo },
         headerShadowVisible: false,
+        headerTransparent: false,
         headerTitleStyle: { fontWeight: '700', color: cores.tinta },
         sceneStyle: { backgroundColor: cores.fundo },
       }}

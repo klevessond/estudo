@@ -33,11 +33,12 @@ function Navegacao() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={logado}>
+      {/* Router 58: guarda que falha redireciona; o destino fica explícito. */}
+      <Stack.Protected guard={logado} redirectTo="/login">
         <Stack.Screen name="(app)" />
         <Stack.Screen name="(detalhe)" />
       </Stack.Protected>
-      <Stack.Protected guard={!logado}>
+      <Stack.Protected guard={!logado} redirectTo="/">
         <Stack.Screen name="login" />
       </Stack.Protected>
     </Stack>

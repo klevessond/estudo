@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../../contexts/auth';
 import { usePainel } from '../../../contexts/painel';
-import { lerTexto, abrirDetalhe } from '../../../lib/navegar';
+import { lerTexto, useNavegar } from '../../../lib/navegar';
 import { nomeCompleto, podeVerComissoes, resumoDoVendedor } from '../../../lib/vendedores';
 import { moeda, percentual } from '../../../lib/format';
 import { IndicadorLinha } from '../../../components/IndicadorLinha';
@@ -16,6 +16,7 @@ export default function Vendedor() {
   const params = useLocalSearchParams();
   const cod = Number(lerTexto(params.cod));
   const { me } = useAuth();
+  const { router, abrirDetalhe } = useNavegar();
   const { dados, periodo, esperado, carregando, atualizando, erro, buscar } = usePainel();
 
   const v = useMemo(() => (dados ? resumoDoVendedor(dados, cod) : null), [dados, cod]);

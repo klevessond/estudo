@@ -9,6 +9,8 @@ export default function DetalheLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: cores.fundo },
         headerShadowVisible: false,
+        // SDK 58 deixa o cabeçalho transparente no iOS com Liquid Glass; aqui ele é sólido.
+        headerTransparent: false,
         headerTintColor: cores.marca,
         headerTitleStyle: { fontWeight: '700', color: cores.tinta },
         headerBackTitle: 'Voltar',

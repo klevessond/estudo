@@ -1,9 +1,8 @@
 import React, { useMemo } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
 import { useAuth } from '../../contexts/auth';
 import { usePainel } from '../../contexts/painel';
-import { abrirDetalhe } from '../../lib/navegar';
+import { useNavegar } from '../../lib/navegar';
 import { moeda } from '../../lib/format';
 import { Bloco, LinhaLink, TituloSecao } from '../../components/Lista';
 import { IndicadorLinha } from '../../components/IndicadorLinha';
@@ -23,6 +22,7 @@ import { cores } from '../../theme';
 
 export default function Indicadores() {
   const { me, ehGerente, codFuncionario } = useAuth();
+  const { router, abrirDetalhe } = useNavegar();
   const {
     periodo,
     chavePeriodo,

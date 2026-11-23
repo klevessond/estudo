@@ -3,7 +3,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { usePainel } from '../../contexts/painel';
 import { useAuth } from '../../contexts/auth';
-import { abrirVendedor } from '../../lib/navegar';
+import { useNavegar } from '../../lib/navegar';
 import { nomeCompleto, ordenarVendedores } from '../../lib/vendedores';
 import { statusDe } from '../../lib/indicadores';
 import { criarPeriodo, OPCOES_PERIODO } from '../../lib/periodos';
@@ -16,6 +16,7 @@ const COR = { ok: cores.ok, atencao: cores.atencao, ruim: cores.ruim, neutro: co
 
 export default function Equipe() {
   const { codFuncionario } = useAuth();
+  const { abrirVendedor } = useNavegar();
   const { vendedores, esperado, carregando, atualizando, erro, buscar, chavePeriodo, setChavePeriodo, dados } =
     usePainel();
   const [ordem, setOrdem] = useState('cobertura');

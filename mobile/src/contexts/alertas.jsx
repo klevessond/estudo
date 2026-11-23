@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Linking, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import api from '../api';
 import { storage } from '../lib/storage';
 import { useAuth } from './auth';
@@ -43,6 +43,7 @@ async function avisarNoCelular(novos) {
 
 export function AlertasProvider({ children }) {
   const { me, logado } = useAuth();
+  const router = useRouter();
   const [naoLidos, setNaoLidos] = useState(0);
   const [permissao, setPermissao] = useState('undetermined');
   const ultimoIdRef = useRef(null);
@@ -128,7 +129,7 @@ export function AlertasProvider({ children }) {
       if (rota) router.push(rota);
     });
     return () => sub.remove();
-  }, []);
+  }, [router]);
 
   const valor = useMemo(
     () => ({ naoLidos, setNaoLidos, verificar, permissao, pedirPermissao }),
