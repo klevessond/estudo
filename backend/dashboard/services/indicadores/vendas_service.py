@@ -866,75 +866,70 @@ def buscar_mix_agregado(
     return 0
 
 
+# Coluna de MaterialComissao (TabelaN) usada no cálculo: vem da tabela de comissão
+# por produto da área de venda; se a área não tiver, usa a da supervisão.
+# (Hipótese: validada só pelo vendedor 6 até agora. Conferir com o script de comparação.)
+_N_EXPR = "COALESCE(NULLIF(AV.CodTabelaComissaoProd, 0), NULLIF(SUPV.CodTabelaComissaoProd, 0))"
+
+_CASE_PERC = (
+    f"CASE {_N_EXPR}\n"
+    + "\n".join(f"            WHEN {n} THEN MC.Tabela{n}" for n in range(1, 51))
+    + "\n            ELSE 0 END"
+)
+
+
 def buscar_comissoes_vendedor(cod_vendedor: int, data_inicio: str = None, data_fim: str = None) -> Dict[str, Any]:
     """
-    Retorna todas as vendas comissionáveis do vendedor no período informado,
-    calculando a comissão com base no percentual do pedido aplicado ao valor líquido.
- 
-    Filtros aplicados:
-        - NO.Comissionar = 1  (natureza de operação comissionável)
-        - NO.Venda       = 1  (é uma venda)
-        - M.EmbRetornavel = 0 (exclui embalagens retornáveis)
-        - PV.Status      = 0  (pedido ativo)
-        - PV.Situacao <> 'A'  (não anulado)
-        - CodVendedor    = cod_vendedor
-        - DataVenda no período informado
- 
-    Retorno:
-    {
-        "total_comissao":      float,   # soma calculada (ValorPedido * ComissaoPercentual / 100)
-        "total_valor_pedidos": float,   # soma do valor líquido dos pedidos
-        "detalhado": [
-            {
-                "CodPedidoVenda":         int,
-                "NumPedidoVenda":         str,
-                "DataVenda":              str (YYYY-MM-DD),
-                "Cliente":                str,
-                "Rota":                   str,
-                "Cidade":                 str,
-                "NaturezaOperacao":       str,
-                "SituacaoPagamento":      str,
-                "ComissaoPercentual":     float,
-                "ComissaoValor":          float,  # calculado: ValorPedido * ComissaoPercentual / 100
-                "ValorPedido":            float,  # valor líquido do pedido
-            },
-            ...
-        ]
-    }
+    Retorna todas as vendas comissionáveis do vendedor no período informado.
+
+    A comissão é calculada item a item: valor líquido do item x percentual
+    cadastrado em MaterialComissao (coluna TabelaN). Não depende do
+    processamento de comissão do ERP. Sem arredondamento por item (o ERP
+    também não arredonda); só o total do pedido é arredondado em 2 casas.
+
+    Filtros: NO.Comissionar=1, NO.Venda=1, M.EmbRetornavel=0, PV.Status=0,
+    PV.Situacao <> 'C', CodVendedor = cod_vendedor, DataVenda no período.
+
+    Retorno: {"total_comissao", "total_valor_pedidos", "detalhado": [...]}
+    (ComissaoPercentual = comissão / valor do pedido).
     """
     if not data_inicio or not data_fim:
         raise ValueError("data_inicio e data_fim são obrigatórios.")
- 
-    ini     = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+
+    ini      = datetime.strptime(data_inicio, "%Y-%m-%d").date()
     fim_excl = datetime.strptime(data_fim, "%Y-%m-%d").date() + timedelta(days=1)
-    p_ini   = ini.strftime("%Y%m%d")
-    p_fim   = fim_excl.strftime("%Y%m%d")
-    p_vend  = int(cod_vendedor)
- 
-    sql = """
-  SELECT
+    p_ini    = ini.strftime("%Y%m%d")
+    p_fim    = fim_excl.strftime("%Y%m%d")
+    p_vend   = int(cod_vendedor)
+
+    sql = f"""
+    SELECT
         PV.CodPedidoVenda,
         PV.NumPedidoVenda,
-        CONVERT(VARCHAR(10), PV.DataVenda, 120)                                          AS DataVenda,
+        CONVERT(VARCHAR(10), PV.DataVenda, 120)                  AS DataVenda,
         C.Cliente,
         R.Rota,
         Cidade.Cidade,
         NO.NaturezaOperacao,
         PV.SituacaoPagamento,
-        PV.ComissaoPercentual,
-        SUM(PVI.ComissaoValor)                                                           AS ComissaoValorItens,
-        SUM(ROUND(100 * PVI.Quantidade * (PVI.ValorEmbalagem - PVI.Desconto), 0)) / 100 AS ValorPedido
+        SUM(V.ValorItem)                                         AS ValorPedido,
+        SUM(V.ValorItem * ISNULL(PC.Perc, 0) / 100.0)            AS ComissaoValor
     FROM PedidoVenda PV
-    INNER JOIN NaturezaOperacao NO  ON PV.CodNaturezaOperacao = NO.CodNaturezaOperacao
-    INNER JOIN PedidoVendaItens  PVI ON PV.CodPedidoVenda     = PVI.CodPedidoVenda
-    INNER JOIN Cliente           C   ON PV.CodCliente          = C.CodCliente
-    INNER JOIN Rota              R   ON C.CodRota              = R.CodRota
+    INNER JOIN NaturezaOperacao NO   ON PV.CodNaturezaOperacao = NO.CodNaturezaOperacao
+    INNER JOIN PedidoVendaItens PVI  ON PV.CodPedidoVenda      = PVI.CodPedidoVenda
+    INNER JOIN Cliente          C    ON PV.CodCliente          = C.CodCliente
+    INNER JOIN Rota             R    ON C.CodRota              = R.CodRota
     INNER JOIN Cidade                ON C.CodCidade            = Cidade.CodCidade
-    INNER JOIN Funcionario       F   ON PV.CodVendedor         = F.CodFuncionario
-    INNER JOIN Material          M   ON PVI.CodMaterial        = M.CodMaterial
-    INNER JOIN MaterialComissao  MC  ON M.CodMaterial          = MC.CodMaterial
-    INNER JOIN TabelaPreco       TP  ON PVI.CodTabelaPreco     = TP.CodTabelaPreco
-    INNER JOIN Classificador     CL  ON PVI.CodTipo            = CL.CodClassificador
+    INNER JOIN Material         M    ON PVI.CodMaterial        = M.CodMaterial
+    LEFT  JOIN MaterialComissao MC   ON MC.CodMaterial         = M.CodMaterial
+    LEFT  JOIN AreaVenda        AV   ON AV.CodAreaVenda        = R.CodAreaVenda
+    LEFT  JOIN AreaSupervisao   SUPV ON SUPV.CodAreaSupervisao = AV.CodAreaSupervisao
+    CROSS APPLY (
+        SELECT ROUND(100 * PVI.Quantidade * (PVI.ValorEmbalagem - PVI.Desconto), 0) / 100.0 AS ValorItem
+    ) V
+    OUTER APPLY (
+        SELECT {_CASE_PERC} AS Perc
+    ) PC
     WHERE
         NO.Comissionar   = 1
         AND NO.Venda     = 1
@@ -947,35 +942,25 @@ def buscar_comissoes_vendedor(cod_vendedor: int, data_inicio: str = None, data_f
     GROUP BY
         PV.CodPedidoVenda, PV.NumPedidoVenda, PV.DataVenda,
         C.Cliente, R.Rota, Cidade.Cidade, NO.NaturezaOperacao,
-        PV.SituacaoPagamento, PV.ComissaoPercentual
+        PV.SituacaoPagamento
     ORDER BY
         PV.DataVenda DESC, C.Cliente, PV.CodPedidoVenda
     """
- 
-    params = [p_vend, p_ini, p_fim]
-    rows   = query_all(sql, params)
- 
+
+    rows = query_all(sql, [p_vend, p_ini, p_fim])
+
     detalhado           = []
     total_comissao      = 0.0
     total_valor_pedidos = 0.0
- 
+
     for r in rows:
-        valor    = float(r.get("ValorPedido")        or 0)
-        perc     = float(r.get("ComissaoPercentual") or 0)
-    
-        # Se ComissaoPercentual é NULL, usa o valor gravado nos itens
-        if perc > 0:
-            comissao = round(valor * perc / 100, 2)
-        else:
-            comissao = float(r.get("ComissaoValorItens") or 0)
+        valor    = float(r.get("ValorPedido")   or 0)
+        comissao = round(float(r.get("ComissaoValor") or 0), 2)
+        perc     = round(comissao / valor * 100, 4) if valor else 0
 
         total_comissao      += comissao
         total_valor_pedidos += valor
-        
-        # Para exibição: recalcula % a partir do valor real se perc for nulo
-        perc_exibir = perc if perc > 0 else (round(comissao / valor * 100, 4) if valor else 0)
 
-   
         detalhado.append({
             "CodPedidoVenda":     int(r.get("CodPedidoVenda") or 0),
             "NumPedidoVenda":     str(r.get("NumPedidoVenda") or ""),
@@ -985,11 +970,11 @@ def buscar_comissoes_vendedor(cod_vendedor: int, data_inicio: str = None, data_f
             "Cidade":             str(r.get("Cidade") or ""),
             "NaturezaOperacao":   str(r.get("NaturezaOperacao") or ""),
             "SituacaoPagamento":  str(r.get("SituacaoPagamento") or ""),
-            "ComissaoPercentual": perc_exibir,
+            "ComissaoPercentual": perc,
             "ComissaoValor":      comissao,
             "ValorPedido":        round(valor, 2),
         })
- 
+
     return {
         "total_comissao":      round(total_comissao, 2),
         "total_valor_pedidos": round(total_valor_pedidos, 2),
