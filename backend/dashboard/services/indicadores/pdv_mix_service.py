@@ -1,4 +1,5 @@
 # backend/dashboard/services/indicadores/pdv_mix_service.py
+
 """
 Serviço de Mix por UnidGestora — baseado em ViewVenda + ViewVendaItens.
 
@@ -20,6 +21,8 @@ Regras de negócio:
 """
 from __future__ import annotations
 
+import threading
+import time as _time
 from datetime import datetime, timedelta, date
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -205,8 +208,34 @@ def _buscar_resumo_por_ug(
 
 # ═══════════════════════════════════════════════════════════════════
 # 3. VISÃO DO VENDEDOR
-#    2 queries fixas: resumo por UG + mapa de materiais. Zero loops de query.
+#    2 queries por período (todas as UGs), reaproveitadas via cache curto.
 # ═══════════════════════════════════════════════════════════════════
+
+_PDV_DADOS_TTL = 120            # segundos; a mesma tela reaproveita as queries
+_pdv_dados_cache: Dict[Any, Any] = {}
+_pdv_dados_lock = threading.Lock()
+
+
+def _dados_pdv_periodo(di_dt, df_dt):
+    """Roda as 2 queries pesadas UMA vez por período (todas as UGs) e reaproveita."""
+    chave = (di_dt, df_dt)
+    hit = _pdv_dados_cache.get(chave)
+    if hit and _time.monotonic() - hit[0] < _PDV_DADOS_TTL:
+        return hit[1], hit[2]
+    with _pdv_dados_lock:
+        hit = _pdv_dados_cache.get(chave)
+        if hit and _time.monotonic() - hit[0] < _PDV_DADOS_TTL:
+            return hit[1], hit[2]
+        resumo = _buscar_resumo_por_ug(di_dt, df_dt, None)
+        todas = sorted({str(r.get("UnidGestora")).strip()
+                        for r in resumo if r.get("UnidGestora") is not None})
+        mapa = _buscar_mapa_materiais_por_ug(di_dt, df_dt, todas) if todas else {}
+        _pdv_dados_cache[chave] = (_time.monotonic(), resumo, mapa)
+        if len(_pdv_dados_cache) > 20:      # limpeza simples
+            for k in sorted(_pdv_dados_cache, key=lambda x: _pdv_dados_cache[x][0])[:10]:
+                _pdv_dados_cache.pop(k, None)
+        return resumo, mapa
+
 
 def buscar_mix_pdv_vendedor(
     data_inicio,
@@ -234,9 +263,13 @@ def buscar_mix_pdv_vendedor(
         return {"QtdVendas": 0, "QtdItens": 0.0, "ValorTotal": 0.0,
                 "Desconto": 0.0, "Peso": 0.0, "Mix": 0, "por_ug": []}
 
-    # 2 queries — sem loop
-    por_ug   = _buscar_resumo_por_ug(di_dt, df_dt, ugs)
-    mat_mapa = _buscar_mapa_materiais_por_ug(di_dt, df_dt, ugs)
+    # 2 queries por periodo (todas as UGs), reaproveitadas entre chamadas
+    resumo, mat_mapa = _dados_pdv_periodo(di_dt, df_dt)
+    alvo = set(ugs)
+    por_ug = sorted(
+        (dict(r) for r in resumo if str(r.get("UnidGestora")).strip() in alvo),
+        key=lambda r: r.get("UnidGestora") or 0,
+    )
 
     return {
         "QtdVendas" : sum(r["QtdVendas"]  for r in por_ug),

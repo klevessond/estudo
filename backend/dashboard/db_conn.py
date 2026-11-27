@@ -2,6 +2,8 @@
 import os
 import time
 from pathlib import Path
+import threading
+_tl = threading.local()
 
 import pyodbc
 from dotenv import load_dotenv
@@ -65,29 +67,47 @@ def _ensure_nocount(sql: str) -> str:
         return "SET NOCOUNT ON;\n" + sql
     return sql
 
+def _get_cn(open_timeout: int):
+    cn = getattr(_tl, "cn", None)
+    if cn is None:
+        cn = _connect(timeout_connect=open_timeout, attempts=3)
+        cn.autocommit = True          # só leitura: não deixa transação aberta no servidor
+        _tl.cn = cn
+    return cn
+
+
+def _drop_cn():
+    cn = getattr(_tl, "cn", None)
+    _tl.cn = None
+    if cn is not None:
+        try:
+            cn.close()
+        except Exception:
+            pass
+
 
 def query_all(sql: str, params=None, timeout: int = 30):
-    """
-    Executa SQL e retorna lista de dicts.
-    - timeout: timeout de execução do SQL (cn.timeout). O de abertura é derivado.
-    """
     sql = _ensure_nocount(sql)
-
-    # Timeout de abertura um pouco maior/igual ao de execução para evitar falso positivo
     open_timeout = max(10, timeout)
 
-    with _connect(timeout_connect=open_timeout, attempts=3) as cn:
-        # Timeout de execução do comando (segundos)
-        cn.timeout = max(180, timeout)
-        with cn.cursor() as cur:
-            cur.execute(sql, params or [])
-            # Avança até o primeiro result set com colunas
-            while cur.description is None:
-                if not cur.nextset():
-                    return []
-            cols = [c[0] for c in cur.description]
-            rows = cur.fetchall()
-            return [dict(zip(cols, r)) for r in rows]
+    for tentativa in (1, 2):
+        cn = _get_cn(open_timeout)
+        try:
+            cn.timeout = max(180, timeout)
+            with cn.cursor() as cur:
+                cur.execute(sql, params or [])
+                while cur.description is None:
+                    if not cur.nextset():
+                        return []
+                cols = [c[0] for c in cur.description]
+                rows = cur.fetchall()
+                return [dict(zip(cols, r)) for r in rows]
+        except pyodbc.Error as e:
+            _drop_cn()                      # conexão possivelmente morta: descarta
+            code = str(e.args[0]) if e.args else ""
+            if tentativa == 1 and (code.startswith("08") or code.startswith("HYT") or code in ("HY000",)):
+                continue                    # refaz uma vez com conexão nova
+            raise
 
 
 def query_one(sql: str, params=None, timeout: int = 30):

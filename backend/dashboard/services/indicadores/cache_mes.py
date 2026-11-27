@@ -57,6 +57,43 @@ def _init_db() -> None:
 
 _init_db()
 
+# ── cache em MEMORIA (TTL curto) para periodos ABERTOS (mes atual) ───────────
+# O cache SQLite abaixo so guarda meses fechados. Para o mes corrente, guardamos
+# o resultado por poucos segundos, para a tela nao refazer todas as consultas
+# a cada carga. CACHE_MES_ATUAL_TTL=0 (no .env) desliga.
+import copy
+import os
+import threading
+import time as _time
+
+_MEM_TTL = int(os.getenv("CACHE_MES_ATUAL_TTL", "120"))   # segundos
+_MEM_MAX = 300
+_mem_cache: dict = {}
+_mem_lock = threading.Lock()
+
+
+def _mem_get(chave: str):
+    if _MEM_TTL <= 0:
+        return None
+    with _mem_lock:
+        hit = _mem_cache.get(chave)
+        if hit and _time.monotonic() - hit[0] < _MEM_TTL:
+            return copy.deepcopy(hit[1])
+        if hit:
+            _mem_cache.pop(chave, None)
+    return None
+
+
+def _mem_set(chave: str, payload) -> None:
+    if _MEM_TTL <= 0:
+        return
+    with _mem_lock:
+        if len(_mem_cache) >= _MEM_MAX:
+            for k in sorted(_mem_cache, key=lambda x: _mem_cache[x][0])[:_MEM_MAX // 2]:
+                _mem_cache.pop(k, None)
+        _mem_cache[chave] = (_time.monotonic(), copy.deepcopy(payload))
+
+
 
 # ─────────────────────────────────────────────
 # Elegibilidade
@@ -132,7 +169,7 @@ def get_cache_mes(
             set_cache_mes("vendas_por_vendedor", de, ate, resultado, vendedores)
     """
     if not periodo_cacheavel(data_ini, data_fim):
-        return None
+        return _mem_get(_chave(tipo, data_ini, data_fim, escopo))
 
     chave = _chave(tipo, data_ini, data_fim, escopo)
     try:
@@ -164,6 +201,7 @@ def set_cache_mes(
     não for cacheável).
     """
     if not periodo_cacheavel(data_ini, data_fim):
+        _mem_set(_chave(tipo, data_ini, data_fim, escopo), payload)
         return
 
     chave = _chave(tipo, data_ini, data_fim, escopo)
